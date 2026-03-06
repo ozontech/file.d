@@ -31,7 +31,7 @@ type nginxErrorDecoder struct {
 	params nginxErrorParams
 }
 
-func NewNginxErrorDecoder(params map[string]any) (Decoder, error) {
+func NewNginxErrorDecoder(params Params) (Decoder, error) {
 	p, err := extractNginxErrorParams(params)
 	if err != nil {
 		return nil, fmt.Errorf("can't extract params: %w", err)
@@ -198,7 +198,7 @@ func (d *nginxErrorDecoder) extractCustomFields(data []byte) ([]byte, map[string
 	return data, fields
 }
 
-func extractNginxErrorParams(params map[string]any) (nginxErrorParams, error) {
+func extractNginxErrorParams(params Params) (nginxErrorParams, error) {
 	withCustomFields := false
 	if withCustomFieldsRaw, ok := params[nginxWithCustomFieldsParam]; ok {
 		withCustomFields, ok = withCustomFieldsRaw.(bool)

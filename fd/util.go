@@ -29,9 +29,11 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 	decoderParams := make(map[string]any)
 	isStrict := pipeline.DefaultIsStrict
 	eventTimeout := pipeline.DefaultEventTimeout
-	metricHoldDuration := pipeline.DefaultMetricHoldDuration
 	metaCacheSize := pipeline.DefaultMetaCacheSize
 	pool := ""
+
+	metricHoldDuration := pipeline.DefaultMetricHoldDuration
+	metricMaxLabelValueLength := pipeline.DefaultMetricMaxLabelValueLength
 
 	if settings != nil {
 		val := settings.Get("capacity").MustInt()
@@ -104,7 +106,15 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 		sourceNameMetaField = settings.Get("source_name_meta_field").MustString()
 		isStrict = settings.Get("is_strict").MustBool()
 
-		str = settings.Get("metric_hold_duration").MustString()
+		if str := settings.Get("pool").MustString(); str != "" {
+			pool = str
+		}
+
+		metrics := settings.Get("metrics")
+		str = metrics.Get("hold_duration").MustString()
+		if str == "" {
+			str = settings.Get("metric_hold_duration").MustString()
+		}
 		if str != "" {
 			i, err := time.ParseDuration(str)
 			if err != nil {
@@ -113,8 +123,10 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 			metricHoldDuration = i
 		}
 
-		if str := settings.Get("pool").MustString(); str != "" {
-			pool = str
+		metricMaxLabelValueLength = metrics.Get("max_label_value_length").MustInt()
+		if metricMaxLabelValueLength < 0 {
+			logger.Warn("negative max_label_value_length value, metric label truncation is disabled")
+			metricMaxLabelValueLength = 0
 		}
 	}
 
@@ -134,8 +146,11 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 		EventTimeout:            eventTimeout,
 		StreamField:             streamField,
 		IsStrict:                isStrict,
-		MetricHoldDuration:      metricHoldDuration,
 		Pool:                    pipeline.PoolType(pool),
+		Metric: &pipeline.MetricSettings{
+			HoldDuration:        metricHoldDuration,
+			MaxLabelValueLength: metricMaxLabelValueLength,
+		},
 	}
 }
 

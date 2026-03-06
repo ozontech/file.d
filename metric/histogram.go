@@ -26,10 +26,10 @@ type HistogramVec struct {
 	vec   *prometheus.HistogramVec
 }
 
-func newHistogramVec(hv *prometheus.HistogramVec) *HistogramVec {
+func newHistogramVec(hv *prometheus.HistogramVec, maxLabelValueLength int) *HistogramVec {
 	return &HistogramVec{
 		vec:   hv,
-		store: newHeldMetricsStore[prometheus.Histogram](),
+		store: newHeldMetricsStore[prometheus.Histogram](maxLabelValueLength),
 	}
 }
 

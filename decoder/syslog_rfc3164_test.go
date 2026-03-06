@@ -11,7 +11,7 @@ func TestSyslogRFC3164(t *testing.T) {
 		name string
 
 		input  string
-		params map[string]any
+		params Params
 
 		want          SyslogRFC3164Row
 		wantCreateErr bool
@@ -47,7 +47,7 @@ func TestSyslogRFC3164(t *testing.T) {
 		{
 			name:  "valid_priority_format",
 			input: "<34>Oct 11 22:14:15 mymachine.example.com myproc[10]: 'myproc' failed on /dev/pts/8\n",
-			params: map[string]any{
+			params: Params{
 				syslogFacilityFormatParam: spfString,
 				syslogSeverityFormatParam: spfString,
 			},
@@ -64,7 +64,7 @@ func TestSyslogRFC3164(t *testing.T) {
 		},
 		{
 			name: "invalid_create_1",
-			params: map[string]any{
+			params: Params{
 				syslogFacilityFormatParam: spfString,
 				syslogSeverityFormatParam: 123,
 			},
@@ -72,7 +72,7 @@ func TestSyslogRFC3164(t *testing.T) {
 		},
 		{
 			name: "invalid_create_2",
-			params: map[string]any{
+			params: Params{
 				syslogFacilityFormatParam: "test",
 			},
 			wantCreateErr: true,

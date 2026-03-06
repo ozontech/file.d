@@ -23,7 +23,7 @@ type syslogRFC3164Decoder struct {
 	params syslogParams
 }
 
-func NewSyslogRFC3164Decoder(params map[string]any) (Decoder, error) {
+func NewSyslogRFC3164Decoder(params Params) (Decoder, error) {
 	p, err := extractSyslogParams(params)
 	if err != nil {
 		return nil, fmt.Errorf("can't extract params: %w", err)

@@ -52,10 +52,10 @@ type GaugeVec struct {
 	vec   *prometheus.GaugeVec
 }
 
-func newGaugeVec(gv *prometheus.GaugeVec) *GaugeVec {
+func newGaugeVec(gv *prometheus.GaugeVec, maxLabelValueLength int) *GaugeVec {
 	return &GaugeVec{
 		vec:   gv,
-		store: newHeldMetricsStore[prometheus.Gauge](),
+		store: newHeldMetricsStore[prometheus.Gauge](maxLabelValueLength),
 	}
 }
 
