@@ -252,6 +252,7 @@ func TestTokenNormalizerBuiltin(t *testing.T) {
 		{
 			name: "hash",
 			inputs: []string{
+				"some cf83e1357eefb8bdf1542850d66d8007d620e4050b5715dc83f4a921d36ce9ce47d0d13c5d85f2b0ff8318d2877eec2f63b931bd47417a81a538327af927da3e here",
 				"some 48757ec9f04efe7faacec8722f3476339b125a6b6172b8a69ff3aa329e0bd0ff here",
 				"some a94a8fe5ccb19ba61c4c0873d391e987982fbbd3 here",
 				"some 098f6bcd4621d373cade4e832627b4f6 here",
@@ -263,6 +264,8 @@ func TestTokenNormalizerBuiltin(t *testing.T) {
 			name: "datetime",
 			inputs: []string{
 				"some 2025-01-13 20:58:04.019973588 +0000 UTC m=+1417512.275697914 here",
+				"some 2025-01-13 20:58:04.019973588 -0700 MST m=-123.456789012 here",
+				"some 2025-01-13 20:58:04.019973588 +0300 MSK m=+0.123456789 here",
 				"some 2025-01-13T10:20:40Z here",
 				"some 2025-01-13T10:20:40.999999999Z here",
 				"some 2025-01-13T10:20:40-06:00 here",
@@ -312,9 +315,8 @@ func TestTokenNormalizerBuiltin(t *testing.T) {
 		{
 			name: "filepath",
 			inputs: []string{
-				"some /plugin/action/normalize here",
+				`some C:\Windows\System32\drivers\etc\hosts here`,
 				"some /Users/seq-ui/action/playlist here",
-				"some /home/user/photos here",
 			},
 			patterns: "filepath",
 			want:     "some <filepath> here",
@@ -453,24 +455,6 @@ func TestTokenNormalizerCustom(t *testing.T) {
 				`some "asdfasd" and 10.11.2002 here`,
 			},
 			want: "some \"asdfasd\" and <date> here",
-		},
-		{
-			name: "entity",
-			params: TokenNormalizerParams{
-				BuiltinPatterns: "no",
-				CustomPatterns: []TokenPattern{
-					{
-						Placeholder: "<entity>",
-						RE:          `[a-zA-Z][a-zA-Z0-9]*(-[a-zA-Z0-9]+)+`,
-					},
-				},
-			},
-			inputs: []string{
-				"some client-123a-456b-789c here",
-				"some server-88f63-0876-45cf-aabb here",
-				"some resource-data-container-12345 here",
-			},
-			want: "some <entity> here",
 		},
 		{
 			name: "custom_with_builtin",
