@@ -502,8 +502,8 @@ var builtinTokenPatterns = []TokenPattern{
 	{
 		// SHA512, SHA256, SHA1, MD5
 		Placeholder: placeholderByPattern[pHash],
-		RE: fmt.Sprintf("(%s)|(%s)|(%s)|(%s)",
-			strings.Repeat("[0-9a-fA-F]", 128),
+		RE: fmt.Sprintf("(%s)|(%s)|(%s)",
+			// strings.Repeat("[0-9a-fA-F]", 128),
 			strings.Repeat("[0-9a-fA-F]", 64),
 			strings.Repeat(`[0-9a-fA-F]`, 40),
 			strings.Repeat(`[0-9a-fA-F]`, 32),
@@ -514,8 +514,8 @@ var builtinTokenPatterns = []TokenPattern{
 	{
 		// RFC3339, RFC3339Nano, DateTime, DateOnly, TimeOnly, Go time with monotonic clock
 		Placeholder: placeholderByPattern[pDatetime],
-		RE: fmt.Sprintf(`(%s)|(%s)|(%s)`,
-			// `\d\d\d\d-\d\d-\d\d \d\d:\d\d:\d\d\.\d+ [+\-]\d\d\d\d [A-Z]+ m=[+\-]\d+\.\d+`,
+		RE: fmt.Sprintf(`(%s)|(%s)|(%s)|(%s)`,
+			`\d\d\d\d-\d\d-\d\d \d\d:\d\d:\d\d\.\d+ [+\-]\d\d\d\d [A-Z]+ m=[+\-]\d+\.\d+`,
 			`\d\d\d\d-\d\d-\d\dT\d\d:\d\d:\d\d(\.\d+)?(Z|[\+\-]\d\d:\d\d)`,
 			`\d\d:\d\d:\d\d`,
 			`\d\d\d\d-\d\d-\d\d( \d\d:\d\d:\d\d)?`,
