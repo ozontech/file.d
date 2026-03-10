@@ -484,7 +484,7 @@ var builtinTokenPatterns = []TokenPattern{
 	},
 	{
 		Placeholder: placeholderByPattern[pFilepath],
-		RE:          `([a-zA-Z]:[\\/]|[\\/])[^ \t\n\r]*`,
+		RE:          `(/[a-zA-Z0-9-]+)+`,
 		mask:        pFilepath,
 	},
 	{

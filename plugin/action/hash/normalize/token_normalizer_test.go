@@ -315,8 +315,9 @@ func TestTokenNormalizerBuiltin(t *testing.T) {
 		{
 			name: "filepath",
 			inputs: []string{
-				`some C:\\Windows\\System32\\drivers\\etc\\hosts here`,
+				"some /plugin/action/normalize here",
 				"some /Users/seq-ui/action/playlist here",
+				"some /home/user/photos here",
 			},
 			patterns: "filepath",
 			want:     "some <filepath> here",
