@@ -137,8 +137,9 @@ func Test_addrWithDefaultPort(t *testing.T) {
 func TestAddress_UnmarshalJSON(t *testing.T) {
 	t.Parallel()
 	type fields struct {
-		Addr   string
-		Weight int
+		Addr        string
+		Weight      int
+		WeightIsNil bool
 	}
 	type args struct {
 		b []byte
@@ -157,6 +158,16 @@ func TestAddress_UnmarshalJSON(t *testing.T) {
 			want: fields{
 				Addr:   "127.0.0.1:9001",
 				Weight: 2,
+			},
+		},
+		{
+			name: "ok_object_only_addr",
+			args: args{
+				b: []byte(`{"addr":"127.0.0.1:9001"}`),
+			},
+			want: fields{
+				Addr:   "127.0.0.1:9001",
+				Weight: 1,
 			},
 		},
 		{
@@ -185,6 +196,9 @@ func TestAddress_UnmarshalJSON(t *testing.T) {
 		},
 		{
 			name: "empty",
+			want: fields{
+				WeightIsNil: true,
+			},
 		},
 	}
 	for _, tt := range tests {
@@ -197,7 +211,14 @@ func TestAddress_UnmarshalJSON(t *testing.T) {
 			}
 			if !tt.wantErr {
 				assert.Equal(t, tt.want.Addr, a.Addr)
-				assert.Equal(t, tt.want.Weight, a.Weight)
+				if tt.want.WeightIsNil {
+					assert.Nil(t, a.Weight)
+				} else {
+					assert.NotNil(t, a.Weight)
+					if a.Weight != nil {
+						assert.Equal(t, tt.want.Weight, *a.Weight)
+					}
+				}
 			}
 		})
 	}

@@ -25,6 +25,7 @@
   - [Datetime parse formats](/pipeline/README.md#datetime-parse-formats)
   - [Match modes](/pipeline/README.md#match-modes)
   - [Experimental: Do If rules](/pipeline/doif/README.md#experimental-do-if-rules)
+  - [Decoder](/decoder/readme.md)
 
 - **Other**
   - [Contributing](/docs/contributing.md)
