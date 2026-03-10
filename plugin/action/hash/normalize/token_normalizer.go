@@ -272,6 +272,12 @@ func newToken(placeholder string) lexmachine.Action {
 
 func newIpToken(placeholder string) lexmachine.Action {
 	return func(s *lexmachine.Scanner, m *machines.Match) (any, error) {
+		// skip `\w<match>\w`
+		if m.TC > 0 && isWord(s.Text[m.TC-1]) ||
+			m.TC+len(m.Bytes) < len(s.Text) && isWord(s.Text[m.TC+len(m.Bytes)]) {
+			return nil, nil
+		}
+
 		// Fallback IP parser.
 		// Scans for IP-like patterns until end, then validates with net.ParseIP.
 		// Necessary because lexer's own pattern matching can be incomplete.
@@ -285,15 +291,15 @@ func newIpToken(placeholder string) lexmachine.Action {
 		}
 
 		candidate := string(s.Text[begin:end])
-		if net.ParseIP(candidate) != nil {
-			return token{
-				placeholder: placeholder,
-				begin:       begin,
-				end:         end,
-			}, nil
-		} else {
+		if net.ParseIP(candidate) == nil {
 			return nil, nil
 		}
+
+		return token{
+			placeholder: placeholder,
+			begin:       begin,
+			end:         end,
+		}, nil
 	}
 }
 
