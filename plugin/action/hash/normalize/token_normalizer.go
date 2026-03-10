@@ -514,8 +514,8 @@ var builtinTokenPatterns = []TokenPattern{
 	{
 		// RFC3339, RFC3339Nano, DateTime, DateOnly, TimeOnly, Go time with monotonic clock
 		Placeholder: placeholderByPattern[pDatetime],
-		RE: fmt.Sprintf(`(%s)|(%s)|(%s)|(%s)`,
-			`\d\d\d\d-\d\d-\d\d \d\d:\d\d:\d\d\.\d+ [+\-]\d\d\d\d [A-Z]+ m=[+\-]\d+\.\d+`,
+		RE: fmt.Sprintf(`(%s)|(%s)|(%s)`,
+			// `\d\d\d\d-\d\d-\d\d \d\d:\d\d:\d\d\.\d+ [+\-]\d\d\d\d [A-Z]+ m=[+\-]\d+\.\d+`,
 			`\d\d\d\d-\d\d-\d\dT\d\d:\d\d:\d\d(\.\d+)?(Z|[\+\-]\d\d:\d\d)`,
 			`\d\d:\d\d:\d\d`,
 			`\d\d\d\d-\d\d-\d\d( \d\d:\d\d:\d\d)?`,
