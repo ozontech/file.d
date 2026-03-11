@@ -54,7 +54,7 @@ Which field in the log indicates `stream`. Mostly used for distinguishing `stdou
 
 **`maintenance_interval`** *`string`* *`default=5s`* 
 
-How often to perform maintenance. Maintenance includes antispammer maintenance and metric cleanup, metric holder maintenance, increasing basic pipeline metrics with accumulated deltas, logging pipeline stats. The value must be passed in format of duration (`<number>(ms|s|m|h)`).
+How often to perform maintenance. Maintenance includes metric cleanup, metric holder maintenance, increasing basic pipeline metrics with accumulated deltas, logging pipeline stats. The value must be passed in format of duration (`<number>(ms|s|m|h)`).
 
 <br>
 
@@ -66,13 +66,17 @@ How long the event can process in action plugins and block stream in streamer un
 
 **`antispam_threshold`** *`int`* *`default=0`* 
 
-Threshold value for the [antispammer](/pipeline/antispam/README.md#antispammer) to ban sources. If set to 0 antispammer is disabled. If set to the value greater than 0 antispammer is enabled and bans sources which write `antispam_threshold` or more logs in `maintenance_interval` time.
+Threshold value for the [antispammer](/pipeline/antispam/README.md#antispammer) to ban sources. If set to -1 antispammer is disabled. If set to the value greater than -1 antispammer is enabled and bans sources which write `antispam_threshold` or more logs in `maintenance_interval` time.
+
+> ⚠ DEPRECATED. Use `threshold` in `antispam` instead.
 
 <br>
 
 **`antispam_exceptions`** *`[]`[antispam.Exception](/pipeline/antispam/README.md#exception-parameters)*
 
 The list of antispammer exceptions. If the log matches at least one of the exceptions it is not accounted in antispammer.
+
+> ⚠ DEPRECATED. Use `rules` in `antispam` instead.
 
 <br>
 
@@ -146,6 +150,8 @@ pipelines:
         max_label_value_length: 100
 ```
 
+<br>
+
 **`hold_duration`** *`string`* *`default=30m`*
 
 The amount of time the metric can be idle until it is deleted. Used for deleting rarely updated metrics to save metrics storage resources. The value must be passed in format of duration (`<number>(ms|s|m|h)`).
@@ -155,6 +161,59 @@ The amount of time the metric can be idle until it is deleted. Used for deleting
 **`max_label_value_length`** *`int`* *`default=0`*
 
 Maximum length of custom metric labels in action plugins. If zero, no limit is set.
+
+<br>
+
+## Antispam
+
+Section for antispam in settings. Example:
+
+```yaml
+pipelines:
+  test:
+    settings:
+      antispam:
+        threshold: 3000
+        maintenance_interval: 5s
+        rules:
+          - name: ban_all
+            threshold: 0
+            do_if: 
+              op: equal
+              field: source_name
+              values: ["test.log"]
+          - name: custom_threshold
+            threshold: 5000 
+            do_if:
+              op: and
+              operands:
+                - op: contains
+                  data: meta.service
+                  values:
+                    - test_service
+                - op: prefix
+                  data: event
+                  values:
+                    - '{"level":"debug"'
+```
+
+<br>
+
+**`maintenance_interval`** *`string`* *`default=5s`*
+
+How often to perform antispammer maintenance. The value must be passed in format of duration (`<number>(ms|s|m|h)`).
+
+<br>
+
+**`threshold`** *`int`* *`default=-1`*
+
+Threshold value for the [antispammer](/pipeline/antispam/README.md#antispammer) to ban sources. If set to -1 antispammer is disabled. If set to the value greater than -1 antispammer is enabled and bans sources which write `threshold` or more logs in `maintenance_interval` time.
+
+<br>
+
+**`rules`** *`[]`[antispam.Rule](/pipeline/antispam/README.md#rules)*
+
+The list of antispammer rules. If the log matches at least one of the exceptions it is not accounted in antispammer.
 
 <br>
 

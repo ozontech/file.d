@@ -4,11 +4,42 @@ In some systems services might explode with logs due to different circumstances.
 
 ## Antispammer
 
-The main entity is `Antispammer`. It counts input data from the sources (e.g. if data comes from [file input plugin](/plugin/input/file/README.md), source can be filename) and decides whether to ban it or not. For each source it counts how many logs it has got, in other words the counter for the source is incremented for each incoming log. When the counter is greater or equal to the threshold value the source is banned until its counter is less than the threshold value. The counter value is decremented once in maintenance interval by the threshold value. The maintenance interval for antispam is the same as for the pipeline (see `maintenance_interval` in [pipeline settings](/pipeline/README.md#settings)).
+The main entity is `Antispammer`. It counts input data from the sources (e.g. if data comes from [file input plugin](/plugin/input/file/README.md), source can be filename) and decides whether to ban it or not. For each source it counts how many logs it has got, in other words the counter for the source is incremented for each incoming log. When the counter is greater or equal to the threshold value the source is banned until its counter is less than the threshold value. The counter value is decremented once in maintenance interval by the threshold value.
+
+## Rules
+
+Antispammer has rules which can be applied by checking source name, field in metadata map or log as raw bytes contents. Antispammer iterates through the rules, checks the event and applies the first matching rule.
+If event does not match any rule it will be limited with common threshold.
+
+### Rule parameters
+
+**`name`** **`string`**
+
+Name of the rule. If set to nonempty string, adds label value for the `name` label in the `antispam_exceptions` metric.
+
+<br>
+
+**`threshold`** **`int`**
+
+Common threshold applied to events that don't match any rule.
+Values:
+- `-1` - no limit;
+- `0` - discard all logs;
+- `> 0` - normal threshold value.
+
+<br>
+
+**`do_if`**
+
+Condition tree. Checks if the event matches the rule(see [doc](../doif/README.md)).
+
+<br>
 
 ## Exceptions
 
 Antispammer has some exception rules which can be applied by checking source name or log as raw bytes contents. If the log is matched by the rules it is not accounted for in the antispammer. It might be helpful for the logs from critical infrastructure services which must not be banned at all.
+
+> ⚠ DEPRECATED. Use `rules` instead.
 
 ### Exception parameters
 

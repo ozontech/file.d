@@ -178,12 +178,16 @@ func getNodeBytesSize(node *insaneJSON.Node) int {
 	return size
 }
 
-func (n *lenCmpOpNode) Check(eventRoot *insaneJSON.Root) bool {
+func (n *lenCmpOpNode) Check(data Data) bool {
 	value := 0
+	eventData, ok := data.(rootData)
+	if !ok {
+		return false
+	}
 
 	switch n.lenCmpOp {
 	case byteLenCmpOp:
-		node := eventRoot.Dig(n.fieldPath...)
+		node := eventData.root.Dig(n.fieldPath...)
 		if node == nil {
 			return false
 		}
@@ -194,14 +198,14 @@ func (n *lenCmpOpNode) Check(eventRoot *insaneJSON.Root) bool {
 			value = len(node.AsString())
 		}
 	case arrayLenCmpOp:
-		node := eventRoot.Dig(n.fieldPath...)
+		node := eventData.root.Dig(n.fieldPath...)
 		if !node.IsArray() {
 			return false
 		}
 
 		value = len(node.AsArray())
 	case intValCmpOp:
-		node := eventRoot.Dig(n.fieldPath...)
+		node := eventData.root.Dig(n.fieldPath...)
 		if node == nil {
 			return false
 		}

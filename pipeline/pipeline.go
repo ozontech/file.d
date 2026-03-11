@@ -24,7 +24,7 @@ import (
 )
 
 const (
-	DefaultAntispamThreshold         = 0
+	DefaultAntispamThreshold         = -1
 	DefaultSourceNameMetaField       = ""
 	DefaultDecoder                   = "auto"
 	DefaultIsStrict                  = false
@@ -149,8 +149,7 @@ type Settings struct {
 	MetaCacheSize           int
 	MaintenanceInterval     time.Duration
 	EventTimeout            time.Duration
-	AntispamThreshold       int
-	AntispamExceptions      antispam.Exceptions
+	Antispam                AntispamSettings
 	SourceNameMetaField     string
 	AvgEventSize            int
 	MaxEventSize            int
@@ -165,6 +164,13 @@ type Settings struct {
 type MetricSettings struct {
 	HoldDuration        time.Duration
 	MaxLabelValueLength int
+}
+
+type AntispamSettings struct {
+	Threshold           int
+	Rules               antispam.Rules
+	Exceptions          antispam.Exceptions
+	MaintenanceInterval time.Duration
 }
 
 type PoolType string
@@ -207,12 +213,13 @@ func New(name string, settings *Settings, registry *prometheus.Registry, lg *zap
 		streamer:  newStreamer(settings.EventTimeout),
 		eventPool: eventPool,
 		antispamer: antispam.NewAntispammer(&antispam.Options{
-			MaintenanceInterval: settings.MaintenanceInterval,
-			Threshold:           settings.AntispamThreshold,
+			Threshold:           settings.Antispam.Threshold,
+			MaintenanceInterval: settings.Antispam.MaintenanceInterval,
 			UnbanIterations:     antispamUnbanIterations,
 			Logger:              lg.Named("antispam"),
 			MetricsController:   metricCtl,
-			Exceptions:          settings.AntispamExceptions,
+			Rules:               settings.Antispam.Rules,
+			Exceptions:          settings.Antispam.Exceptions,
 		}),
 		metricCtl: metricCtl,
 
@@ -346,6 +353,7 @@ func (p *Pipeline) Start() {
 	p.streamer.start()
 
 	go p.maintenance()
+	go p.antispammerMaintenance()
 	if !p.useSpread {
 		go p.growProcs()
 	}
@@ -431,7 +439,7 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offsets Offsets, byt
 	// The event is Partial if it is larger than the driver configuration.
 	// For example, for containerd this setting is called max_container_log_line_size
 	// https://github.com/containerd/containerd/blob/f7f2be732159a411eae46b78bfdb479b133a823b/pkg/cri/config/config.go#L263-L266
-	if !row.IsPartial && p.settings.AntispamThreshold > 0 {
+	if !row.IsPartial && p.settings.Antispam.Threshold >= 0 {
 		streamOffset := offsets.ByStream(string(row.Stream))
 		currentOffset := offsets.current
 
@@ -463,7 +471,7 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offsets Offsets, byt
 				p.Error(fmt.Sprintf("cannot parse raw time %s: %v", row.Time, err))
 			}
 		}
-		isSpam := p.antispamer.IsSpam(checkSourceID, checkSourceName, isNewSource, bytes, eventTime)
+		isSpam := p.antispamer.IsSpam(checkSourceID, checkSourceName, isNewSource, bytes, eventTime, meta)
 		if isSpam {
 			return EventSeqIDError
 		}
@@ -869,6 +877,17 @@ func (p *Pipeline) maintenance() {
 		myDeltas := p.incMetrics(inputEvents, inputSize, outputEvents, outputSize, readOps)
 		p.setMetrics(p.eventPool.inUse())
 		p.logChanges(myDeltas)
+	}
+}
+
+func (p *Pipeline) antispammerMaintenance() {
+	for {
+		time.Sleep(p.settings.Antispam.MaintenanceInterval)
+		if p.shouldStop.Load() {
+			return
+		}
+
+		p.antispamer.Maintenance()
 	}
 }
 
