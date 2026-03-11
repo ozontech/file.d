@@ -32,6 +32,7 @@
     - [debug](plugin/action/debug/README.md)
     - [decode](plugin/action/decode/README.md)
     - [discard](plugin/action/discard/README.md)
+    - [event_to_metrics](plugin/action/event_to_metrics/README.md)
     - [flatten](plugin/action/flatten/README.md)
     - [hash](plugin/action/hash/README.md)
     - [join](plugin/action/join/README.md)

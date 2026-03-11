@@ -18,7 +18,7 @@ import (
 )
 
 /*{ introduction
-It sends the logs batches to Loki using HTTP API.
+It sends metrics to Prometheus using the remote write API. The plugin receives metric events from the pipeline (e.g., from the event_to_metrics action plugin) and forwards them to a Prometheus-compatible endpoint.
 }*/
 
 const (
