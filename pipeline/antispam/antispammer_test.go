@@ -7,6 +7,7 @@ import (
 	"github.com/ozontech/file.d/cfg/matchrule"
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/metric"
+	"github.com/ozontech/file.d/pipeline/doif"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/require"
 )
@@ -155,4 +156,75 @@ func TestAntispamExceptions(t *testing.T) {
 		eventRulesetName:  3,
 		sourceRulesetName: 1,
 	})
+}
+
+func TestAntispamRules(t *testing.T) {
+	r := require.New(t)
+	now := time.Now()
+
+	threshold := 2
+	unbanIterations := 2
+	maintenanceInterval := time.Second * 1
+
+	antispamer := newAntispammer(threshold, unbanIterations, maintenanceInterval)
+
+	ruleNameBanAll := "test_ban_all"
+	ruleNamePassAll := "test_pass_all"
+	ruleCustomThresold := "test_custom_threshold"
+
+	doIfCheckerSourceName, err := doif.NewFromMap(map[string]any{
+		"op":     "equal",
+		"field":  "source_name",
+		"values": []any{"test_source_name"},
+	})
+	r.NoError(err)
+
+	doIfCheckerMetaField, err := doif.NewFromMap(map[string]any{
+		"op":     "equal",
+		"field":  "meta.some_field",
+		"values": []any{"test_meta_field"},
+	})
+	r.NoError(err)
+
+	doIfCheckerEventBytes, err := doif.NewFromMap(map[string]any{
+		"op":     "prefix",
+		"field":  "event",
+		"values": []any{`{"level":"error"`},
+	})
+	r.NoError(err)
+
+	antispamer.rules = Rules{
+		Rule{
+			Name:        ruleNameBanAll,
+			Threshold:   0,
+			DoIfChecker: doIfCheckerSourceName,
+		},
+		Rule{
+			Name:        ruleNamePassAll,
+			Threshold:   -1,
+			DoIfChecker: doIfCheckerMetaField,
+		},
+		Rule{
+			Name:        ruleCustomThresold,
+			Threshold:   3,
+			DoIfChecker: doIfCheckerEventBytes,
+		},
+	}
+
+	checkSpam := func(expected bool, source, event string, meta map[string]string) {
+		r.Equal(expected, antispamer.IsSpam(source, source, false, []byte(event), now, meta))
+	}
+
+	checkSpam(true, "test_source_name", `{"level":"info","message":test"}`, nil)
+
+	checkSpam(false, "test_meta_field", `{"level":"info","message":test"}`, map[string]string{
+		"some_field": "test_meta_field",
+	})
+
+	checkSpam(false, "test_event_bytes", `{"level":"error","message":test"}`, nil)
+	checkSpam(false, "test_event_bytes", `{"level":"error","message":test"}`, nil)
+	checkSpam(true, "test_event_bytes", `{"level":"error","message":test"}`, nil)
+
+	checkSpam(false, "test", `{"level":"info","message":test"}`, nil)
+	checkSpam(true, "test", `{"level":"info","message":test"}`, nil)
 }

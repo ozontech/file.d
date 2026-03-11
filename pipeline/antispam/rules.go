@@ -23,7 +23,7 @@ func (d *antispamData) Get(args ...string) []byte {
 	switch args[0] {
 	case "event":
 		return d.eventBytes
-	case "source":
+	case "source_name":
 		return []byte(d.sourceName)
 	case "meta":
 		if len(args) != 2 {

@@ -438,7 +438,7 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offsets Offsets, byt
 	// The event is Partial if it is larger than the driver configuration.
 	// For example, for containerd this setting is called max_container_log_line_size
 	// https://github.com/containerd/containerd/blob/f7f2be732159a411eae46b78bfdb479b133a823b/pkg/cri/config/config.go#L263-L266
-	if !row.IsPartial && p.settings.Antispam.Threshold > 0 {
+	if !row.IsPartial && p.settings.Antispam.Threshold >= 0 {
 		streamOffset := offsets.ByStream(string(row.Stream))
 		currentOffset := offsets.current
 
