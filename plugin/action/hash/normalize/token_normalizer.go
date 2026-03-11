@@ -500,10 +500,9 @@ var builtinTokenPatterns = []TokenPattern{
 		mask: pUuid,
 	},
 	{
-		// SHA512, SHA256, SHA1, MD5
+		// SHA256, SHA1, MD5
 		Placeholder: placeholderByPattern[pHash],
 		RE: fmt.Sprintf("(%s)|(%s)|(%s)",
-			// strings.Repeat("[0-9a-fA-F]", 128),
 			strings.Repeat("[0-9a-fA-F]", 64),
 			strings.Repeat(`[0-9a-fA-F]`, 40),
 			strings.Repeat(`[0-9a-fA-F]`, 32),

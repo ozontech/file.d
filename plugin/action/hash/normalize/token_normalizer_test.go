@@ -252,7 +252,6 @@ func TestTokenNormalizerBuiltin(t *testing.T) {
 		{
 			name: "hash",
 			inputs: []string{
-				// "some cf83e1357eefb8bdf1542850d66d8007d620e4050b5715dc83f4a921d36ce9ce47d0d13c5d85f2b0ff8318d2877eec2f63b931bd47417a81a538327af927da3e here",
 				"some 48757ec9f04efe7faacec8722f3476339b125a6b6172b8a69ff3aa329e0bd0ff here",
 				"some a94a8fe5ccb19ba61c4c0873d391e987982fbbd3 here",
 				"some 098f6bcd4621d373cade4e832627b4f6 here",
