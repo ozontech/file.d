@@ -28,9 +28,9 @@ const (
 	pEmail
 	pUrl
 	pHost
+	pFilepath
 	pUuid
-	pSha1
-	pMd5
+	pHash
 	pDatetime
 	pIp
 	pDuration
@@ -53,9 +53,9 @@ var patternById = map[string]int{
 	"email":            pEmail,
 	"url":              pUrl,
 	"host":             pHost,
+	"filepath":         pFilepath,
 	"uuid":             pUuid,
-	"sha1":             pSha1,
-	"md5":              pMd5,
+	"hash":             pHash,
 	"datetime":         pDatetime,
 	"ip":               pIp,
 	"duration":         pDuration,
@@ -75,9 +75,9 @@ var placeholderByPattern = map[int]string{
 	pEmail:           "<email>",
 	pUrl:             "<url>",
 	pHost:            "<host>",
+	pFilepath:        "<filepath>",
 	pUuid:            "<uuid>",
-	pSha1:            "<sha1>",
-	pMd5:             "<md5>",
+	pHash:            "<hash>",
 	pDatetime:        "<datetime>",
 	pIp:              "<ip>",
 	pDuration:        "<duration>",
@@ -483,6 +483,11 @@ var builtinTokenPatterns = []TokenPattern{
 		mask: pHost,
 	},
 	{
+		Placeholder: placeholderByPattern[pFilepath],
+		RE:          `(/[a-zA-Z0-9-]+)+`,
+		mask:        pFilepath,
+	},
+	{
 		Placeholder: placeholderByPattern[pUuid],
 		RE: fmt.Sprintf(`%s-%s-%s-%s-%s`,
 			strings.Repeat(`[0-9a-fA-F]`, 8),
@@ -495,21 +500,21 @@ var builtinTokenPatterns = []TokenPattern{
 		mask: pUuid,
 	},
 	{
-		Placeholder: placeholderByPattern[pSha1],
-		RE:          strings.Repeat(`[0-9a-fA-F]`, 40),
+		// SHA256, SHA1, MD5
+		Placeholder: placeholderByPattern[pHash],
+		RE: fmt.Sprintf("(%s)|(%s)|(%s)",
+			strings.Repeat("[0-9a-fA-F]", 64),
+			strings.Repeat(`[0-9a-fA-F]`, 40),
+			strings.Repeat(`[0-9a-fA-F]`, 32),
+		),
 
-		mask: pSha1,
+		mask: pHash,
 	},
 	{
-		Placeholder: placeholderByPattern[pMd5],
-		RE:          strings.Repeat(`[0-9a-fA-F]`, 32),
-
-		mask: pMd5,
-	},
-	{
-		// RFC3339, RFC3339Nano, DateTime, DateOnly, TimeOnly
+		// RFC3339, RFC3339Nano, DateTime, DateOnly, TimeOnly, Go time with monotonic clock
 		Placeholder: placeholderByPattern[pDatetime],
-		RE: fmt.Sprintf(`(%s)|(%s)|(%s)`,
+		RE: fmt.Sprintf(`(%s)|(%s)|(%s)|(%s)`,
+			`\d\d\d\d-\d\d-\d\d \d\d:\d\d:\d\d\.\d+ [+\-]\d\d\d\d [A-Z]+ m=[+\-]\d+\.\d+`,
 			`\d\d\d\d-\d\d-\d\dT\d\d:\d\d:\d\d(\.\d+)?(Z|[\+\-]\d\d:\d\d)`,
 			`\d\d:\d\d:\d\d`,
 			`\d\d\d\d-\d\d-\d\d( \d\d:\d\d:\d\d)?`,
