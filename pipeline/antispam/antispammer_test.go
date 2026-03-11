@@ -163,7 +163,7 @@ func TestAntispamRules(t *testing.T) {
 	now := time.Now()
 
 	threshold := 2
-	unbanIterations := 2
+	unbanIterations := 4
 	maintenanceInterval := time.Second * 1
 
 	antispamer := newAntispammer(threshold, unbanIterations, maintenanceInterval)
