@@ -353,6 +353,7 @@ func (p *Pipeline) Start() {
 	p.streamer.start()
 
 	go p.maintenance()
+	go p.antispammerMaintenance()
 	if !p.useSpread {
 		go p.growProcs()
 	}
@@ -876,6 +877,17 @@ func (p *Pipeline) maintenance() {
 		myDeltas := p.incMetrics(inputEvents, inputSize, outputEvents, outputSize, readOps)
 		p.setMetrics(p.eventPool.inUse())
 		p.logChanges(myDeltas)
+	}
+}
+
+func (p *Pipeline) antispammerMaintenance() {
+	for {
+		time.Sleep(p.settings.Antispam.MaintenanceInterval)
+		if p.shouldStop.Load() {
+			return
+		}
+
+		p.antispamer.Maintenance()
 	}
 }
 
