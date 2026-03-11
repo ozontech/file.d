@@ -54,7 +54,7 @@ Which field in the log indicates `stream`. Mostly used for distinguishing `stdou
 
 **`maintenance_interval`** *`string`* *`default=5s`* 
 
-How often to perform maintenance. Maintenance includes antispammer maintenance and metric cleanup, metric holder maintenance, increasing basic pipeline metrics with accumulated deltas, logging pipeline stats. The value must be passed in format of duration (`<number>(ms|s|m|h)`).
+How often to perform maintenance. Maintenance includes metric cleanup, metric holder maintenance, increasing basic pipeline metrics with accumulated deltas, logging pipeline stats. The value must be passed in format of duration (`<number>(ms|s|m|h)`).
 
 <br>
 
