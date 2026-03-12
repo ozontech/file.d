@@ -124,7 +124,7 @@ AutoCommitInterval sets how long to go between autocommits
 
 **`timeout`** *`cfg.Duration`* *`default=15s`* 
 
-Timeout for consume
+Timeout for fetch messages
 
 <br>
 

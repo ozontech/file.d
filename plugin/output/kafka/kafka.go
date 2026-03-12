@@ -102,7 +102,7 @@ type Config struct {
 	// > @3@4@5@6
 	// >
 	// > Timeout for the produce request
-	Timeout  cfg.Duration `json:"produce_timeout" default:"15s" parse:"duration"` // *
+	Timeout  cfg.Duration `json:"timeout" default:"15s" parse:"duration"` // *
 	Timeout_ time.Duration
 
 	// > @3@4@5@6

@@ -158,7 +158,7 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
-	// > Timeout for consume
+	// > Timeout for fetch messages
 	Timeout  cfg.Duration `json:"timeout" default:"15s" parse:"duration"` // *
 	Timeout_ time.Duration
 
