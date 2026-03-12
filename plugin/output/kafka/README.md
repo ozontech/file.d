@@ -59,6 +59,12 @@ After this timeout the batch will be sent even if batch isn't full.
 
 <br>
 
+**`produce_timeout`** *`cfg.Duration`* *`default=15s`* 
+
+Timeout for the produce request
+
+<br>
+
 **`max_message_bytes`** *`cfg.Expression`* *`default=1000000`* 
 
 The maximum permitted size of a message.
