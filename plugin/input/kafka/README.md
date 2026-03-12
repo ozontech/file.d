@@ -122,6 +122,12 @@ AutoCommitInterval sets how long to go between autocommits
 
 <br>
 
+**`timeout`** *`cfg.Duration`* *`default=15s`* 
+
+Timeout for consume
+
+<br>
+
 **`session_timeout`** *`cfg.Duration`* *`default=10s`* 
 
 SessionTimeout sets how long a member in the group can go between heartbeats
