@@ -3,8 +3,9 @@ pipelines:
     input:
       type: kafka
       offset: oldest
+      timeout: 60s
       meta:
-        partition: 'partition_{{ .partition }}'
-        topic: '{{ .topic }}'
+        partition: "partition_{{ .partition }}"
+        topic: "{{ .topic }}"
     output:
       type: file

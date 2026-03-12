@@ -59,7 +59,7 @@ After this timeout the batch will be sent even if batch isn't full.
 
 <br>
 
-**`produce_timeout`** *`cfg.Duration`* *`default=15s`* 
+**`timeout`** *`cfg.Duration`* *`default=15s`* 
 
 Timeout for the produce request
 
