@@ -158,6 +158,12 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
+	// > Timeout for fetch messages
+	Timeout  cfg.Duration `json:"timeout" default:"15s" parse:"duration"` // *
+	Timeout_ time.Duration
+
+	// > @3@4@5@6
+	// >
 	// > SessionTimeout sets how long a member in the group can go between heartbeats
 	SessionTimeout  cfg.Duration `json:"session_timeout" default:"10s" parse:"duration"` // *
 	SessionTimeout_ time.Duration
@@ -287,7 +293,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 		p.idByTopic[topic] = i
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), p.config.Timeout_)
 	p.cancel = cancel
 	p.s = &splitConsume{
 		consumers:              make(map[tp]*pconsumer),
@@ -313,13 +319,17 @@ func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 
 func (p *Plugin) Stop() {
 	p.logger.Infof("Stopping")
-	err := p.client.CommitMarkedOffsets(context.Background())
+	p.cancel()
+
+	ctx, cancel := context.WithTimeout(context.Background(), p.config.Timeout_)
+	defer cancel()
+
+	err := p.client.CommitMarkedOffsets(ctx)
 	if err != nil {
 		p.commitErrorsMetric.Inc()
 		p.logger.Errorf("can't commit marked offsets: %s", err.Error())
 	}
 	p.client.Close()
-	p.cancel()
 }
 
 func (p *Plugin) Commit(event *pipeline.Event) {
