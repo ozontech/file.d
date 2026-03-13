@@ -22,6 +22,16 @@ services:
       - "kafka_data:/bitnami"
       - ./certs/kafka.truststore.jks:/bitnami/kafka/config/certs/kafka.truststore.jks
       - ./certs/kafka.keystore.jks:/bitnami/kafka/config/certs/kafka.keystore.jks
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "/opt/bitnami/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9094",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
     environment:
       - KAFKA_CFG_NODE_ID=1001
       - KAFKA_CFG_PROCESS_ROLES=broker,controller
