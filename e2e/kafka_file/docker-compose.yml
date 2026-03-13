@@ -7,6 +7,16 @@ services:
       - "9092:9092"
     volumes:
       - "kafka_data:/bitnami"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "/opt/bitnami/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
     environment:
       - KAFKA_CFG_NODE_ID=1001
       - KAFKA_CFG_PROCESS_ROLES=broker,controller
