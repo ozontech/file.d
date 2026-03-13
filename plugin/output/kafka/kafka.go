@@ -348,7 +348,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 		data.messages[i].Timestamp = time.Now()
 		data.messages[i].Value = outBuf[start:]
 		data.messages[i].Topic = topic
-		data.messages[i].Context = ctx
+		data.messages[i].Context = nil // cause we set context on produce batch
 		i++
 	})
 
