@@ -327,6 +327,10 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 	outBuf := data.outBuf[:0]
 	start := 0
 	i := 0
+
+	ctx, cancel := context.WithTimeout(p.ctx, p.config.Timeout_)
+	defer cancel()
+
 	batch.ForEach(func(event *pipeline.Event) {
 		outBuf, start = event.Encode(outBuf)
 
@@ -344,11 +348,9 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 		data.messages[i].Timestamp = time.Now()
 		data.messages[i].Value = outBuf[start:]
 		data.messages[i].Topic = topic
+		data.messages[i].Context = ctx
 		i++
 	})
-
-	ctx, cancel := context.WithTimeout(p.ctx, p.config.Timeout_)
-	defer cancel()
 
 	if err := p.client.ProduceSync(ctx, data.messages[:i]...).FirstErr(); err != nil {
 		if errors.Is(err, kerr.LeaderNotAvailable) || errors.Is(err, kerr.NotLeaderForPartition) {
