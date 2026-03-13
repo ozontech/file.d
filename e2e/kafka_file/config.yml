@@ -3,7 +3,7 @@ pipelines:
     input:
       type: kafka
       offset: oldest
-      timeout: 60s
+      timeout: 5s
       meta:
         partition: "partition_{{ .partition }}"
         topic: "{{ .topic }}"
