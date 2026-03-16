@@ -77,7 +77,7 @@ func (s *splitConsume) Lost(_ context.Context, _ *kgo.Client, lost map[string][]
 
 func (s *splitConsume) consume(ctx context.Context, cl *kgo.Client, timeout time.Duration) {
 	for {
-		pollCtx, cancel := context.WithTimeout(context.Background(), timeout)
+		pollCtx, cancel := context.WithTimeout(ctx, timeout)
 
 		fetches := cl.PollRecords(pollCtx, s.bufferSize)
 		cancel()
