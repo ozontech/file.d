@@ -283,7 +283,7 @@ func newIpToken(placeholder string) lexmachine.Action {
 		// Necessary because lexer's own pattern matching can be incomplete.
 		begin, end := m.TC, m.TC
 
-		for begin < len(s.Text) {
+		for end < len(s.Text) {
 			if !isIPChar(s.Text[end]) {
 				break
 			}
