@@ -89,7 +89,7 @@ func (c *Config) Send(t *testing.T) {
 func (c *Config) Validate(t *testing.T) {
 	r := require.New(t)
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
 	expectedEventsCount := messages * arrayLen
@@ -99,7 +99,9 @@ func (c *Config) Validate(t *testing.T) {
 
 	go func() {
 		for {
-			fetches := c.client.PollFetches(ctx)
+			pollCtx, pollCancel := context.WithTimeout(context.Background(), 5*time.Second)
+			fetches := c.client.PollFetches(pollCtx)
+			pollCancel()
 			fetches.EachError(func(topic string, p int32, err error) {})
 			fetches.EachRecord(func(r *kgo.Record) {
 				result[string(r.Value)]++

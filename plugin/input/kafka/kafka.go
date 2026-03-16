@@ -293,7 +293,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 		p.idByTopic[topic] = i
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), p.config.Timeout_)
+	ctx, cancel := context.WithCancel(context.Background())
 	p.cancel = cancel
 	p.s = &splitConsume{
 		consumers:              make(map[tp]*pconsumer),
@@ -309,7 +309,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	p.controller.UseSpread()
 	p.controller.DisableStreams()
 
-	go p.s.consume(ctx, p.client)
+	go p.s.consume(ctx, p.client, p.config.Timeout_)
 }
 
 func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
@@ -319,7 +319,6 @@ func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 
 func (p *Plugin) Stop() {
 	p.logger.Infof("Stopping")
-	p.cancel()
 
 	ctx, cancel := context.WithTimeout(context.Background(), p.config.Timeout_)
 	defer cancel()
@@ -330,6 +329,7 @@ func (p *Plugin) Stop() {
 		p.logger.Errorf("can't commit marked offsets: %s", err.Error())
 	}
 	p.client.Close()
+	p.cancel()
 }
 
 func (p *Plugin) Commit(event *pipeline.Event) {
