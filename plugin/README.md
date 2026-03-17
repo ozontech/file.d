@@ -910,6 +910,16 @@ pipelines:
 ```
 
 [More details...](plugin/output/s3/README.md)
+## socket
+It sends events to a socket endpoint.
+Supports TCP, UDP, and Unix socket protocols.
+
+Events are sent in batches serialized as newline-delimited JSON, compatible with the socket input plugin.
+If a network error occurs, the batch will be retried according to the backoff settings.
+
+Supports [dead queue](/plugin/output/README.md#dead-queue).
+
+[More details...](plugin/output/socket/README.md)
 ## splunk
 It sends events to splunk.
 
