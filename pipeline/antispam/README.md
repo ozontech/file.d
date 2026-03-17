@@ -31,7 +31,7 @@ Values:
 
 **`do_if`**
 
-Condition tree. Checks if the event matches the rule(see [doc](../doif/README.md)).
+Condition tree. Checks if the event matches the rule(see [doc](/pipeline/doif/README.md)).
 
 <br>
 
