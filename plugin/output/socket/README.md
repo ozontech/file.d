@@ -79,14 +79,14 @@ Examples:
 **`ca_cert`** *`string`* 
 
 Client certificate in PEM encoding. This can be a path or the contents of the file.
-> Enables mutual TLS. Works only when `network` is `tcp`.
+> Enables TLS. Works only when `network` is `tcp`.
 
 <br>
 
 **`private_key`** *`string`* 
 
 Client private key in PEM encoding. This can be a path or the contents of the file.
-> Enables mutual TLS. Works only when `network` is `tcp`.
+> Enables TLS. Works only when `network` is `tcp`.
 
 <br>
 
