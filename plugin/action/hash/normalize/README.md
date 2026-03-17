@@ -22,9 +22,9 @@ We support a set of patterns out of the box.
 | 7 | email | `<email>` | test@host1.host2.com |
 | 8 | url | `<url>` | https://some.host.com/page1?a=1<br>ws://some.host1.host2.net<br>ftp://login:pass@serv.example.com:21/ |
 | 9 | host | `<host>` | www.weather.jp |
-| 10 | uuid | `<uuid>` | 7c1811ed-e98f-4c9c-a9f9-58c757ff494f |
-| 11 | sha1 | `<sha1>` | a94a8fe5ccb19ba61c4c0873d391e987982fbbd3 |
-| 12 | md5 | `<md5>` | 098f6bcd4621d373cade4e832627b4f6 |
+| 10 | filepath | `<filepath>` | /home/user/photos |
+| 11 | uuid | `<uuid>` | 7c1811ed-e98f-4c9c-a9f9-58c757ff494f |
+| 12 | hash | `<hash>` | 48757ec9f04efe7faacec8722f3476339b125a6b6172b8a69ff3aa329e0bd0ff<br>a94a8fe5ccb19ba61c4c0873d391e987982fbbd3<br>098f6bcd4621d373cade4e832627b4f6 |
 | 13 | datetime | `<datetime>` | 2025-01-13T10:20:40.999999Z<br>2025-01-13T10:20:40+04:00<br>2025-01-13 10:20:40<br>2025-01-13<br>10:20:40 |
 | 14 | ip | `<ip>` | **IPv4:** 1.2.3.4<br>**IPv6:** 2001:db8:3333:4444:5555:6666:1.2.3.4 |
 | 15 | duration | `<duration>` | -1m5s<br>1w2d3h4m5s6ms7us8ns |
