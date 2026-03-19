@@ -61,6 +61,7 @@ func (c *Config) Configure(t *testing.T, conf *cfg.Config, pipelineName string) 
 		AutoCommitInterval_:  1 * time.Second,
 		ConsumerMaxWaitTime_: 1 * time.Second,
 		HeartbeatInterval_:   10 * time.Second,
+		Timeout_:             10 * time.Second,
 	}
 
 	c.client = kafka_in.NewClient(config,
