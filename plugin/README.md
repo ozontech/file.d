@@ -331,6 +331,12 @@ pipelines:
 ```
 
 [More details...](plugin/action/discard/README.md)
+## event_to_metrics
+Get metric from event
+
+This plugin transforms incoming events into metric data. Each event can generate one or more metrics with configurable labels and values. Using the Prometheus output plugin, you can send the generated metrics to Prometheus.
+
+[More details...](plugin/action/event_to_metrics/README.md)
 ## flatten
 It extracts the object keys and adds them into the root with some prefix. If the provided field isn't an object, an event will be skipped.
 
@@ -832,6 +838,10 @@ It sends the event batches to postgres db using pgx.
 Supports [dead queue](/plugin/output/README.md#dead-queue).
 
 [More details...](plugin/output/postgres/README.md)
+## prometheus
+It sends metrics to Prometheus using the remote write API. The plugin receives metric events from the pipeline (e.g., from the event_to_metrics action plugin) and forwards them to a Prometheus-compatible endpoint.
+
+[More details...](plugin/output/prometheus/README.md)
 ## s3
 Sends events to s3 output of one or multiple buckets.
 `bucket` is default bucket for events. Addition buckets can be described in `multi_buckets` section, example down here.
