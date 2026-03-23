@@ -2,14 +2,12 @@ package kafka
 
 import (
 	"context"
-	"errors"
 	"time"
 
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
-	"github.com/twmb/franz-go/pkg/kerr"
 	"github.com/twmb/franz-go/pkg/kgo"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -353,9 +351,6 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 	})
 
 	if err := p.client.ProduceSync(ctx, data.messages[:i]...).FirstErr(); err != nil {
-		if errors.Is(err, kerr.LeaderNotAvailable) || errors.Is(err, kerr.NotLeaderForPartition) {
-			p.client.ForceMetadataRefresh()
-		}
 		p.logger.Errorf("can't write batch: %v", err)
 		p.sendErrorMetric.Inc()
 		return err
