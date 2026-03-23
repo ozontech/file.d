@@ -132,18 +132,6 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
-	// > Keep-alive config.
-	// >
-	// > `KeepAliveConfig` params:
-	// > * `max_idle_conn_duration` - idle keep-alive connections are closed after this duration.
-	// > By default idle connections are closed after `10s`.
-	// > * `max_conn_duration` - keep-alive connections are closed after this duration.
-	// > If set to `0` - connection duration is unlimited.
-	// > By default connection duration is `5m`.
-	KeepAlive KeepAliveConfig `json:"keep_alive" child:"true"` // *
-
-	// > @3@4@5@6
-	// >
 	// > It defines how much time to wait for the connection.
 	DialTimeout  cfg.Duration `json:"dial_timeout" default:"5s" parse:"duration"` // *
 	DialTimeout_ time.Duration
@@ -157,9 +145,9 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
-	// > It defines how often to perform maintenance
-	MaintenanceInterval  cfg.Duration `json:"maintenance_interval" default:"1m" parse:"duration"` // *
-	MaintenanceInterval_ time.Duration
+	// > The plugin reconnects to endpoint periodically using this interval. It is useful if an endpoint is a load balancer.
+	ReconnectInterval  cfg.Duration `json:"reconnect_interval" default:"1m" parse:"duration"` // *
+	ReconnectInterval_ time.Duration
 
 	// > @3@4@5@6
 	// >
@@ -209,22 +197,9 @@ type Config struct {
 	RetentionExponentMultiplier int `json:"retention_exponentially_multiplier" default:"2"` // *
 }
 
-type KeepAliveConfig struct {
-	// Idle keep-alive connections are closed after this duration.
-	MaxIdleConnDuration  cfg.Duration `json:"max_idle_conn_duration" parse:"duration" default:"10s"`
-	MaxIdleConnDuration_ time.Duration
-
-	// Keep-alive connections are closed after this duration.
-	MaxConnDuration  cfg.Duration `json:"max_conn_duration" parse:"duration" default:"5m"`
-	MaxConnDuration_ time.Duration
-}
-
 type data struct {
 	conn   net.Conn
 	outBuf []byte
-
-	connCreatedTime  time.Time
-	connLastUsedTime time.Time
 }
 
 func init() {
@@ -255,7 +230,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		BatchSizeCount:      p.config.BatchSize_,
 		BatchSizeBytes:      p.config.BatchSizeBytes_,
 		FlushTimeout:        p.config.BatchFlushTimeout_,
-		MaintenanceInterval: p.config.MaintenanceInterval_,
+		MaintenanceInterval: p.config.ReconnectInterval_,
 		MetricCtl:           params.MetricCtl,
 	}
 
@@ -323,58 +298,31 @@ func (p *Plugin) buildTLSConfig() {
 	p.tlsConfig = tlsBuilder.Build()
 }
 
-func (p *Plugin) maintenance(wd *pipeline.WorkerData) {
-	if *wd == nil {
+func (p *Plugin) maintenance(workerData *pipeline.WorkerData) {
+	if *workerData == nil {
 		return
 	}
-	d := (*wd).(*data)
-	if d.conn == nil {
+	data := (*workerData).(*data)
+	if data.conn == nil {
 		return
 	}
-
-	now := time.Now()
-	if p.config.KeepAlive.MaxIdleConnDuration_ > 0 && now.Sub(d.connLastUsedTime) >= p.config.KeepAlive.MaxIdleConnDuration_ {
-		p.logger.Info("closing idle socket connection",
-			zap.Duration("idle_for", now.Sub(d.connLastUsedTime)),
-			zap.Duration("max_idle_conn_duration", p.config.KeepAlive.MaxIdleConnDuration_),
-		)
-		_ = d.conn.Close()
-		d.conn = nil
-		return
-	}
-
-	if p.config.KeepAlive.MaxConnDuration_ > 0 && now.Sub(d.connCreatedTime) >= p.config.KeepAlive.MaxConnDuration_ {
-		p.logger.Info("closing long-lived socket connection",
-			zap.Duration("alive_for", now.Sub(d.connCreatedTime)),
-			zap.Duration("max_conn_duration", p.config.KeepAlive.MaxConnDuration_),
-		)
-		_ = d.conn.Close()
-		d.conn = nil
-	}
+	_ = data.conn.Close()
+	data.conn = nil
 }
 
-func (p *Plugin) out(wd *pipeline.WorkerData, batch *pipeline.Batch) error {
-	if *wd == nil {
-		*wd = &data{
+func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) error {
+	if *workerData == nil {
+		*workerData = &data{
 			outBuf: make([]byte, 0, p.config.BatchSize_*p.avgEventSize),
 		}
 	}
-	d := (*wd).(*data)
+	data := (*workerData).(*data)
 
-	if cap(d.outBuf) > p.config.BatchSize_*p.avgEventSize {
-		d.outBuf = make([]byte, 0, p.config.BatchSize_*p.avgEventSize)
+	if cap(data.outBuf) > p.config.BatchSize_*p.avgEventSize {
+		data.outBuf = make([]byte, 0, p.config.BatchSize_*p.avgEventSize)
 	}
 
-	if d.conn != nil && p.config.KeepAlive.MaxConnDuration_ > 0 && time.Since(d.connCreatedTime) >= p.config.KeepAlive.MaxConnDuration_ {
-		p.logger.Info("closing socket connection: max_conn_duration exceeded",
-			zap.Duration("alive_for", time.Since(d.connCreatedTime)),
-			zap.Duration("max_conn_duration", p.config.KeepAlive.MaxConnDuration_),
-		)
-		_ = d.conn.Close()
-		d.conn = nil
-	}
-
-	if d.conn == nil {
+	if data.conn == nil {
 		conn, err := p.dial()
 		if err != nil {
 			p.sendErrorMetric.WithLabelValues("connect").Inc()
@@ -384,34 +332,30 @@ func (p *Plugin) out(wd *pipeline.WorkerData, batch *pipeline.Batch) error {
 			)
 			return err
 		}
-		now := time.Now()
-		d.conn = conn
-		d.connCreatedTime = now
-		d.connLastUsedTime = now
+		data.conn = conn
 	}
 
-	d.outBuf = d.outBuf[:0]
+	outBuf := data.outBuf[:0]
 	batch.ForEach(func(event *pipeline.Event) {
-		d.outBuf, _ = event.Encode(d.outBuf)
-		d.outBuf = append(d.outBuf, '\n')
+		outBuf, _ = event.Encode(data.outBuf)
+		outBuf = append(data.outBuf, byte(0))
 	})
+	data.outBuf = outBuf
 
 	if p.config.WriteTimeout_ > 0 {
-		_ = d.conn.SetWriteDeadline(time.Now().Add(p.config.WriteTimeout_))
+		_ = data.conn.SetWriteDeadline(time.Now().Add(p.config.WriteTimeout_))
 	}
 
-	if err := writeAll(d.conn, d.outBuf); err != nil {
+	if err := writeAll(data.conn, data.outBuf); err != nil {
 		p.sendErrorMetric.WithLabelValues("write").Inc()
 		p.logger.Error("can't write batch to the socket endpoint", zap.Error(err),
 			zap.String("network", p.config.Network),
 			zap.String("address", p.config.Address),
 		)
-		_ = d.conn.Close()
-		d.conn = nil
+		_ = data.conn.Close()
+		data.conn = nil
 		return err
 	}
-
-	d.connLastUsedTime = time.Now()
 
 	return nil
 }
