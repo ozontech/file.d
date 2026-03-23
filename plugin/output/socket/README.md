@@ -90,19 +90,6 @@ Client private key in PEM encoding. This can be a path or the contents of the fi
 
 <br>
 
-**`keep_alive`** *`KeepAliveConfig`* 
-
-Keep-alive config.
-
-`KeepAliveConfig` params:
-* `max_idle_conn_duration` - idle keep-alive connections are closed after this duration.
-By default idle connections are closed after `10s`.
-* `max_conn_duration` - keep-alive connections are closed after this duration.
-If set to `0` - connection duration is unlimited.
-By default connection duration is `5m`.
-
-<br>
-
 **`dial_timeout`** *`cfg.Duration`* *`default=5s`* 
 
 It defines how much time to wait for the connection.
@@ -116,9 +103,9 @@ Timeout for writing a single batch to the socket.
 
 <br>
 
-**`maintenance_interval`** *`cfg.Duration`* *`default=1m`* 
+**`reconnect_interval`** *`cfg.Duration`* *`default=1m`* 
 
-It defines how often to perform maintenance
+The plugin reconnects to endpoint periodically using this interval. It is useful if an endpoint is a load balancer.
 
 <br>
 
