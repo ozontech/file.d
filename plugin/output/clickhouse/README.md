@@ -215,5 +215,17 @@ After this timeout batch will be sent even if batch isn't completed.
 
 <br>
 
+**`ban_timeout`** *`cfg.Duration`* *`default=10s`* 
+
+Timeout for banning host if it fails.
+
+<br>
+
+**`retry_interval`** *`cfg.Duration`* *`default=5s`* 
+
+Interval for retrying connections to banned hosts
+
+<br>
+
 
 <br>*Generated using [__insane-doc__](https://github.com/vitkovskii/insane-doc)*
