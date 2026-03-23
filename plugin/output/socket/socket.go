@@ -337,8 +337,8 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 
 	outBuf := data.outBuf[:0]
 	batch.ForEach(func(event *pipeline.Event) {
-		outBuf, _ = event.Encode(data.outBuf)
-		outBuf = append(data.outBuf, byte(0))
+		outBuf, _ = event.Encode(outBuf)
+		outBuf = append(outBuf, byte(0))
 	})
 	data.outBuf = outBuf
 
