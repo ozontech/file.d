@@ -1,0 +1,6 @@
+{"level":"error","message":"1: k8s_pod_label_app","k8s_pod_label_app":"k8s-service"}
+{"level":"info","message":"2: systemd.unit","systemd.unit":"systemd-service"}
+{"level":"warning","message":"3: syslog.identifier","syslog.identifier":"syslog-service"}
+{"level":"debug","message":"4: No service field"}
+{"level":"error","message":"5: Empty k8s_pod_label_app","k8s_pod_label_app":""}
+{"level":"info","message":"6: Multiple sources","k8s_pod_label_app":"k8s-service","systemd.unit":"systemd-service"}

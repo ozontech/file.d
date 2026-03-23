@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/ClickHouse/ch-go"
@@ -61,6 +62,10 @@ type Plugin struct {
 	queriesCountMetric *metric.Counter
 
 	router *pipeline.Router
+
+	bannedHosts  map[Address]time.Time
+	pendingHosts map[Address]struct{}
+	mu           sync.Mutex
 }
 
 type Setting struct {
@@ -334,6 +339,18 @@ type Config struct {
 	// > After this timeout batch will be sent even if batch isn't completed.
 	BatchFlushTimeout  cfg.Duration `json:"batch_flush_timeout" default:"200ms" parse:"duration"` // *
 	BatchFlushTimeout_ time.Duration
+
+	// > @3@4@5@6
+	// >
+	// > Timeout for banning host if it fails.
+	BanTimeout  cfg.Duration `json:"ban_timeout" default:"10s" parse:"duration"` // *
+	BanTimeout_ time.Duration
+
+	// > @3@4@5@6
+	// >
+	// > Interval for retrying connections to banned hosts
+	RetryInterval  cfg.Duration `json:"retry_interval" default:"5s" parse:"duration"` // *
+	RetryInterval_ time.Duration
 }
 
 func init() {
@@ -355,6 +372,9 @@ func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginParams) {
 	p.logger = params.Logger.Desugar()
 
+	p.bannedHosts = make(map[Address]time.Time, len(p.config.Addresses)) // Заранее выделил память под мапку
+	p.pendingHosts = make(map[Address]struct{}, len(p.config.Addresses)) // не знал, как обыграть момент с удалением успешно
+	// подключенного(ранее ожидающего) хоста, поэтому поменял на мапу (этот момент видно будет в checkBannedHosts)
 	p.config = config.(*Config)
 	p.registerMetrics(params.MetricCtl)
 	p.ctx, p.cancelFunc = context.WithCancel(context.Background())
@@ -404,28 +424,14 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	}
 
 	for _, addr := range p.config.Addresses {
-		addr.Addr = addrWithDefaultPort(addr.Addr, "9000")
-		pool, err := chpool.New(p.ctx, chpool.Options{
-			ClientOptions: ch.Options{
-				Logger:           p.logger.Named("driver"),
-				Address:          addr.Addr,
-				Database:         p.config.Database,
-				User:             p.config.User,
-				Password:         p.config.Password,
-				QuotaKey:         p.config.QuotaKey,
-				Compression:      compression,
-				Settings:         p.config.ClickhouseSettings.toProtoSettings(),
-				DialTimeout:      time.Second * 10,
-				TLS:              b.Build(),
-				HandshakeTimeout: time.Minute,
-			},
-			MaxConnLifetime:   p.config.MaxConnLifetime_,
-			MaxConnIdleTime:   p.config.MaxConnIdleTime_,
-			MaxConns:          p.config.MaxConns_,
-			MinConns:          p.config.MinConns_,
-			HealthCheckPeriod: p.config.HealthCheckPeriod_,
-		})
+		pool, err := p.createConnection(addr, compression, b)
 		if err != nil {
+			var netError net.Error
+			if errors.As(err, &netError) {
+				p.mu.Lock()
+				p.bannedHosts[addr] = time.Now().Add(p.config.BanTimeout_)
+				p.mu.Unlock()
+			}
 			p.logger.Error("create clickhouse connection pool", zap.Error(err), zap.String("addr", addr.Addr))
 		} else {
 			for j := 0; j < *addr.Weight; j++ {
@@ -433,11 +439,16 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 			}
 		}
 	}
-
-	if len(p.instances) == 0 {
+	// CORELOG-3268 если все хосты недоступны и fatal_on_failed_insert=false, пропускаем логи и идем дальше,
+	// если все хосты недоступны и fatal_on_failed_insert=true — падаем.
+	if len(p.instances) == 0 && p.config.FatalOnFailedInsert == true {
 		p.logger.Fatal("cannot start: no available clickhouse addresses in config")
 	}
-
+	// Объясни момент, в чем критическая важность reconnect делать именно в out,
+	// а не сразу в start, чтобы к моменту out мб поднялся какой-то хост и мы создали instance
+	if len(p.bannedHosts) > 0 {
+		go p.checkBannedHosts(compression, b)
+	}
 	batcherOpts := pipeline.BatcherOptions{
 		PipelineName:   params.PipelineName,
 		OutputType:     outPluginType,
@@ -482,6 +493,82 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	)
 
 	p.batcher.Start(p.ctx)
+}
+
+func (p *Plugin) createConnection(addr Address, compression ch.Compression, b xtls.ConfigBuilder) (*chpool.Pool, error) {
+	addr.Addr = addrWithDefaultPort(addr.Addr, "9000")
+	pool, err := chpool.New(p.ctx, chpool.Options{
+		ClientOptions: ch.Options{
+			Logger:           p.logger.Named("driver"),
+			Address:          addr.Addr,
+			Database:         p.config.Database,
+			User:             p.config.User,
+			Password:         p.config.Password,
+			QuotaKey:         p.config.QuotaKey,
+			Compression:      compression,
+			Settings:         p.config.ClickhouseSettings.toProtoSettings(),
+			DialTimeout:      time.Second * 10,
+			TLS:              b.Build(),
+			HandshakeTimeout: time.Minute,
+		},
+		MaxConnLifetime:   p.config.MaxConnLifetime_,
+		MaxConnIdleTime:   p.config.MaxConnIdleTime_,
+		MaxConns:          p.config.MaxConns_,
+		MinConns:          p.config.MinConns_,
+		HealthCheckPeriod: p.config.HealthCheckPeriod_,
+	})
+
+	return pool, err
+}
+
+func (p *Plugin) checkBannedHosts(compression ch.Compression, b xtls.ConfigBuilder) {
+	ticker := time.NewTicker(p.config.RetryInterval_)
+	for {
+		select {
+		case <-p.ctx.Done():
+			return
+		case <-ticker.C:
+			p.mu.Lock()
+			if len(p.bannedHosts) == 0 { // Так обыграл раннее завершение горутины
+				p.mu.Unlock()
+				return
+			}
+			for host, banUntil := range p.bannedHosts {
+				if time.Now().After(banUntil) {
+					p.pendingHosts[host] = struct{}{}
+				}
+			}
+			for host := range p.pendingHosts {
+				err := p.retryConnect(host, compression, b)
+				if err != nil {
+					p.logger.Error("failed to reconnect to banned host", zap.Error(err), zap.String("addr", host.Addr))
+					continue
+				}
+				delete(p.bannedHosts, host)
+				delete(p.pendingHosts, host)
+			}
+			p.mu.Unlock()
+		}
+	}
+}
+
+func (p *Plugin) retryConnect(addr Address, compression ch.Compression, b xtls.ConfigBuilder) error {
+	pool, err := p.createConnection(addr, compression, b)
+	if err != nil {
+		var netError net.Error
+		if errors.As(err, &netError) {
+			p.mu.Lock()
+			p.bannedHosts[addr] = time.Now().Add(p.config.BanTimeout_)
+			p.mu.Unlock()
+		}
+		return err
+	}
+
+	for j := 0; j < *addr.Weight; j++ {
+		p.instances = append(p.instances, pool)
+	}
+
+	return nil
 }
 
 func (p *Plugin) Stop() {
