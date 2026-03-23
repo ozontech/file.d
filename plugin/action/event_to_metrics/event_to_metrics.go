@@ -330,22 +330,24 @@ func (p *Plugin) Stop() {
 
 func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	p.mu.Lock()
-	copyMetrics := make([]Metric, 0, len(p.Metrics))
+	metricIndices := make([]int, 0, len(p.Metrics))
 	for i := range p.Metrics {
-		if p.Metrics[i].DoIfChecker == nil {
-			copyMetrics = append(copyMetrics, p.Metrics[i])
-		} else {
-			if !p.config.Metrics[i].DoIfChecker.Check(event.Root) {
-				continue
-			}
-			copyMetrics = append(copyMetrics, p.Metrics[i])
-		}
-		if p.Metrics[i].Labels != nil {
-			copyMetrics[len(copyMetrics)-1].Labels = make(map[string]string, len(p.Metrics[i].Labels))
-			maps.Copy(copyMetrics[len(copyMetrics)-1].Labels, p.Metrics[i].Labels)
+		if p.Metrics[i].DoIfChecker == nil || p.config.Metrics[i].DoIfChecker.Check(event.Root) {
+			metricIndices = append(metricIndices, i)
 		}
 	}
 	p.mu.Unlock()
+
+	copyMetrics := make([]Metric, 0, len(metricIndices))
+	for _, idx := range metricIndices {
+		metric := p.Metrics[idx]
+		if metric.Labels != nil {
+			labels := make(map[string]string, len(metric.Labels))
+			maps.Copy(labels, metric.Labels)
+			metric.Labels = labels
+		}
+		copyMetrics = append(copyMetrics, metric)
+	}
 
 	var ts time.Time
 
@@ -368,7 +370,8 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	}
 
 	children := make([]*insaneJSON.Node, 0, len(copyMetrics))
-	for _, metric := range copyMetrics {
+	for i := range copyMetrics {
+		metric := &copyMetrics[i]
 		elem := new(insaneJSON.Node)
 		object := elem.MutateToObject()
 

@@ -48,8 +48,8 @@ func TestEventToMetrics(t *testing.T) {
 	wrongEventsCnt := 0
 	outWg := sync.WaitGroup{}
 	outWg.Add(len(config.Metrics))
-	output.SetOutFn(func(e *pipeline.Event) {
 
+	output.SetOutFn(func(e *pipeline.Event) {
 		message := e.Root
 
 		metricName := message.Dig("name").AsString()
@@ -62,17 +62,17 @@ func TestEventToMetrics(t *testing.T) {
 		ttl := e.Root.Dig("ttl").AsInt64()
 		value := e.Root.Dig("value").AsFloat()
 
-		if metricName == "status" {
+		switch metricName {
+		case "status":
 			assert.Equal(t, "counter", metricType)
 			assert.Equal(t, (1 * time.Hour).Milliseconds(), ttl)
 			assert.Equal(t, float64(1), value)
-		} else if metricName == "checkout_response_time" {
+		case "checkout_response_time":
 			assert.Equal(t, "gauge", metricType)
 			assert.Equal(t, int64(0), ttl)
 			assert.Equal(t, float64(0.1), value)
-		} else {
-			fmt.Println("unkown metric name", metricName)
-			return
+		default:
+			assert.Fail(t, "unknown metric name", metricName)
 		}
 
 		assert.Equal(t, now.UnixMilli(), timestamp)

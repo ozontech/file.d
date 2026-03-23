@@ -48,8 +48,6 @@ func newCollector(sender storageSender, flushTimeout time.Duration, logger *zap.
 	return c
 }
 
-var i int
-
 func (p *metricCollector) handleMetric(labels []promwrite.Label, value float64, timestamp int64, metricType string, ttl int64) {
 	key := labelsToKey(labels)
 	now := time.Now()
@@ -149,7 +147,7 @@ func createTimeSeries(labels []promwrite.Label, metric *metricValue, roundPeriod
 }
 
 func keyToLabels(key string) []promwrite.Label {
-	if len(key) == 0 {
+	if key == "" {
 		return nil
 	}
 	key = key[:len(key)-1] // Remove trailing comma

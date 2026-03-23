@@ -25,10 +25,6 @@ const (
 	outPluginType = "prometheus"
 )
 
-type data struct {
-	outBuf []byte
-}
-
 type Label struct {
 	Label string `json:"label" required:"true"`
 	Value string `json:"value" required:"true"`

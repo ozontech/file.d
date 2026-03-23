@@ -66,8 +66,6 @@ func (m *mockPrometheus) reset() {
 
 // mockController implements pipeline.OutputPluginController for testing
 type mockController struct {
-	mu          sync.Mutex
-	commitCount int
 }
 
 func (m *mockController) Commit(_ *pipeline.Event) {}
