@@ -20,4 +20,3 @@ pipelines:
         message: output event sample
     output:
       type: kafka
-      timeout: 5s
