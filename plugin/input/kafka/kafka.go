@@ -158,12 +158,6 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
-	// > Timeout for fetch messages
-	Timeout  cfg.Duration `json:"timeout" default:"15s" parse:"duration"` // *
-	Timeout_ time.Duration
-
-	// > @3@4@5@6
-	// >
 	// > SessionTimeout sets how long a member in the group can go between heartbeats
 	SessionTimeout  cfg.Duration `json:"session_timeout" default:"10s" parse:"duration"` // *
 	SessionTimeout_ time.Duration
@@ -309,7 +303,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	p.controller.UseSpread()
 	p.controller.DisableStreams()
 
-	go p.s.consume(ctx, p.client, p.config.Timeout_)
+	go p.s.consume(ctx, p.client)
 }
 
 func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
@@ -320,7 +314,7 @@ func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 func (p *Plugin) Stop() {
 	p.logger.Infof("Stopping")
 
-	ctx, cancel := context.WithTimeout(context.Background(), p.config.Timeout_)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	err := p.client.CommitMarkedOffsets(ctx)

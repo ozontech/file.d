@@ -61,7 +61,6 @@ func (c *Config) Configure(t *testing.T, conf *cfg.Config, pipelineName string) 
 		AutoCommitInterval_:  1 * time.Second,
 		ConsumerMaxWaitTime_: 1 * time.Second,
 		HeartbeatInterval_:   10 * time.Second,
-		Timeout_:             10 * time.Second,
 	}
 
 	c.client = kafka_in.NewClient(config,
@@ -97,7 +96,7 @@ func (c *Config) Send(t *testing.T) {
 func (c *Config) Validate(t *testing.T) {
 	r := require.New(t)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancel()
 
 	expectedEventsCount := messages * arrayLen
@@ -107,9 +106,7 @@ func (c *Config) Validate(t *testing.T) {
 
 	go func() {
 		for {
-			pollCtx, pollCancel := context.WithTimeout(context.Background(), 5*time.Second)
-			fetches := c.client.PollFetches(pollCtx)
-			pollCancel()
+			fetches := c.client.PollFetches(ctx)
 			fetches.EachError(func(topic string, p int32, err error) {})
 			fetches.EachRecord(func(r *kgo.Record) {
 				result[string(r.Value)]++

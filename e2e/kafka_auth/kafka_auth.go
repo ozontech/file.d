@@ -142,7 +142,6 @@ func (c *Config) Configure(t *testing.T, _ *cfg.Config, _ string) {
 					SslSkipVerify:        true,
 					SessionTimeout_:      10 * time.Second,
 					AutoCommitInterval_:  1 * time.Second,
-					Timeout_:             10 * time.Second,
 				}
 				if tt.sasl.Enabled {
 					config.SaslEnabled = true

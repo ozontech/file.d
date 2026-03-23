@@ -3,7 +3,6 @@ package kafka
 import (
 	"context"
 	"sync"
-	"time"
 
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
@@ -75,12 +74,9 @@ func (s *splitConsume) Lost(_ context.Context, _ *kgo.Client, lost map[string][]
 	}
 }
 
-func (s *splitConsume) consume(ctx context.Context, cl *kgo.Client, timeout time.Duration) {
+func (s *splitConsume) consume(ctx context.Context, cl *kgo.Client) {
 	for {
-		pollCtx, cancel := context.WithTimeout(ctx, timeout)
-
-		fetches := cl.PollRecords(pollCtx, s.bufferSize)
-		cancel()
+		fetches := cl.PollRecords(ctx, s.bufferSize)
 
 		if fetches.IsClientClosed() {
 			return
