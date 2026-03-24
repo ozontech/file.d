@@ -291,15 +291,36 @@ func newIpToken(placeholder string) lexmachine.Action {
 		}
 
 		candidate := string(s.Text[begin:end])
-		if net.ParseIP(candidate) == nil {
-			return nil, nil
+		if ip := net.ParseIP(candidate); ip != nil {
+			return token{
+				placeholder: placeholder,
+				begin:       begin,
+				end:         end,
+			}, nil
 		}
 
-		return token{
-			placeholder: placeholder,
-			begin:       begin,
-			end:         end,
-		}, nil
+		host, _, err := net.SplitHostPort(candidate)
+		if err == nil {
+			if ip := net.ParseIP(host); ip != nil {
+				return token{
+					placeholder: placeholder,
+					begin:       begin,
+					end:         end,
+				}, nil
+			}
+		}
+
+		host, _, err = net.SplitHostPort(strings.TrimSuffix(candidate, ":"))
+		if err == nil {
+			if ip := net.ParseIP(host); ip != nil {
+				return token{
+					placeholder: placeholder,
+					begin:       begin,
+					end:         end - 1,
+				}, nil
+			}
+		}
+		return nil, nil
 	}
 }
 
