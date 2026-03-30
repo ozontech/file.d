@@ -151,6 +151,12 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
+	// > Enable partial shipment big batches
+	// > Only one flag out of two (SplitBatch or ItemizeBatch) can be initialized
+	ItemizeBatch bool `json:"itemize_batch" default:"false"` // *
+
+	// > @3@4@5@6
+	// >
 	// > Retention milliseconds for retry to DB.
 	Retention  cfg.Duration `json:"retention" default:"1s" parse:"duration"` // *
 	Retention_ time.Duration
@@ -334,9 +340,12 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 	var statusCode int
 	var err error
 
-	if p.config.SplitBatch {
+	switch true {
+	case p.config.SplitBatch:
 		statusCode, err = p.sendSplit(0, eventsCount, data.begin, data.outBuf)
-	} else {
+	case p.config.ItemizeBatch:
+		statusCode, err = p.sendItemize(0, eventsCount, data.begin, data.outBuf)
+	default:
 		statusCode, err = p.send(data.outBuf)
 	}
 
@@ -405,6 +414,40 @@ func (p *Plugin) sendSplit(left int, right int, begin []int, data []byte) (int, 
 	}
 
 	return http.StatusOK, nil
+}
+
+func (p *Plugin) sendItemize(left int, right int, begin []int, data []byte) (statusCode int, err error) {
+	statusCode = http.StatusOK
+	err = nil
+	if left == right {
+		return statusCode, err
+	}
+
+	for i := left; i < right; i++ {
+		sc, r := p.client.DoTimeout(
+			http.MethodPost,
+			p.config.ContentType,
+			data[begin[i]:begin[i+1]],
+			p.config.ConnectionTimeout_,
+			nil)
+		if r != nil {
+			p.sendErrorMetric.WithLabelValues(strconv.Itoa(sc)).Inc()
+
+			switch sc {
+			case http.StatusRequestEntityTooLarge:
+				// can't save even one log
+				if right-i == 1 {
+					statusCode = sc
+					err = r
+				}
+			default:
+				statusCode = sc
+				err = r
+			}
+		}
+	}
+
+	return statusCode, err
 }
 
 func (p *Plugin) getAuthHeader() string {
