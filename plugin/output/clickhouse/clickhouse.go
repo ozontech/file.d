@@ -97,7 +97,7 @@ const (
 
 type Address struct {
 	Addr   string `json:"addr"`
-	Weight int    `json:"weight"`
+	Weight *int   `json:"weight,omitempty"`
 }
 
 func (a *Address) UnmarshalJSON(b []byte) error {
@@ -105,9 +105,11 @@ func (a *Address) UnmarshalJSON(b []byte) error {
 		return nil
 	}
 
+	defaultWeight := 1
+
 	switch b[0] {
 	case '"':
-		a.Weight = 1
+		a.Weight = &defaultWeight
 		return json.Unmarshal(b, &a.Addr)
 	case '{':
 		type tmpAddress Address
@@ -115,6 +117,9 @@ func (a *Address) UnmarshalJSON(b []byte) error {
 		dec := json.NewDecoder(bytes.NewReader(b))
 		dec.DisallowUnknownFields()
 		err := dec.Decode(&tmp)
+		if tmp.Weight == nil {
+			tmp.Weight = &defaultWeight
+		}
 		*a = Address(tmp)
 		return err
 	default:
@@ -421,11 +426,16 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 			HealthCheckPeriod: p.config.HealthCheckPeriod_,
 		})
 		if err != nil {
-			p.logger.Fatal("create clickhouse connection pool", zap.Error(err), zap.String("addr", addr.Addr))
+			p.logger.Error("create clickhouse connection pool", zap.Error(err), zap.String("addr", addr.Addr))
+		} else {
+			for j := 0; j < *addr.Weight; j++ {
+				p.instances = append(p.instances, pool)
+			}
 		}
-		for j := 0; j < addr.Weight; j++ {
-			p.instances = append(p.instances, pool)
-		}
+	}
+
+	if len(p.instances) == 0 {
+		p.logger.Fatal("cannot start: no available clickhouse addresses in config")
 	}
 
 	batcherOpts := pipeline.BatcherOptions{

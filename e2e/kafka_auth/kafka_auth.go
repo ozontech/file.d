@@ -111,6 +111,7 @@ func (c *Config) Configure(t *testing.T, _ *cfg.Config, _ string) {
 					MaxMessageBytes_: 1000000,
 					SslEnabled:       c.SslEnabled,
 					SslSkipVerify:    true,
+					Timeout_:         10 * time.Second,
 				}
 				if tt.sasl.Enabled {
 					config.SaslEnabled = true
