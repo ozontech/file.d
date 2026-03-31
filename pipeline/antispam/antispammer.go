@@ -90,8 +90,11 @@ func NewAntispammer(o *Options) *Antispammer {
 }
 
 func (a *Antispammer) IsSpam(id string, name string, isNewSource bool, event []byte, timeEvent time.Time, meta map[string]string) bool {
-	threshold := a.threshold
+	if a.rules == nil && a.threshold == -1 {
+		return false
+	}
 
+	threshold := a.threshold
 	if a.rules == nil {
 		for i := 0; i < len(a.exceptions); i++ {
 			e := &a.exceptions[i]
@@ -125,6 +128,7 @@ func (a *Antispammer) IsSpam(id string, name string, isNewSource bool, event []b
 				}
 
 				threshold = rule.Threshold
+				break
 			}
 		}
 	}

@@ -216,7 +216,8 @@ func extractAntispamRules(settings *simplejson.Json) (antispam.Rules, error) {
 
 		threshold := ruleJSON.Get("threshold").MustInt()
 		if threshold < -1 {
-			return nil, fmt.Errorf("invalid threshold, must be >= -1")
+			logger.Warnf("invalid threshold value, antispam disabled for rule #%d", i)
+			threshold = -1
 		}
 
 		doIfChecker, err := extractDoIfChecker(ruleJSON.Get("do_if"))
