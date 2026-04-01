@@ -55,7 +55,7 @@ func (p *metricCollector) handleMetric(labels []promwrite.Label, value float64, 
 	defer p.mutex.Unlock()
 
 	if existing, exists := p.metrics[key]; exists {
-		if metricType == "counter" {
+		if metricType == metricTypeCounter {
 			value += existing.value
 		}
 		timestamp = max(timestamp, existing.sendedTimestamp.UnixMilli())

@@ -72,16 +72,16 @@ func TestMetricCollector(t *testing.T) {
 
 		// First value - should not be sent
 		now := time.Now()
-		collector.handleMetric(labels, 10.0, now.UnixMilli(), "counter", 0)
+		collector.handleMetric(labels, 10.0, now.UnixMilli(), metricTypeCounter, 0)
 		assert.Empty(t, testSender.getSentMetrics())
 
 		// Second value in same time window - should accumulate but not send
-		collector.handleMetric(labels, 5.0, now.UnixMilli(), "counter", 0)
+		collector.handleMetric(labels, 5.0, now.UnixMilli(), metricTypeCounter, 0)
 		assert.Empty(t, testSender.getSentMetrics())
 
 		// Third value in next time window - should send accumulated value
 		nextTime := now.Add(10 * time.Second)
-		collector.handleMetric(labels, 3.0, nextTime.UnixMilli(), "counter", 0)
+		collector.handleMetric(labels, 3.0, nextTime.UnixMilli(), metricTypeCounter, 0)
 		time.Sleep(2 * time.Second)
 		sendedMetrics := testSender.getSentMetrics()
 
@@ -103,7 +103,7 @@ func TestMetricCollector(t *testing.T) {
 
 		// First value - should not be sent
 		now := time.Now()
-		collector.handleMetric(labels, 10.0, now.UnixMilli(), "counter", 5000)
+		collector.handleMetric(labels, 10.0, now.UnixMilli(), metricTypeCounter, 5000)
 
 		time.Sleep(3 * time.Second)
 		sendedMetrics := testSender.getSentMetrics()
@@ -132,7 +132,7 @@ func TestMetricCollector(t *testing.T) {
 						{Name: "worker", Value: string(rune(workerID))},
 						{Name: "index", Value: string(rune(j))},
 					}
-					collector.handleMetric(labels, float64(j), time.Now().UnixMilli(), "counter", 0)
+					collector.handleMetric(labels, float64(j), time.Now().UnixMilli(), metricTypeCounter, 0)
 				}
 			}(i)
 		}
