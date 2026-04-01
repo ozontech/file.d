@@ -72,7 +72,7 @@ func (m *mockController) Commit(_ *pipeline.Event) {}
 func (m *mockController) Error(_ string)           {}
 
 func TestPluginOut(t *testing.T) {
-	t.Run("add event to batcher", func(t *testing.T) {
+	t.Run("add event", func(t *testing.T) {
 		logger := zaptest.NewLogger(t)
 		mockClient := &mockPrometheus{t: t}
 		mockClient.reset()

@@ -35,15 +35,15 @@ pipelines:
               value: []
               ttl: 60s
               labels:
-                service: app
-                environment: production
+                service: service
+                environment: environment
     output:
       plugin: prometheus
 ```
 
 Input event:
 ```json
-{"time": "2024-01-15T10:30:00Z", "message": "request processed"}
+{"time": "2024-01-15T10:30:00Z", "message": "request processed", "service": "app", "environment": "production"}
 ```
 
 Generated metric:

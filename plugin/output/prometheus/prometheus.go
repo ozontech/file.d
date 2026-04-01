@@ -23,6 +23,9 @@ It sends metrics to Prometheus using the remote write API. The plugin receives m
 
 const (
 	outPluginType = "prometheus"
+
+	metricTypeGauge   = "gauge"
+	metricTypeCounter = "counter"
 )
 
 type Label struct {
@@ -207,20 +210,29 @@ func (p *Plugin) Stop() {
 
 func (p *Plugin) Out(event *pipeline.Event) {
 	msg := event.Root
-	nameNode := msg.Dig("name")
-	if nameNode == nil {
+	typeNode := msg.Dig("type")
+	if typeNode == nil {
 		if !p.isAvailable {
 			<-p.retryChan // Block until Prometheus is available
 		}
 		p.controller.Commit(event)
 		return
 	}
-	name := nameNode.AsString()
-	nameNode.Suicide()
-
-	typeNode := msg.Dig("type")
 	metricType := typeNode.AsString()
 	typeNode.Suicide()
+
+	if metricType != metricTypeCounter && metricType != metricTypeGauge {
+		p.logger.Warn(
+			"unsupported metric type, skipping",
+			zap.String("type", metricType),
+		)
+		p.controller.Commit(event)
+		return
+	}
+
+	nameNode := msg.Dig("name")
+	name := nameNode.AsString()
+	nameNode.Suicide()
 
 	timestampNode := msg.Dig("timestamp")
 	timestamp := timestampNode.AsInt64()
@@ -243,7 +255,6 @@ func (p *Plugin) Out(event *pipeline.Event) {
 		Name:  "__name__",
 		Value: name,
 	})
-
 	for _, l := range labelValues {
 		labels = append(labels, promwrite.Label{
 			Name:  l.AsString(),
