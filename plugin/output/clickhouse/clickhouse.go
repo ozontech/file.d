@@ -3,6 +3,7 @@ package clickhouse
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -43,6 +44,11 @@ type Clickhouse interface {
 	Do(ctx context.Context, query ch.Query) error
 }
 
+type instance struct {
+	addr Address
+	pool Clickhouse
+}
+
 type Plugin struct {
 	logger *zap.Logger
 
@@ -54,7 +60,7 @@ type Plugin struct {
 	query string
 
 	// TODO: support shards
-	instances []Clickhouse
+	instances []instance
 	requestID atomic.Int64
 
 	// plugin metrics
@@ -63,9 +69,13 @@ type Plugin struct {
 
 	router *pipeline.Router
 
+	compression ch.Compression
+	tlsConfig   *tls.Config
+
+	poolsByAddr  map[Address]Clickhouse
 	bannedHosts  map[Address]time.Time
 	pendingHosts map[Address]struct{}
-	mu           sync.Mutex
+	mu           sync.RWMutex
 }
 
 type Setting struct {
@@ -342,15 +352,15 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
-	// > Timeout for banning host if it fails.
-	BanTimeout  cfg.Duration `json:"ban_timeout" default:"10s" parse:"duration"` // *
-	BanTimeout_ time.Duration
+	// > Period for which addresses will be banned in case of unavailability.
+	FailureCooldownPeriod  cfg.Duration `json:"failure_cooldown_period" default:"10s" parse:"duration"` // *
+	FailureCooldownPeriod_ time.Duration
 
 	// > @3@4@5@6
 	// >
-	// > Interval for retrying connections to banned hosts
-	RetryInterval  cfg.Duration `json:"retry_interval" default:"5s" parse:"duration"` // *
-	RetryInterval_ time.Duration
+	// > Interval for reconnecting to addresses that are unavailable during initialization.
+	ReconnectInterval  cfg.Duration `json:"reconnect_interval" default:"5s" parse:"duration"` // *
+	ReconnectInterval_ time.Duration
 }
 
 func init() {
@@ -371,11 +381,12 @@ func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginParams) {
 	p.logger = params.Logger.Desugar()
-
-	p.bannedHosts = make(map[Address]time.Time, len(p.config.Addresses)) // Заранее выделил память под мапку
-	p.pendingHosts = make(map[Address]struct{}, len(p.config.Addresses)) // не знал, как обыграть момент с удалением успешно
-	// подключенного(ранее ожидающего) хоста, поэтому поменял на мапу (этот момент видно будет в checkBannedHosts)
 	p.config = config.(*Config)
+
+	p.bannedHosts = make(map[Address]time.Time, len(p.config.Addresses))
+	p.pendingHosts = make(map[Address]struct{}, len(p.config.Addresses))
+	p.poolsByAddr = make(map[Address]Clickhouse, len(p.config.Addresses))
+
 	p.registerMetrics(params.MetricCtl)
 	p.ctx, p.cancelFunc = context.WithCancel(context.Background())
 
@@ -384,6 +395,12 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	}
 	if p.config.InsertTimeout_ < 1 {
 		p.logger.Fatal("'db_request_timeout' can't be <1")
+	}
+	if p.config.ReconnectInterval_ < 1 {
+		p.logger.Fatal("'reconnect_interval' can't be <1")
+	}
+	if p.config.FailureCooldownPeriod_ < 1 {
+		p.logger.Fatal("'failure_cooldown_period' cant't be <1")
 	}
 
 	schema, err := inferInsaneColInputs(p.config.Columns)
@@ -400,55 +417,56 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		p.config.InsertStrategy_ = StrategyInOrder
 	}
 
-	var compression ch.Compression
 	switch strings.ToLower(p.config.Compression) {
 	default:
 		fallthrough
 	case "disabled":
-		compression = ch.CompressionDisabled
+		p.compression = ch.CompressionDisabled
 	case "lz4":
-		compression = ch.CompressionLZ4
+		p.compression = ch.CompressionLZ4
 	case "zstd":
-		compression = ch.CompressionZSTD
+		p.compression = ch.CompressionZSTD
 	case "none":
-		compression = ch.CompressionNone
+		p.compression = ch.CompressionNone
 	}
 
-	var b xtls.ConfigBuilder
 	if p.config.CACert != "" {
 		b := xtls.NewConfigBuilder()
-		err := b.AppendCARoot(p.config.CACert)
-		if err != nil {
+		if err := b.AppendCARoot(p.config.CACert); err != nil {
 			p.logger.Fatal("can't append CA root", zap.Error(err))
 		}
+		p.tlsConfig = b.Build()
 	}
 
 	for _, addr := range p.config.Addresses {
-		pool, err := p.createConnection(addr, compression, b)
+		pool, err := p.createConnection(addr)
 		if err != nil {
 			var netError net.Error
 			if errors.As(err, &netError) {
-				p.mu.Lock()
-				p.bannedHosts[addr] = time.Now().Add(p.config.BanTimeout_)
-				p.mu.Unlock()
+				p.pendingHosts[addr] = struct{}{}
 			}
 			p.logger.Error("create clickhouse connection pool", zap.Error(err), zap.String("addr", addr.Addr))
-		} else {
-			for j := 0; j < *addr.Weight; j++ {
-				p.instances = append(p.instances, pool)
-			}
+			continue
+		}
+		p.poolsByAddr[addr] = pool
+		for j := 0; j < *addr.Weight; j++ {
+			p.instances = append(p.instances, instance{
+				addr: addr,
+				pool: pool,
+			})
 		}
 	}
-	// CORELOG-3268 если все хосты недоступны и fatal_on_failed_insert=false, пропускаем логи и идем дальше,
-	// если все хосты недоступны и fatal_on_failed_insert=true — падаем.
-	if len(p.instances) == 0 && p.config.FatalOnFailedInsert == true {
+
+	if len(p.instances) == 0 && p.config.FatalOnFailedInsert {
 		p.logger.Fatal("cannot start: no available clickhouse addresses in config")
 	}
-	// Объясни момент, в чем критическая важность reconnect делать именно в out,
-	// а не сразу в start, чтобы к моменту out мб поднялся какой-то хост и мы создали instance
-	if len(p.bannedHosts) > 0 {
-		go p.checkBannedHosts(compression, b)
+
+	go p.checkBannedHosts()
+
+	if len(p.pendingHosts) > 0 {
+		go p.checkPendingHosts()
 	}
+
 	batcherOpts := pipeline.BatcherOptions{
 		PipelineName:   params.PipelineName,
 		OutputType:     outPluginType,
@@ -495,7 +513,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.batcher.Start(p.ctx)
 }
 
-func (p *Plugin) createConnection(addr Address, compression ch.Compression, b xtls.ConfigBuilder) (*chpool.Pool, error) {
+func (p *Plugin) createConnection(addr Address) (*chpool.Pool, error) {
 	addr.Addr = addrWithDefaultPort(addr.Addr, "9000")
 	pool, err := chpool.New(p.ctx, chpool.Options{
 		ClientOptions: ch.Options{
@@ -505,10 +523,10 @@ func (p *Plugin) createConnection(addr Address, compression ch.Compression, b xt
 			User:             p.config.User,
 			Password:         p.config.Password,
 			QuotaKey:         p.config.QuotaKey,
-			Compression:      compression,
+			Compression:      p.compression,
 			Settings:         p.config.ClickhouseSettings.toProtoSettings(),
 			DialTimeout:      time.Second * 10,
-			TLS:              b.Build(),
+			TLS:              p.tlsConfig,
 			HandshakeTimeout: time.Minute,
 		},
 		MaxConnLifetime:   p.config.MaxConnLifetime_,
@@ -521,61 +539,72 @@ func (p *Plugin) createConnection(addr Address, compression ch.Compression, b xt
 	return pool, err
 }
 
-func (p *Plugin) checkBannedHosts(compression ch.Compression, b xtls.ConfigBuilder) {
-	ticker := time.NewTicker(p.config.RetryInterval_)
+func (p *Plugin) checkPendingHosts() {
+	ticker := time.NewTicker(p.config.ReconnectInterval_)
+	for {
+		select {
+		case <-p.ctx.Done():
+			return
+		case <-ticker.C:
+			if len(p.pendingHosts) == 0 {
+				return
+			}
+
+			for addr := range p.pendingHosts {
+				pool, err := p.createConnection(addr)
+				if err != nil {
+					p.logger.Error("failed to reconnect to pending host", zap.Error(err), zap.String("addr", addr.Addr))
+					continue
+				}
+
+				p.mu.Lock()
+				p.poolsByAddr[addr] = pool
+				for j := 0; j < *addr.Weight; j++ {
+					p.instances = append(p.instances, instance{
+						addr: addr,
+						pool: pool,
+					})
+				}
+				delete(p.pendingHosts, addr)
+				p.mu.Unlock()
+			}
+		}
+	}
+}
+
+func (p *Plugin) checkBannedHosts() {
+	ticker := time.NewTicker(p.config.ReconnectInterval_)
 	for {
 		select {
 		case <-p.ctx.Done():
 			return
 		case <-ticker.C:
 			p.mu.Lock()
-			if len(p.bannedHosts) == 0 { // Так обыграл раннее завершение горутины
-				p.mu.Unlock()
-				return
-			}
-			for host, banUntil := range p.bannedHosts {
+			for addr, banUntil := range p.bannedHosts {
 				if time.Now().After(banUntil) {
-					p.pendingHosts[host] = struct{}{}
+					pool, ok := p.poolsByAddr[addr]
+					if ok {
+						for i := 0; i < *addr.Weight; i++ {
+							p.instances = append(p.instances, instance{
+								addr: addr,
+								pool: pool,
+							})
+						}
+					}
+					delete(p.bannedHosts, addr)
 				}
-			}
-			for host := range p.pendingHosts {
-				err := p.retryConnect(host, compression, b)
-				if err != nil {
-					p.logger.Error("failed to reconnect to banned host", zap.Error(err), zap.String("addr", host.Addr))
-					continue
-				}
-				delete(p.bannedHosts, host)
-				delete(p.pendingHosts, host)
 			}
 			p.mu.Unlock()
 		}
 	}
-}
-
-func (p *Plugin) retryConnect(addr Address, compression ch.Compression, b xtls.ConfigBuilder) error {
-	pool, err := p.createConnection(addr, compression, b)
-	if err != nil {
-		var netError net.Error
-		if errors.As(err, &netError) {
-			p.mu.Lock()
-			p.bannedHosts[addr] = time.Now().Add(p.config.BanTimeout_)
-			p.mu.Unlock()
-		}
-		return err
-	}
-
-	for j := 0; j < *addr.Weight; j++ {
-		p.instances = append(p.instances, pool)
-	}
-
-	return nil
 }
 
 func (p *Plugin) Stop() {
 	p.cancelFunc()
 	p.batcher.Stop()
-	for _, clickhouse := range p.instances {
-		clickhouse.Close()
+
+	for _, pool := range p.poolsByAddr {
+		pool.Close()
 	}
 }
 
@@ -638,13 +667,26 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 		}
 	})
 
+	p.mu.RLock()
+	attempts := len(p.instances)
+	p.mu.RUnlock()
+
+	if attempts == 0 && p.config.FatalOnFailedInsert {
+		p.logger.Fatal("no available clickhouse addresses")
+	}
+
 	var err error
-	for i := range p.instances {
+	for i := 0; i < attempts; i++ {
 		requestID := p.requestID.Inc()
-		clickhouse := p.getInstance(requestID, i)
-		err = p.do(clickhouse, data.input)
+		instance := p.getInstance(requestID, i)
+		err = p.do(instance.pool, data.input)
 		if err == nil {
 			return nil
+		}
+
+		var netErr net.Error
+		if errors.As(err, &netErr) {
+			p.banInstance(instance)
 		}
 	}
 	if err != nil {
@@ -670,7 +712,23 @@ func (p *Plugin) do(clickhouse Clickhouse, queryInput proto.Input) error {
 	})
 }
 
-func (p *Plugin) getInstance(requestID int64, retry int) Clickhouse {
+func (p *Plugin) banInstance(inst instance) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	filtered := p.instances[:0]
+	for _, it := range p.instances {
+		if it.addr != inst.addr {
+			filtered = append(filtered, it)
+		}
+	}
+	p.instances = filtered
+	p.bannedHosts[inst.addr] = time.Now().Add(p.config.FailureCooldownPeriod_)
+}
+
+func (p *Plugin) getInstance(requestID int64, retry int) instance {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
 	var instanceIdx int
 	switch p.config.InsertStrategy_ {
 	case StrategyInOrder:

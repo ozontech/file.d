@@ -215,18 +215,17 @@ After this timeout batch will be sent even if batch isn't completed.
 
 <br>
 
-**`ban_timeout`** *`cfg.Duration`* *`default=10s`* 
+**`failure_cooldown_period`** *`cfg.Duration`* *`default=10s`* 
 
-Timeout for banning host if it fails.
+Period for which addresses will be banned in case of unavailability.
 
 <br>
 
-**`retry_interval`** *`cfg.Duration`* *`default=5s`* 
+**`reconnect_interval`** *`cfg.Duration`* *`default=5s`* 
 
-Interval for retrying connections to banned hosts
+Interval for reconnecting to addresses that are unavailable during initialization.
 
 <br>
 
 
 <br>*Generated using [__insane-doc__](https://github.com/vitkovskii/insane-doc)*
-
