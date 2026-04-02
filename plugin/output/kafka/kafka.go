@@ -360,6 +360,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 }
 
 func (p *Plugin) Stop() {
+	p.cancelFunc()
 	p.batcher.Stop()
 	p.cancelFunc()
 	p.client.Close()
