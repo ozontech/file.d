@@ -291,6 +291,8 @@ func newIpToken(placeholder string) lexmachine.Action {
 		}
 
 		candidate := string(s.Text[begin:end])
+		trimmedCandidate := strings.TrimSuffix(candidate, ":")
+		// classic ip (IPv4+IPv6)
 		if ip := net.ParseIP(candidate); ip != nil {
 			return token{
 				placeholder: placeholder,
@@ -299,25 +301,47 @@ func newIpToken(placeholder string) lexmachine.Action {
 			}, nil
 		}
 
-		host, _, err := net.SplitHostPort(candidate)
-		if err == nil {
-			if ip := net.ParseIP(host); ip != nil {
-				return token{
-					placeholder: placeholder,
-					begin:       begin,
-					end:         end,
-				}, nil
-			}
-		}
-
-		host, _, err = net.SplitHostPort(strings.TrimSuffix(candidate, ":"))
-		if err == nil {
-			if ip := net.ParseIP(host); ip != nil {
+		if strings.Count(trimmedCandidate, ":") >= 2 {
+			// IPv6+:
+			if ip := net.ParseIP(trimmedCandidate); ip != nil {
 				return token{
 					placeholder: placeholder,
 					begin:       begin,
 					end:         end - 1,
 				}, nil
+			}
+		} else {
+			// IPv4+:
+			if ip := net.ParseIP(trimmedCandidate); ip != nil {
+				return token{
+					placeholder: placeholder,
+					begin:       begin,
+					end:         end - 1,
+				}, nil
+			}
+
+			// IPv4:port
+			host, _, err := net.SplitHostPort(candidate)
+			if err == nil {
+				if ip := net.ParseIP(host); ip != nil {
+					return token{
+						placeholder: placeholder,
+						begin:       begin,
+						end:         end,
+					}, nil
+				}
+			}
+
+			// IPv4:port+:
+			host, _, err = net.SplitHostPort(trimmedCandidate)
+			if err == nil {
+				if ip := net.ParseIP(host); ip != nil {
+					return token{
+						placeholder: placeholder,
+						begin:       begin,
+						end:         end - 1,
+					}, nil
+				}
 			}
 		}
 		return nil, nil

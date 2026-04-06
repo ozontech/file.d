@@ -285,6 +285,7 @@ func TestTokenNormalizerBuiltin(t *testing.T) {
 				// IPv6 Normal
 				"some 2001:db8:3333:4444:5555:DDDD:EEEE:FFFF here",
 				"some :: here",
+				"some ::1 here",
 				"some 2001:db8:: here",
 				"some ::1234:5678 here",
 				"some 2001:0db8:0001:0000:0000:0ab9:C0A8:0102 here",
@@ -300,6 +301,17 @@ func TestTokenNormalizerBuiltin(t *testing.T) {
 			},
 			patterns: "ip",
 			want:     "some <ip> here",
+		},
+		{
+			name: "ip_with_colon",
+			inputs: []string{
+				"some 10.234.121.44:34850: here",
+				"some 10.234.121.44: here",
+				"some 2001:db8:3333:4444:5555:6666:1.2.3.4: here",
+				"some ::11.22.33.44: here",
+			},
+			patterns: "ip",
+			want:     "some <ip>: here",
 		},
 		{
 			name: "duration",
