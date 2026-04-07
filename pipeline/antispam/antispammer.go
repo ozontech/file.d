@@ -27,6 +27,7 @@ type Antispammer struct {
 	maintenanceInterval time.Duration
 	mu                  sync.RWMutex
 	sources             map[string]source
+	sourcesThresholds   map[string]int
 	exceptions          Exceptions
 	rules               Rules
 
@@ -67,6 +68,7 @@ func NewAntispammer(o *Options) *Antispammer {
 		threshold:           o.Threshold,
 		maintenanceInterval: o.MaintenanceInterval,
 		sources:             make(map[string]source),
+		sourcesThresholds:   make(map[string]int),
 		exceptions:          o.Exceptions,
 		rules:               o.Rules,
 		logger:              o.Logger,
@@ -158,6 +160,7 @@ func (a *Antispammer) IsSpam(id string, name string, isNewSource bool, event []b
 			}
 			src.timestamp.Add(timeEventSeconds)
 			a.sources[id] = src
+			a.sourcesThresholds[id] = threshold
 		}
 		a.mu.Unlock()
 	}
@@ -196,27 +199,29 @@ func (a *Antispammer) Maintenance() {
 
 		if x == 0 {
 			delete(a.sources, sourceID)
+			delete(a.sourcesThresholds, sourceID)
 			a.banMetric.DeleteLabelValues(source.name)
 			continue
 		}
 
-		isMore := x >= a.threshold
-		x -= a.threshold
+		threshold := a.sourcesThresholds[sourceID]
+		isMore := x >= threshold
+		x -= threshold
 		if x < 0 {
 			x = 0
 		}
 
-		if isMore && x < a.threshold {
+		if isMore && x < threshold {
 			a.banMetric.WithLabelValues(source.name).Dec()
 			a.logger.Info("source has been unbanned", zap.Any("id", sourceID))
 		}
 
-		if x >= a.threshold {
+		if x >= threshold {
 			allUnbanned = false
 		}
 
-		if x > a.unbanIterations*a.threshold {
-			x = a.unbanIterations * a.threshold
+		if x > a.unbanIterations*threshold {
+			x = a.unbanIterations * threshold
 		}
 
 		source.counter.Swap(int32(x))
