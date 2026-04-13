@@ -215,7 +215,7 @@ After this timeout batch will be sent even if batch isn't completed.
 
 <br>
 
-**`failure_cooldown_period`** *`cfg.Duration`* *`default=10s`* 
+**`ban_period`** *`cfg.Duration`* *`default=10s`* 
 
 Period for which addresses will be banned in case of unavailability.
 

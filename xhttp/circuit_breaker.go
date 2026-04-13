@@ -90,7 +90,21 @@ func (cb *CircuitBreaker[T]) RestoreBannedTargets() {
 	}
 }
 
-func (cb *CircuitBreaker[T]) CalcActiveTargetsCapacity(target []T, getWeight func(T) int) int {
+func (cb *CircuitBreaker[T]) ActiveCount() int {
+	cb.mu.RLock()
+	defer cb.mu.RUnlock()
+
+	return len(cb.activeTargets)
+}
+
+func (cb *CircuitBreaker[T]) GetActiveTargetByIndex(idx int) Target[T] {
+	cb.mu.RLock()
+	defer cb.mu.RUnlock()
+
+	return cb.activeTargets[idx]
+}
+
+func CalcActiveTargetsCapacity[T any](target []T, getWeight func(T) int) int {
 	totalCap := 0
 	for _, t := range target {
 		w := getWeight(t)

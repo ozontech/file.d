@@ -262,7 +262,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 
 	p.prepareClient(endpoints)
 
-	capacity := p.cb.CalcActiveTargetsCapacity(
+	capacity := xhttp.CalcActiveTargetsCapacity(
 		endpoints,
 		func(_ string) int { return 1 },
 	)

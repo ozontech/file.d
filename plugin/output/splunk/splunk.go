@@ -252,13 +252,9 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	endpoints := []string{p.config.Endpoint}
 	p.prepareClient(endpoints)
 
-	capacity := p.cb.CalcActiveTargetsCapacity(
-		endpoints,
-		func(_ string) int { return 1 },
-	)
 	p.cb = xhttp.NewCircuitBreaker[string](
 		p.config.BanPeriod_,
-		capacity,
+		1,
 	)
 	for _, endpoint := range endpoints {
 		p.cb.AddTarget(xhttp.TargetID(endpoint), endpoint, 1)
