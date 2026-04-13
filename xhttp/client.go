@@ -83,7 +83,7 @@ func (c *Client) DoTimeout(
 	body []byte,
 	timeout time.Duration,
 	processResponse func([]byte) error,
-) (int, error) {
+) (int, string, error) {
 	req := fasthttp.AcquireRequest()
 	defer fasthttp.ReleaseRequest(req)
 	resp := fasthttp.AcquireResponse()
@@ -99,20 +99,20 @@ func (c *Client) DoTimeout(
 	c.prepareRequest(req, endpoint, method, contentType, body)
 
 	if err := c.client.DoTimeout(req, resp, timeout); err != nil {
-		return 0, fmt.Errorf("can't send request to %s: %w", endpoint.String(), err)
+		return 0, endpoint.String(), fmt.Errorf("can't send request to %s: %w", endpoint.String(), err)
 	}
 
 	respContent := resp.Body()
 	statusCode := resp.Header.StatusCode()
 
 	if !(http.StatusOK <= statusCode && statusCode <= http.StatusAccepted) {
-		return statusCode, fmt.Errorf("response status from %s isn't OK: status=%d, body=%s", endpoint.String(), statusCode, string(respContent))
+		return statusCode, endpoint.String(), fmt.Errorf("response status from %s isn't OK: status=%d, body=%s", endpoint.String(), statusCode, string(respContent))
 	}
 
 	if processResponse != nil {
-		return statusCode, processResponse(respContent)
+		return statusCode, endpoint.String(), processResponse(respContent)
 	}
-	return statusCode, nil
+	return statusCode, endpoint.String(), nil
 }
 
 func (c *Client) prepareRequest(req *fasthttp.Request, endpoint *fasthttp.URI, method, contentType string, body []byte) {
@@ -166,5 +166,17 @@ func parseGzipCompressionLevel(level string) int {
 		return fasthttp.CompressHuffmanOnly
 	default:
 		return -1
+	}
+}
+
+func ShouldBanEndpoint(statusCode int, err error) bool {
+	switch statusCode {
+	case http.StatusBadGateway,
+		http.StatusServiceUnavailable,
+		http.StatusGatewayTimeout,
+		http.StatusTooManyRequests:
+		return true
+	default:
+		return false
 	}
 }
