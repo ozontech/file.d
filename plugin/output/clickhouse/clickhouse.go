@@ -19,6 +19,7 @@ import (
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/xtime"
 	"github.com/ozontech/file.d/xtls"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
@@ -353,8 +354,8 @@ type Config struct {
 	// > @3@4@5@6
 	// >
 	// > Period for which addresses will be banned in case of unavailability.
-	FailureCooldownPeriod  cfg.Duration `json:"failure_cooldown_period" default:"10s" parse:"duration"` // *
-	FailureCooldownPeriod_ time.Duration
+	BanPeriod  cfg.Duration `json:"ban_period" default:"10s" parse:"duration"` // *
+	BanPeriod_ time.Duration
 
 	// > @3@4@5@6
 	// >
@@ -399,8 +400,8 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	if p.config.ReconnectInterval_ < 1 {
 		p.logger.Fatal("'reconnect_interval' can't be <1")
 	}
-	if p.config.FailureCooldownPeriod_ < 1 {
-		p.logger.Fatal("'failure_cooldown_period' cant't be <1")
+	if p.config.BanPeriod_ < 1 {
+		p.logger.Fatal("'ban_period' cant't be <1")
 	}
 
 	schema, err := inferInsaneColInputs(p.config.Columns)
@@ -515,7 +516,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 
 func (p *Plugin) createConnection(addr Address) (*chpool.Pool, error) {
 	addr.Addr = addrWithDefaultPort(addr.Addr, "9000")
-	pool, err := chpool.New(p.ctx, chpool.Options{
+	return chpool.New(p.ctx, chpool.Options{
 		ClientOptions: ch.Options{
 			Logger:           p.logger.Named("driver"),
 			Address:          addr.Addr,
@@ -535,12 +536,12 @@ func (p *Plugin) createConnection(addr Address) (*chpool.Pool, error) {
 		MinConns:          p.config.MinConns_,
 		HealthCheckPeriod: p.config.HealthCheckPeriod_,
 	})
-
-	return pool, err
 }
 
 func (p *Plugin) checkPendingHosts() {
 	ticker := time.NewTicker(p.config.ReconnectInterval_)
+	defer ticker.Stop()
+
 	for {
 		select {
 		case <-p.ctx.Done():
@@ -574,6 +575,8 @@ func (p *Plugin) checkPendingHosts() {
 
 func (p *Plugin) checkBannedHosts() {
 	ticker := time.NewTicker(p.config.ReconnectInterval_)
+	defer ticker.Stop()
+
 	for {
 		select {
 		case <-p.ctx.Done():
@@ -581,18 +584,21 @@ func (p *Plugin) checkBannedHosts() {
 		case <-ticker.C:
 			p.mu.Lock()
 			for addr, banUntil := range p.bannedHosts {
-				if time.Now().After(banUntil) {
-					pool, ok := p.poolsByAddr[addr]
-					if ok {
-						for i := 0; i < *addr.Weight; i++ {
-							p.instances = append(p.instances, instance{
-								addr: addr,
-								pool: pool,
-							})
-						}
-					}
-					delete(p.bannedHosts, addr)
+				if !xtime.GetInaccurateTime().After(banUntil) {
+					continue
 				}
+				pool, ok := p.poolsByAddr[addr]
+				if !ok {
+					delete(p.bannedHosts, addr) // Я не знаю, по идее такой ситуации вообще не должно быть
+					continue                    // и можно просто ограничиться pool := p.poolsByAddr и дальше в цикл пробрасывать
+				}
+				for i := 0; i < *addr.Weight; i++ {
+					p.instances = append(p.instances, instance{
+						addr: addr,
+						pool: pool,
+					})
+				}
+				delete(p.bannedHosts, addr)
 			}
 			p.mu.Unlock()
 		}
@@ -667,16 +673,12 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 		}
 	})
 
-	p.mu.RLock()
-	attempts := len(p.instances)
-	p.mu.RUnlock()
-
-	if attempts == 0 && p.config.FatalOnFailedInsert {
+	if len(p.instances) == 0 && p.config.FatalOnFailedInsert {
 		p.logger.Fatal("no available clickhouse addresses")
 	}
 
 	var err error
-	for i := 0; i < attempts; i++ {
+	for i := range p.instances {
 		requestID := p.requestID.Inc()
 		instance := p.getInstance(requestID, i)
 		err = p.do(instance.pool, data.input)
@@ -686,7 +688,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 
 		var netErr net.Error
 		if errors.As(err, &netErr) {
-			p.banInstance(instance)
+			p.banInstance(instance.addr)
 		}
 	}
 	if err != nil {
@@ -712,18 +714,18 @@ func (p *Plugin) do(clickhouse Clickhouse, queryInput proto.Input) error {
 	})
 }
 
-func (p *Plugin) banInstance(inst instance) {
+func (p *Plugin) banInstance(addr Address) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
 	filtered := p.instances[:0]
 	for _, it := range p.instances {
-		if it.addr != inst.addr {
+		if it.addr != addr {
 			filtered = append(filtered, it)
 		}
 	}
 	p.instances = filtered
-	p.bannedHosts[inst.addr] = time.Now().Add(p.config.FailureCooldownPeriod_)
+	p.bannedHosts[addr] = xtime.GetInaccurateTime().Add(p.config.BanPeriod_)
 }
 
 func (p *Plugin) getInstance(requestID int64, retry int) instance {
