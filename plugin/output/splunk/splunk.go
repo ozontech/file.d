@@ -95,6 +95,8 @@ type Plugin struct {
 
 	cancel context.CancelFunc
 
+	cb *xhttp.CircuitBreaker[string]
+
 	// plugin metrics
 	sendErrorMetric *metric.CounterVec
 
@@ -202,6 +204,18 @@ type Config struct {
 	// > Supports copying whole original event, but does not allow to copy directly to the output root
 	// > or the "event" key with any of its subkeys.
 	CopyFields []CopyField `json:"copy_fields" slice:"true"` // *
+
+	// > @3@4@5@6
+	// >
+	// > Period for which addresses will be banned in case of unavailability.
+	BanPeriod  cfg.Duration `json:"ban_period" default:"10s" parse:"duration"` // *
+	BanPeriod_ time.Duration
+
+	// > @3@4@5@6
+	// >
+	// > Interval for reconnecting to addresses that are unavailable during initialization.
+	ReconnectInterval  cfg.Duration `json:"reconnect_interval" default:"5s" parse:"duration"` // *
+	ReconnectInterval_ time.Duration
 }
 
 type KeepAliveConfig struct {
@@ -235,8 +249,20 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.avgEventSize = params.PipelineSettings.AvgEventSize
 	p.config = config.(*Config)
 	p.registerMetrics(params.MetricCtl)
-	p.prepareClient()
+	endpoints := []string{p.config.Endpoint}
+	p.prepareClient(endpoints)
 
+	capacity := p.cb.CalcActiveTargetsCapacity(
+		endpoints,
+		func(_ string) int { return 1 },
+	)
+	p.cb = xhttp.NewCircuitBreaker[string](
+		p.config.BanPeriod_,
+		capacity,
+	)
+	for _, endpoint := range endpoints {
+		p.cb.AddTarget(xhttp.TargetID(endpoint), endpoint, 1)
+	}
 	for _, cf := range p.config.CopyFields {
 		if cf.To == "" {
 			p.logger.Error("copies to the root are not allowed")
@@ -300,6 +326,8 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.cancel = cancel
 
 	p.batcher.Start(ctx)
+
+	go xhttp.CheckBannedHosts(ctx, p.cb, p.config.ReconnectInterval_)
 }
 
 func (p *Plugin) Stop() {
@@ -319,9 +347,9 @@ func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 	)
 }
 
-func (p *Plugin) prepareClient() {
+func (p *Plugin) prepareClient(endpoints []string) {
 	config := &xhttp.ClientConfig{
-		Endpoints:         []string{p.config.Endpoint},
+		Endpoints:         endpoints,
 		ConnectionTimeout: p.config.RequestTimeout_,
 		AuthHeader:        "Splunk " + p.config.Token,
 		KeepAlive: &xhttp.ClientKeepAliveConfig{
@@ -379,8 +407,12 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 
 	p.logger.Debugf("trying to send: %s", outBuf)
 
-	code, err := p.client.DoTimeout(http.MethodPost, "", outBuf,
+	code, endpoint, err := p.client.DoTimeout(http.MethodPost, "", outBuf,
 		p.config.RequestTimeout_, parseSplunkError)
+
+	if err != nil && xhttp.ShouldBanEndpoint(code, err) {
+		p.cb.BanTarget(xhttp.TargetID(endpoint))
+	}
 
 	if err != nil {
 		p.sendErrorMetric.WithLabelValues(strconv.Itoa(code)).Inc()

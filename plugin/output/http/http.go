@@ -42,6 +42,7 @@ type Plugin struct {
 	cancel context.CancelFunc
 	mu     *sync.Mutex
 
+	cb *xhttp.CircuitBreaker[string]
 	// plugin metrics
 	sendErrorMetric *metric.CounterVec
 
@@ -164,6 +165,18 @@ type Config struct {
 	// >
 	// > After a non-retryable write error, fall with a non-zero exit code or not
 	Strict bool `json:"strict" default:"false"` // *
+
+	// > @3@4@5@6
+	// >
+	// > Period for which addresses will be banned in case of unavailability.
+	BanPeriod  cfg.Duration `json:"ban_period" default:"10s" parse:"duration"` // *
+	BanPeriod_ time.Duration
+
+	// > @3@4@5@6
+	// >
+	// > Interval for reconnecting to addresses that are unavailable during initialization.
+	ReconnectInterval  cfg.Duration `json:"reconnect_interval" default:"5s" parse:"duration"` // *
+	ReconnectInterval_ time.Duration
 }
 
 type KeepAliveConfig struct {
@@ -199,9 +212,21 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.config = config.(*Config)
 	p.registerMetrics(params.MetricCtl)
 	p.mu = &sync.Mutex{}
+	endpoints := p.prepareEndpoints()
 
-	p.prepareClient()
+	p.prepareClient(endpoints)
 
+	capacity := p.cb.CalcActiveTargetsCapacity(
+		endpoints,
+		func(_ string) int { return 1 },
+	)
+	p.cb = xhttp.NewCircuitBreaker[string](
+		p.config.BanPeriod_,
+		capacity,
+	)
+	for _, endpoint := range endpoints {
+		p.cb.AddTarget(xhttp.TargetID(endpoint), endpoint, 1)
+	}
 	p.logger.Info("starting batcher", zap.Duration("timeout", p.config.BatchFlushTimeout_))
 
 	batcherOpts := pipeline.BatcherOptions{
@@ -253,6 +278,8 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.cancel = cancel
 
 	p.batcher.Start(ctx)
+
+	go xhttp.CheckBannedHosts(ctx, p.cb, p.config.ReconnectInterval_)
 }
 
 func (p *Plugin) Stop() {
@@ -268,9 +295,9 @@ func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 	p.sendErrorMetric = ctl.RegisterCounterVec("output_http_send_error_total", "Total HTTP send errors", "status_code")
 }
 
-func (p *Plugin) prepareClient() {
+func (p *Plugin) prepareClient(endpoints []string) {
 	config := &xhttp.ClientConfig{
-		Endpoints:         p.prepareEndpoints(),
+		Endpoints:         endpoints,
 		ConnectionTimeout: p.config.ConnectionTimeout_ * 2,
 		AuthHeader:        p.getAuthHeader(),
 		KeepAlive: &xhttp.ClientKeepAliveConfig{
@@ -361,13 +388,19 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 }
 
 func (p *Plugin) send(data []byte) (int, error) {
-	return p.client.DoTimeout(
+	statusCode, endpoint, err := p.client.DoTimeout(
 		http.MethodPost,
 		p.config.ContentType,
 		data,
 		p.config.ConnectionTimeout_,
 		nil,
 	)
+
+	if err != nil && xhttp.ShouldBanEndpoint(statusCode, err) {
+		p.cb.BanTarget(xhttp.TargetID(endpoint))
+	}
+
+	return statusCode, err
 }
 
 func (p *Plugin) sendSplit(left int, right int, begin []int, data []byte) (int, error) {
@@ -375,13 +408,17 @@ func (p *Plugin) sendSplit(left int, right int, begin []int, data []byte) (int, 
 		return http.StatusOK, nil
 	}
 
-	statusCode, err := p.client.DoTimeout(
+	statusCode, endpoint, err := p.client.DoTimeout(
 		http.MethodPost,
 		p.config.ContentType,
 		data[begin[left]:begin[right]],
 		p.config.ConnectionTimeout_,
 		nil,
 	)
+
+	if err != nil && xhttp.ShouldBanEndpoint(statusCode, err) {
+		p.cb.BanTarget(xhttp.TargetID(endpoint))
+	}
 
 	if err != nil {
 		p.sendErrorMetric.WithLabelValues(strconv.Itoa(statusCode)).Inc()

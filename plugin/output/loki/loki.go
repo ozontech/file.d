@@ -178,6 +178,18 @@ type Config struct {
 	// >
 	// > Multiplier for exponential increase of retention between retries
 	RetentionExponentMultiplier int `json:"retention_exponentially_multiplier" default:"2"` // *
+
+	// > @3@4@5@6
+	// >
+	// > Period for which addresses will be banned in case of unavailability.
+	BanPeriod  cfg.Duration `json:"ban_period" default:"10s" parse:"duration"` // *
+	BanPeriod_ time.Duration
+
+	// > @3@4@5@6
+	// >
+	// > Interval for reconnecting to addresses that are unavailable during initialization.
+	ReconnectInterval  cfg.Duration `json:"reconnect_interval" default:"5s" parse:"duration"` // *
+	ReconnectInterval_ time.Duration
 }
 
 type AuthStrategy byte
@@ -231,6 +243,8 @@ type Plugin struct {
 	client  *xhttp.Client
 	batcher *pipeline.RetriableBatcher
 
+	cb *xhttp.CircuitBreaker[string]
+
 	// plugin metrics
 	sendErrorMetric *metric.CounterVec
 
@@ -259,8 +273,16 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 
 	p.labels = p.parseLabels()
 
-	p.prepareClient()
+	endpoints := []string{fmt.Sprintf("%s/loki/api/v1/push", p.config.Address)}
+	p.prepareClient(endpoints)
 
+	p.cb = xhttp.NewCircuitBreaker[string](
+		p.config.BanPeriod_,
+		1,
+	)
+	for _, endpoint := range endpoints {
+		p.cb.AddTarget(xhttp.TargetID(endpoint), endpoint, 1)
+	}
 	batcherOpts := &pipeline.BatcherOptions{
 		PipelineName:   params.PipelineName,
 		OutputType:     outPluginType,
@@ -308,6 +330,8 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.cancel = cancel
 
 	p.batcher.Start(ctx)
+
+	go xhttp.CheckBannedHosts(ctx, p.cb, p.config.ReconnectInterval_)
 }
 
 func (p *Plugin) Stop() {
@@ -412,7 +436,7 @@ func (p *Plugin) send(root *insaneJSON.Root) (int, error) {
 
 	p.logger.Debug("sent", zap.String("data", string(data)))
 
-	statusCode, err := p.client.DoTimeout(
+	statusCode, endpoint, err := p.client.DoTimeout(
 		http.MethodPost,
 		"application/json",
 		data,
@@ -422,6 +446,9 @@ func (p *Plugin) send(root *insaneJSON.Root) (int, error) {
 	if statusCode != http.StatusNoContent {
 		return statusCode, fmt.Errorf("bad response: code=%d, err=%v", statusCode, err)
 	}
+	if err != nil && xhttp.ShouldBanEndpoint(statusCode, err) {
+		p.cb.BanTarget(xhttp.TargetID(endpoint))
+	}
 
 	return statusCode, nil
 }
@@ -430,9 +457,9 @@ func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 	p.sendErrorMetric = ctl.RegisterCounterVec("output_loki_send_error_total", "Total Loki send errors", "status_code")
 }
 
-func (p *Plugin) prepareClient() {
+func (p *Plugin) prepareClient(endpoints []string) {
 	config := &xhttp.ClientConfig{
-		Endpoints:         []string{fmt.Sprintf("%s/loki/api/v1/push", p.config.Address)},
+		Endpoints:         endpoints,
 		ConnectionTimeout: p.config.ConnectionTimeout_ * 2,
 		AuthHeader:        p.getAuthHeader(),
 		CustomHeaders:     p.getCustomHeaders(),

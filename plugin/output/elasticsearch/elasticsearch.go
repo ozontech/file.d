@@ -48,6 +48,8 @@ type Plugin struct {
 	cancel       context.CancelFunc
 	mu           *sync.Mutex
 
+	cb *xhttp.CircuitBreaker[string]
+
 	// plugin metrics
 	sendErrorMetric      *metric.CounterVec
 	indexingErrorsMetric *metric.Counter
@@ -203,6 +205,18 @@ type Config struct {
 	// >
 	// > Process ES response and report errors, if any.
 	ProcessResponse bool `json:"process_response" default:"true"` // *
+
+	// > @3@4@5@6
+	// >
+	// > Period for which addresses will be banned in case of unavailability.
+	BanPeriod  cfg.Duration `json:"ban_period" default:"10s" parse:"duration"` // *
+	BanPeriod_ time.Duration
+
+	// > @3@4@5@6
+	// >
+	// > Interval for reconnecting to addresses that are unavailable during initialization.
+	ReconnectInterval  cfg.Duration `json:"reconnect_interval" default:"5s" parse:"duration"` // *
+	ReconnectInterval_ time.Duration
 }
 
 type KeepAliveConfig struct {
@@ -244,7 +258,21 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		p.config.IndexValues = append(p.config.IndexValues, "@time")
 	}
 
-	p.prepareClient()
+	endpoints := prepareEndpoints(p.config.Endpoints, p.config.IngestPipeline)
+
+	p.prepareClient(endpoints)
+
+	capacity := p.cb.CalcActiveTargetsCapacity(
+		endpoints,
+		func(_ string) int { return 1 },
+	)
+	p.cb = xhttp.NewCircuitBreaker[string](
+		p.config.BanPeriod_,
+		capacity,
+	)
+	for _, endpoint := range endpoints {
+		p.cb.AddTarget(xhttp.TargetID(endpoint), endpoint, 1)
+	}
 
 	p.maintenance(nil)
 
@@ -299,6 +327,8 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.cancel = cancel
 
 	p.batcher.Start(ctx)
+
+	go xhttp.CheckBannedHosts(ctx, p.cb, p.config.ReconnectInterval_)
 }
 
 func (p *Plugin) Stop() {
@@ -315,9 +345,9 @@ func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 	p.indexingErrorsMetric = ctl.RegisterCounter("output_elasticsearch_index_error_total", "Number of elasticsearch indexing errors")
 }
 
-func (p *Plugin) prepareClient() {
+func (p *Plugin) prepareClient(endpoints []string) {
 	config := &xhttp.ClientConfig{
-		Endpoints:         prepareEndpoints(p.config.Endpoints, p.config.IngestPipeline),
+		Endpoints:         endpoints,
 		ConnectionTimeout: p.config.ConnectionTimeout_ * 2,
 		AuthHeader:        p.getAuthHeader(),
 		KeepAlive: &xhttp.ClientKeepAliveConfig{
@@ -420,14 +450,19 @@ func (p *Plugin) send(data []byte) (int, error) {
 	if !p.config.ProcessResponse {
 		processFn = nil
 	}
-
-	return p.client.DoTimeout(
+	statusCode, endpoint, err := p.client.DoTimeout(
 		http.MethodPost,
 		NDJSONContentType,
 		data,
 		p.config.ConnectionTimeout_,
 		processFn,
 	)
+
+	if err != nil && xhttp.ShouldBanEndpoint(statusCode, err) {
+		p.cb.BanTarget(xhttp.TargetID(endpoint))
+	}
+
+	return statusCode, err
 }
 
 func (p *Plugin) sendSplit(left int, right int, begin []int, data []byte) (int, error) {
@@ -440,13 +475,17 @@ func (p *Plugin) sendSplit(left int, right int, begin []int, data []byte) (int, 
 		processFn = nil
 	}
 
-	statusCode, err := p.client.DoTimeout(
+	statusCode, endpoint, err := p.client.DoTimeout(
 		http.MethodPost,
 		NDJSONContentType,
 		data[begin[left]:begin[right]],
 		p.config.ConnectionTimeout_,
 		processFn,
 	)
+
+	if err != nil && xhttp.ShouldBanEndpoint(statusCode, err) {
+		p.cb.BanTarget(xhttp.TargetID(endpoint))
+	}
 
 	if err != nil {
 		p.sendErrorMetric.WithLabelValues(strconv.Itoa(statusCode)).Inc()

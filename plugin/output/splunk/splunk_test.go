@@ -54,7 +54,7 @@ func TestSplunk(t *testing.T) {
 				},
 				logger: zap.NewExample().Sugar(),
 			}
-			plugin.prepareClient()
+			plugin.prepareClient([]string{plugin.config.Endpoint})
 
 			batch := pipeline.NewPreparedBatch([]*pipeline.Event{
 				{Root: input},
@@ -185,7 +185,7 @@ func TestCopyFields(t *testing.T) {
 				copyFieldsPaths: tt.copyFields,
 				logger:          zap.NewExample().Sugar(),
 			}
-			plugin.prepareClient()
+			plugin.prepareClient([]string{plugin.config.Endpoint})
 
 			batch := pipeline.NewPreparedBatch([]*pipeline.Event{
 				{Root: input},
