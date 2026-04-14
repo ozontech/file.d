@@ -406,7 +406,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 	code, endpoint, err := p.client.DoTimeout(http.MethodPost, "", outBuf,
 		p.config.RequestTimeout_, parseSplunkError)
 
-	if err != nil && xhttp.ShouldBanEndpoint(code, err) {
+	if err != nil && xhttp.ShouldBanEndpoint(code) {
 		p.cb.BanTarget(xhttp.TargetID(endpoint))
 	}
 

@@ -458,7 +458,7 @@ func (p *Plugin) send(data []byte) (int, error) {
 		processFn,
 	)
 
-	if err != nil && xhttp.ShouldBanEndpoint(statusCode, err) {
+	if err != nil && xhttp.ShouldBanEndpoint(statusCode) {
 		p.cb.BanTarget(xhttp.TargetID(endpoint))
 	}
 
@@ -483,7 +483,7 @@ func (p *Plugin) sendSplit(left int, right int, begin []int, data []byte) (int, 
 		processFn,
 	)
 
-	if err != nil && xhttp.ShouldBanEndpoint(statusCode, err) {
+	if err != nil && xhttp.ShouldBanEndpoint(statusCode) {
 		p.cb.BanTarget(xhttp.TargetID(endpoint))
 	}
 
