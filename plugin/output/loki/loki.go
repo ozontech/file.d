@@ -446,7 +446,7 @@ func (p *Plugin) send(root *insaneJSON.Root) (int, error) {
 	if statusCode != http.StatusNoContent {
 		return statusCode, fmt.Errorf("bad response: code=%d, err=%v", statusCode, err)
 	}
-	if err != nil && xhttp.ShouldBanEndpoint(statusCode, err) {
+	if err != nil && xhttp.ShouldBanEndpoint(statusCode) {
 		p.cb.BanTarget(xhttp.TargetID(endpoint))
 	}
 

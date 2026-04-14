@@ -169,7 +169,7 @@ func parseGzipCompressionLevel(level string) int {
 	}
 }
 
-func ShouldBanEndpoint(statusCode int, err error) bool {
+func ShouldBanEndpoint(statusCode int) bool {
 	switch statusCode {
 	case http.StatusBadGateway,
 		http.StatusServiceUnavailable,
