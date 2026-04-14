@@ -317,6 +317,7 @@ func TestTokenNormalizerBuiltin(t *testing.T) {
 				"some /plugin/action/normalize here",
 				"some /Users/seq-ui/action/playlist here",
 				"some /home/user/photos here",
+				"some /sys/kubepods.slice/kuber-buber.slice/photos_video-audio/container123.scope here",
 			},
 			patterns: "filepath",
 			want:     "some <filepath> here",
