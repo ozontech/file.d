@@ -587,11 +587,7 @@ func (p *Plugin) checkBannedHosts() {
 				if !xtime.GetInaccurateTime().After(banUntil) {
 					continue
 				}
-				pool, ok := p.poolsByAddr[addr]
-				if !ok {
-					delete(p.bannedHosts, addr) // Я не знаю, по идее такой ситуации вообще не должно быть
-					continue                    // и можно просто ограничиться pool := p.poolsByAddr и дальше в цикл пробрасывать
-				}
+				pool := p.poolsByAddr[addr]
 				for i := 0; i < *addr.Weight; i++ {
 					p.instances = append(p.instances, instance{
 						addr: addr,
