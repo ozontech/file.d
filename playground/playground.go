@@ -270,7 +270,7 @@ func preparePipelineLogger(buf *bytes.Buffer, onFatal zapcore.CheckWriteHook) *z
 func formatMetricFamily(families []*dto.MetricFamily) string {
 	b := new(bytes.Buffer)
 	for _, f := range families {
-		_ = expfmt.NewEncoder(b, expfmt.FmtOpenMetrics).Encode(f)
+		_ = expfmt.NewEncoder(b, expfmt.NewFormat(expfmt.TypeOpenMetrics)).Encode(f)
 		b.WriteString("\n")
 	}
 	return b.String()
