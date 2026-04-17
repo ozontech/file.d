@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/castai/promwrite"
+	"github.com/ozontech/file.d/xtime"
 	"go.uber.org/zap"
 )
 
@@ -50,7 +51,7 @@ func newCollector(sender storageSender, flushTimeout time.Duration, logger *zap.
 
 func (p *metricCollector) handleMetric(labels []promwrite.Label, value float64, timestamp int64, metricType string, ttl int64) {
 	key := labelsToKey(labels)
-	now := time.Now()
+	now := xtime.GetInaccurateTime()
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 

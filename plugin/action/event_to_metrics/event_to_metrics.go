@@ -38,7 +38,7 @@ pipelines:
                 service: service
                 environment: environment
     output:
-      plugin: prometheus
+      type: prometheus
 ```
 
 Input event:
@@ -89,7 +89,7 @@ pipelines:
               labels:
                 method: request.method
     output:
-      plugin: prometheus
+      type: prometheus
 ```
 
 Input event:
@@ -170,7 +170,7 @@ pipelines:
 	                path: request.path
 
 	    output:
-		    plugin: prometheus
+		    type: prometheus
 		    config:
 		        # Prometheus remote write endpoint
 		        endpoint: http://localhost:9090/api/v1/write
@@ -260,7 +260,7 @@ type Metric struct {
 	// > @3@4@5@6
 	// >
 	// > Time-to-live for the metric. Defines how long the metric value should be kept in the Prometheus collector before being expired. This determines the retention period for the metric in Prometheus.
-	TTL  cfg.Duration `json:"ttl" parse:"duration"` // *
+	TTL  cfg.Duration `json:"ttl" parse:"duration" default:"0"` // *
 	TTL_ time.Duration
 
 	// > @3@4@5@6
@@ -305,7 +305,11 @@ func prepareCheckersForMetrics(metrics []Metric, logger *zap.Logger) []Metric {
 			var err error
 			m.DoIfChecker, err = doif.NewFromMap(m.DoIfCheckerMap)
 			if err != nil {
-				logger.Fatal("can't init do_if for mask", zap.Error(err))
+				logger.Fatal(
+					"can't init do_if for mask",
+					zap.Error(err),
+					zap.String("metric_name", m.Name),
+				)
 			}
 		} else {
 			m.use = true
@@ -361,12 +365,12 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 				zap.String("TimeFieldFormat", p.config.TimeFieldFormat),
 				zap.String("value", tsValue),
 			)
-			ts = time.Now()
+			ts = xtime.GetInaccurateTime()
 		} else {
 			ts = t
 		}
 	} else {
-		ts = time.Now()
+		ts = xtime.GetInaccurateTime()
 	}
 
 	children := make([]*insaneJSON.Node, 0, len(copyMetrics))

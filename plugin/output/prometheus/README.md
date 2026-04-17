@@ -2,7 +2,7 @@
 It sends metrics to Prometheus using the remote write API. The plugin receives metric events from the pipeline (e.g., from the event_to_metrics action plugin) and forwards them to a Prometheus-compatible endpoint.
 
 ### Config params
-**`endpoint`** *`string`* *`default=http://localhost:9090/api/v1/write`* *`required`* 
+**`endpoint`** *`string`* *`default=http://localhost:9090/api/v1/write`* 
 
 Prometheus remote write endpoint URL.
 

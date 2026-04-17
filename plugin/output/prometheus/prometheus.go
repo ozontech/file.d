@@ -39,7 +39,7 @@ type Config struct {
 	// > @3@4@5@6
 	// >
 	// > Prometheus remote write endpoint URL.
-	Endpoint string `json:"endpoint" required:"true" default:"http://localhost:9090/api/v1/write"` // *
+	Endpoint string `json:"endpoint" default:"http://localhost:9090/api/v1/write"` // *
 
 	// > @3@4@5@6
 	// >

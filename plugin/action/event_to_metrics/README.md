@@ -21,7 +21,7 @@ pipelines:
                 service: service
                 environment: environment
     output:
-      plugin: prometheus
+      type: prometheus
 ```
 
 Input event:
@@ -72,7 +72,7 @@ pipelines:
               labels:
                 method: request.method
     output:
-      plugin: prometheus
+      type: prometheus
 ```
 
 Input event:
@@ -153,7 +153,7 @@ pipelines:
 	                path: request.path
 
 	    output:
-		    plugin: prometheus
+		    type: prometheus
 		    config:
 		        # Prometheus remote write endpoint
 		        endpoint: http://localhost:9090/api/v1/write
@@ -230,7 +230,7 @@ Labels are key-value pairs that provide context for the metric.
 
 <br>
 
-**`ttl`** *`cfg.Duration`* 
+**`ttl`** *`cfg.Duration`* *`default=0`* 
 
 Time-to-live for the metric. Defines how long the metric value should be kept in the Prometheus collector before being expired. This determines the retention period for the metric in Prometheus.
 
