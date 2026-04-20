@@ -30,6 +30,7 @@ type Antispammer struct {
 	sourcesThresholds   map[string]int
 	exceptions          Exceptions
 	rules               Rules
+	data                *antispamData
 
 	logger *zap.Logger
 
@@ -71,6 +72,7 @@ func NewAntispammer(o *Options) *Antispammer {
 		sourcesThresholds:   make(map[string]int),
 		exceptions:          o.Exceptions,
 		rules:               o.Rules,
+		data:                &antispamData{},
 		logger:              o.Logger,
 		activeMetric: o.MetricsController.RegisterGauge("antispam_active",
 			"Gauge indicates whether the antispam is enabled",
@@ -113,12 +115,8 @@ func (a *Antispammer) IsSpam(id string, name string, isNewSource bool, event []b
 		}
 	} else {
 		for _, rule := range a.rules {
-			data := &antispamData{
-				eventBytes: event,
-				sourceName: name,
-				meta:       meta,
-			}
-			if rule.DoIfChecker.Check(data) {
+			a.data.set(event, name, meta)
+			if rule.DoIfChecker.Check(a.data) {
 				switch rule.Threshold {
 				case thresholdUnlimited:
 					if rule.Name != "" {

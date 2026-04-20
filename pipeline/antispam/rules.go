@@ -16,6 +16,12 @@ type antispamData struct {
 	meta       map[string]string
 }
 
+func (a *antispamData) set(eventBytes []byte, sourceName string, meta map[string]string) {
+	a.eventBytes = eventBytes
+	a.sourceName = sourceName
+	a.meta = meta
+}
+
 func (d *antispamData) Get(args ...string) []byte {
 	if len(args) == 0 {
 		return nil

@@ -871,7 +871,6 @@ func (p *Pipeline) maintenance() {
 			return
 		}
 
-		p.antispamer.Maintenance()
 		p.metricCtl.Maintenance()
 
 		myDeltas := p.incMetrics(inputEvents, inputSize, outputEvents, outputSize, readOps)
