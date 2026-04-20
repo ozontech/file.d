@@ -159,6 +159,8 @@ type Settings struct {
 	IsStrict                bool
 	Pool                    PoolType
 	Metric                  *MetricSettings
+
+	DebugSources []string
 }
 
 type MetricSettings struct {
@@ -220,6 +222,7 @@ func New(name string, settings *Settings, registry *prometheus.Registry, lg *zap
 			MetricsController:   metricCtl,
 			Rules:               settings.Antispam.Rules,
 			Exceptions:          settings.Antispam.Exceptions,
+			DebugSources:        settings.DebugSources,
 		}),
 		metricCtl: metricCtl,
 

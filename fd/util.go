@@ -38,6 +38,8 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 	metricHoldDuration := pipeline.DefaultMetricHoldDuration
 	metricMaxLabelValueLength := pipeline.DefaultMetricMaxLabelValueLength
 
+	debugSources := []string{}
+
 	if settings != nil {
 		val := settings.Get("capacity").MustInt()
 		if val != 0 {
@@ -151,6 +153,9 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 			logger.Warn("negative max_label_value_length value, metric label truncation is disabled")
 			metricMaxLabelValueLength = 0
 		}
+
+		defaultDebugSources := make([]string, 0)
+		debugSources = settings.MustStringArray(defaultDebugSources)
 	}
 
 	return &pipeline.Settings{
@@ -178,6 +183,7 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 			HoldDuration:        metricHoldDuration,
 			MaxLabelValueLength: metricMaxLabelValueLength,
 		},
+		DebugSources: debugSources,
 	}
 }
 
