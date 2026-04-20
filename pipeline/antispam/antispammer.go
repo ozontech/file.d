@@ -30,6 +30,11 @@ type Antispammer struct {
 	activeMetric    *metric.Gauge
 	banMetric       *metric.GaugeVec
 	exceptionMetric *metric.CounterVec
+
+	// debug antispam
+	totalLogs     *metric.CounterVec
+	sourceCounter *metric.GaugeVec
+	debugSource   map[string]int
 }
 
 type source struct {
@@ -46,6 +51,9 @@ type Options struct {
 
 	Logger            *zap.Logger
 	MetricsController *metric.Ctl
+
+	// debug antispam
+	DebugSources []string
 }
 
 func NewAntispammer(o *Options) *Antispammer {
@@ -73,6 +81,19 @@ func NewAntispammer(o *Options) *Antispammer {
 			"How many times an exception match with an event",
 			"name",
 		),
+
+		totalLogs: o.MetricsController.RegisterCounterVec("antispam_events_total",
+			"!Debug metric! Total events per source",
+			"source_name",
+		),
+		sourceCounter: o.MetricsController.RegisterGaugeVec("antispam_source_counter_value",
+			"!Debug metric! Antispam counter for sources contained in DebugSources",
+			"source_name",
+		),
+	}
+
+	for _, source := range o.DebugSources {
+		a.debugSource[source] = 1
 	}
 
 	// not enabled by default
