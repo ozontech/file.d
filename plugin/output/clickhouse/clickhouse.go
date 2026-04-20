@@ -669,30 +669,43 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 		}
 	})
 
-	if len(p.instances) == 0 && p.config.FatalOnFailedInsert {
+	p.mu.RLock()
+	attempts := len(p.instances)
+	p.mu.RUnlock()
+
+	var err error
+	if attempts == 0 && p.config.FatalOnFailedInsert {
+		p.insertErrorsMetric.Inc()
 		p.logger.Fatal("no available clickhouse addresses")
 	}
 
-	var err error
-	for i := range p.instances {
+	noAvailableHosts := false
+	for i := 0; i < attempts; i++ {
 		requestID := p.requestID.Inc()
+
+		p.mu.RLock()
+		if len(p.instances) == 0 {
+			p.mu.RUnlock()
+			err = errors.New("no available clickhouse addresses")
+			noAvailableHosts = true
+			break
+		}
 		instance := p.getInstance(requestID, i)
+		p.mu.RUnlock()
+
 		err = p.do(instance.pool, data.input)
 		if err == nil {
 			return nil
 		}
-
-		var netErr net.Error
-		if errors.As(err, &netErr) {
-			p.banInstance(instance.addr)
-		}
+		p.banInstance(instance.addr)
 	}
 	if err != nil {
 		p.insertErrorsMetric.Inc()
-		p.logger.Error(
-			"an attempt to insert a batch failed",
-			zap.Error(err),
-		)
+		if noAvailableHosts {
+			p.logger.Error("no available clickhouse addresses", zap.Error(err))
+		} else {
+			p.logger.Error("an attempt to insert a batch failed", zap.Error(err))
+		}
 	}
 
 	return err
@@ -725,8 +738,6 @@ func (p *Plugin) banInstance(addr Address) {
 }
 
 func (p *Plugin) getInstance(requestID int64, retry int) instance {
-	p.mu.RLock()
-	defer p.mu.RUnlock()
 	var instanceIdx int
 	switch p.config.InsertStrategy_ {
 	case StrategyInOrder:
