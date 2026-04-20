@@ -90,6 +90,7 @@ func NewAntispammer(o *Options) *Antispammer {
 			"!Debug metric! Antispam counter for sources contained in DebugSources",
 			"source_name",
 		),
+		debugSource: make(map[string]int),
 	}
 
 	for _, source := range o.DebugSources {

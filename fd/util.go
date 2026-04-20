@@ -132,7 +132,7 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 		}
 
 		defaultDebugSources := make([]string, 0)
-		debugSources = settings.MustStringArray(defaultDebugSources)
+		debugSources = settings.Get("debug_sources").MustStringArray(defaultDebugSources)
 	}
 
 	return &pipeline.Settings{
