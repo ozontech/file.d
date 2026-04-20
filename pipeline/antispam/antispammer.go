@@ -103,6 +103,10 @@ func NewAntispammer(o *Options) *Antispammer {
 }
 
 func (a *Antispammer) IsSpam(id string, name string, isNewSource bool, event []byte, timeEvent time.Time) bool {
+	if _, ok := a.debugSource[name]; ok {
+		a.totalLogs.WithLabelValues(name).Inc()
+	}
+
 	if a.threshold <= 0 {
 		return false
 	}
@@ -201,6 +205,10 @@ func (a *Antispammer) Maintenance() {
 		}
 
 		source.counter.Swap(int32(x))
+
+		if _, ok := a.debugSource[source.name]; ok {
+			a.sourceCounter.WithLabelValues(source.name).Set(float64(x))
+		}
 	}
 
 	if allUnbanned {
