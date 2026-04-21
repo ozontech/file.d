@@ -697,7 +697,11 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 		if err == nil {
 			return nil
 		}
-		p.banInstance(instance.addr)
+
+		var netError net.Error
+		if errors.As(err, &netError) {
+			p.banInstance(instance.addr)
+		}
 	}
 	if err != nil {
 		p.insertErrorsMetric.Inc()
