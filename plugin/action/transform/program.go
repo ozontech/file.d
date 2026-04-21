@@ -189,6 +189,11 @@ func validateExpr(expr Expr, registry *Registry) error {
 				}
 			}
 		}
+	case *ForExpr:
+		if err := validateExpr(e.Iter, registry); err != nil {
+			return err
+		}
+		return validateCalls(e.Body, registry)
 	case *RegexLit:
 		re, err := regexp.Compile(e.Pattern)
 		if err != nil {

@@ -18,6 +18,8 @@ const (
 	KW_NULL
 	KW_ABORT
 	KW_DEL
+	KW_FOR
+	KW_IN
 
 	ID
 
@@ -70,6 +72,8 @@ var TokenNames = map[TokenType]string{
 	KW_NULL:       "KW_NULL",
 	KW_ABORT:      "KW_ABORT",
 	KW_DEL:        "KW_DEL",
+	KW_FOR:        "KW_FOR",
+	KW_IN:         "KW_IN",
 	ID:            "ID",
 	FLOAT:         "FLOAT",
 	INTEGER:       "INTEGER",

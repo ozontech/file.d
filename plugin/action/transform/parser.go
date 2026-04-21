@@ -203,6 +203,8 @@ func (p *Parser) parsePrefix() (Expr, error) {
 		return p.parseIf()
 	case KW_ABORT:
 		return &AbortExpr{node: nodeAt(p.advance())}, nil
+	case KW_FOR:
+		return p.parseFor()
 	}
 
 	return nil, p.errorf(tok, "unexpected token %s (%q)", tok.Name(), tok.Lexeme)
@@ -635,6 +637,61 @@ func (p *Parser) parseDel() (Expr, error) {
 	}
 
 	return &DelExpr{node: nodeAt(start), Target: pathExpr}, nil
+}
+
+// Parses delete expressions (e.g. for item in expr { ... } | for i, item in expr { ... })
+
+func (p *Parser) parseFor() (Expr, error) {
+	start := p.advance()
+
+	first, err := p.expect(ID)
+	if err != nil {
+		return nil, err
+	}
+
+	var indexName, itemName string
+
+	if p.match(COMMA) {
+		second, err := p.expect(ID)
+		if err != nil {
+			return nil, err
+		}
+
+		if first.Lexeme != "_" {
+			indexName = first.Lexeme
+		}
+		if second.Lexeme != "_" {
+			itemName = second.Lexeme
+		}
+	} else {
+		itemName = first.Lexeme
+	}
+
+	if indexName == "" && itemName == "" {
+		return nil, p.errorf(first, "for loop must bind at least one variable")
+	}
+
+	if _, err := p.expect(KW_IN); err != nil {
+		return nil, err
+	}
+
+	iter, err := p.parseExpr(bpLowest)
+	if err != nil {
+		return nil, err
+	}
+
+	body, err := p.parseBlock()
+	if err != nil {
+		return nil, err
+	}
+
+	return &ForExpr{
+		node:  nodeAt(start),
+		Index: indexName,
+		Item:  itemName,
+		Iter:  iter,
+		Body:  body,
+	}, nil
 }
 
 // isLValue reports whether expr is a valid assignment target.

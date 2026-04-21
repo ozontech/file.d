@@ -400,6 +400,43 @@ func (e *DelExpr) Eval(ctx *Context) (Value, error) {
 	return NullValue{}, nil
 }
 
+func (e *ForExpr) Eval(ctx *Context) (Value, error) {
+	iterVal, err := e.Iter.Eval(ctx)
+	if err != nil {
+		return NullValue{}, err
+	}
+
+	arr, ok := resolve(iterVal).(ArrayValue)
+	if !ok {
+		return NullValue{}, fmt.Errorf("%s: for loop requires array, got %s", e.Pos(), iterVal.Kind())
+	}
+
+	for i, item := range arr.V {
+		if e.Index != "" {
+			ctx.SetVar(e.Index, IntegerValue{V: int64(i)})
+		}
+		if e.Item != "" {
+			ctx.SetVar(e.Item, resolve(item))
+		}
+
+		_, err := evalBlock(ctx, e.Body)
+		if err != nil {
+			if IsAbort(err) {
+				return NullValue{}, err
+			}
+			return NullValue{}, err
+		}
+	}
+
+	// clean up loop variables from scope
+	if e.Index != "" {
+		ctx.DeleteVar(e.Index)
+	}
+	ctx.DeleteVar(e.Item)
+
+	return NullValue{}, nil
+}
+
 // evalAdd handles the "+" operator:
 //   - string + string  -> concatenation
 //   - int    + int     -> integer result

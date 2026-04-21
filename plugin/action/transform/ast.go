@@ -158,6 +158,14 @@ type DelExpr struct {
 	Target *PathExpr
 }
 
+type ForExpr struct {
+	node
+	Index string
+	Item  string
+	Iter  Expr
+	Body  []Expr
+}
+
 // DumpAST returns a human-readable representation of the AST.
 // Use only for debug
 func DumpAST(expr Expr, depth int) string {

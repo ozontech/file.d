@@ -45,6 +45,8 @@ func NewLexer() (*Lexer, error) {
 	l.Add([]byte(`null`), token(KW_NULL))
 	l.Add([]byte(`abort`), token(KW_ABORT))
 	l.Add([]byte(`del`), token(KW_DEL))
+	l.Add([]byte(`for`), token(KW_FOR))
+	l.Add([]byte(`in`), token(KW_IN))
 
 	// identificators
 	l.Add([]byte(`[a-zA-Z_][a-zA-Z0-9_]*`), token(ID))
