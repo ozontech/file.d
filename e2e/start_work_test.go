@@ -158,7 +158,7 @@ func TestE2EStabilityWorkCase(t *testing.T) {
 		},
 		{
 			name:    "file_clickhouse_main_output_no_available_hosts_dlq",
-			e2eTest: &file_clickhouse_main_output_no_available_hosts_dlq.Config{},
+			e2eTest: &file_clickhouse.Config{},
 			cfgPath: "./file_clickhouse/config_main_output_no_available_hosts_dlq.yml",
 		},
 		{
