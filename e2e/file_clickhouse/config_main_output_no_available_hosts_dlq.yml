@@ -71,7 +71,7 @@ pipelines:
       type: clickhouse
       addresses:
         - doesnotexist
-      table: test_table_insert
+      table: test_table_insert_not_exists
       insert_timeout: 1m
       retry: 0
       columns:

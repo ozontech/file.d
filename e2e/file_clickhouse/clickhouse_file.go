@@ -36,7 +36,7 @@ func (c *Config) Configure(t *testing.T, conf *cfg.Config, pipelineName string) 
 	r := require.New(t)
 
 	c.tableName = "test_table_insert_" + pipelineName
-	c.missingTableName = "test_table_not_exists_" + pipelineName
+	c.missingTableName = "test_table_insert_not_exists_" + pipelineName
 	c.ctx, c.cancel = context.WithTimeout(context.Background(), time.Minute*2)
 
 	conn, err := ch.Dial(c.ctx, ch.Options{
@@ -228,7 +228,7 @@ func (c *Config) Validate(t *testing.T) {
 	sampleIdx := 0
 	r.NoError(c.conn.Do(c.ctx, ch.Query{
 		Body: `select c1, c2, c3, c4, c5, level, ipv4, ipv6, ts, ts_with_tz, ts64, ts64_auto, ts_rfc3339nano, f32, f64, lc_str, str_arr, map_str_str, uuid, uuid_nullable
-			from` + c.tableName + `
+			from ` + c.tableName + `
 			order by c1`,
 		Result: proto.Results{
 			proto.ResultColumn{Name: "c1", Data: c1},
