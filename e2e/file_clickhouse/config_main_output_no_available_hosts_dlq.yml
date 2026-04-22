@@ -24,7 +24,7 @@ pipelines:
       deadqueue:
         type: clickhouse
         addresses:
-          - 127.0.0.1:9002
+          - 127.0.0.1:9001
         table: test_table_insert
         insert_timeout: 1m
         columns:
