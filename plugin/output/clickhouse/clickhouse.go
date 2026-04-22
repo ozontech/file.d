@@ -40,6 +40,8 @@ const (
 	outPluginType = "clickhouse"
 )
 
+var errNoAvailableClickhouseAddresses = errors.New("no available clickhouse addresses")
+
 type Clickhouse interface {
 	Close()
 	Do(ctx context.Context, query ch.Query) error
@@ -384,6 +386,10 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.logger = params.Logger.Desugar()
 	p.config = config.(*Config)
 
+	if len(p.config.Addresses) == 0 {
+		p.logger.Fatal("config.addresses can't be empty")
+	}
+
 	p.bannedHosts = make(map[Address]time.Time, len(p.config.Addresses))
 	p.pendingHosts = make(map[Address]struct{}, len(p.config.Addresses))
 	p.poolsByAddr = make(map[Address]Clickhouse, len(p.config.Addresses))
@@ -674,20 +680,25 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 	p.mu.RUnlock()
 
 	var err error
-	if attempts == 0 && p.config.FatalOnFailedInsert {
+	if attempts == 0 {
+		if p.config.FatalOnFailedInsert {
+			p.logger.Fatal("cannot start: no available clickhouse addresses in config")
+		}
+
+		err = errNoAvailableClickhouseAddresses
 		p.insertErrorsMetric.Inc()
-		p.logger.Fatal("no available clickhouse addresses")
+		p.logger.Error("no available clickhouse addresses", zap.Error(err))
+
+		return err
 	}
 
-	noAvailableHosts := false
 	for i := 0; i < attempts; i++ {
 		requestID := p.requestID.Inc()
 
 		p.mu.RLock()
 		if len(p.instances) == 0 {
 			p.mu.RUnlock()
-			err = errors.New("no available clickhouse addresses")
-			noAvailableHosts = true
+			err = errNoAvailableClickhouseAddresses
 			break
 		}
 		instance := p.getInstance(requestID, i)
@@ -705,7 +716,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 	}
 	if err != nil {
 		p.insertErrorsMetric.Inc()
-		if noAvailableHosts {
+		if errors.Is(err, errNoAvailableClickhouseAddresses) {
 			p.logger.Error("no available clickhouse addresses", zap.Error(err))
 		} else {
 			p.logger.Error("an attempt to insert a batch failed", zap.Error(err))
