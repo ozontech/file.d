@@ -216,8 +216,7 @@ func (p *Parser) parseInfix(left Expr, op Token) (Expr, error) {
 
 	case ASSIGN:
 		if !isLValue(left) {
-			return nil, p.errorf(op,
-				"left side of assignment must be a variable, path, or index expression")
+			return nil, p.errorf(op, "left side of assignment must be a variable, path, or index expression")
 		}
 		// right-associative: bp-1 allows chaining a = b = c -> a = (b = c)
 		right, err := p.parseExpr(bpAssign - 1)
@@ -249,8 +248,7 @@ func (p *Parser) parseInfix(left Expr, op Token) (Expr, error) {
 	case LPAREN:
 		ident, ok := left.(*IdentExpr)
 		if !ok {
-			return nil, p.errorf(op,
-				"function call requires an identifier on the left, got %T", left)
+			return nil, p.errorf(op, "function call requires an identifier on the left, got %T", left)
 		}
 		args, err := p.parseArgList()
 		if err != nil {
@@ -401,8 +399,7 @@ func (p *Parser) parseKVPair() (KVPair, error) {
 	case ID:
 		key = p.advance().Lexeme
 	default:
-		return KVPair{}, p.errorf(tok,
-			"object key must be a string or identifier, got %s", tok.Name())
+		return KVPair{}, p.errorf(tok, "object key must be a string or identifier, got %s", tok.Name())
 	}
 
 	if _, err := p.expect(COLON); err != nil {
@@ -442,8 +439,7 @@ func (p *Parser) parseMetadataPath() (Expr, error) {
 
 	tok := p.peek()
 	if tok.Type != ID {
-		return nil, p.errorf(tok,
-			"expected metadata field name after %%, got %s", tok.Name())
+		return nil, p.errorf(tok, "expected metadata field name after %%, got %s", tok.Name())
 	}
 
 	segments := []PathSegment{{Field: p.advance().Lexeme}}
@@ -481,14 +477,21 @@ func (p *Parser) continueSegments(segments []PathSegment) ([]PathSegment, error)
 	for {
 		switch p.peek().Type {
 		case DOT:
+			if p.pos-1 >= 0 && p.pos-1 < len(p.tokens) {
+				dot := p.peek()
+				prev := p.tokens[p.pos-1]
+				if dot.StartLine > prev.EndLine {
+					return segments, nil
+				}
+			}
+
 			p.advance()
 			seg, ok, err := p.tryFieldSegment()
 			if err != nil {
 				return nil, err
 			}
 			if !ok {
-				return nil, p.errorf(p.peek(),
-					"expected field name after '.', got %s", p.peek().Name())
+				return nil, p.errorf(p.peek(), "expected field name after '.', got %s", p.peek().Name())
 			}
 			segments = append(segments, seg)
 
@@ -632,15 +635,13 @@ func (p *Parser) parseDel() (Expr, error) {
 		pathExpr = raw.(*PathExpr)
 
 	default:
-		return nil, p.errorf(tok,
-			"del requires a path (.field or %%field), got %s", tok.Name())
+		return nil, p.errorf(tok, "del requires a path (.field or %%field), got %s", tok.Name())
 	}
 
 	return &DelExpr{node: nodeAt(start), Target: pathExpr}, nil
 }
 
-// Parses delete expressions (e.g. for item in expr { ... } | for i, item in expr { ... })
-
+// Parses for expressions (e.g. for i in expr { ... } | for i, item in expr { ... })
 func (p *Parser) parseFor() (Expr, error) {
 	start := p.advance()
 
@@ -664,11 +665,11 @@ func (p *Parser) parseFor() (Expr, error) {
 			itemName = second.Lexeme
 		}
 	} else {
-		itemName = first.Lexeme
+		indexName = first.Lexeme
 	}
 
 	if indexName == "" && itemName == "" {
-		return nil, p.errorf(first, "for loop must bind at least one variable")
+		return nil, p.errorf(first, "for loop must bind at least one variable: : use 'for i in ...' or 'for i, item in ...'")
 	}
 
 	if _, err := p.expect(KW_IN); err != nil {
