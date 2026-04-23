@@ -517,19 +517,21 @@ func TestTokenNormalizerCustom(t *testing.T) {
 
 func genBenchInput(count int) []byte {
 	var examples = []string{
-		"s1mple falsehood",                         // no match
-		"test@host1.host2.com",                     // email
-		"http://some.host.com/page1?a=1",           // url
-		"hello-world-123.COM",                      // host
-		"7c1811ed-e98f-4c9c-a9f9-58c757ff494f",     // uuid
-		"a94a8fe5ccb19ba61c4c0873d391e987982fbbd3", // sha1
-		"098f6bcd4621d373cade4e832627b4f6",         // md5
-		"2025-01-13T10:20:40Z",                     // datetime
-		"1.2.3.4",                                  // ip
-		"-1.2m5s",                                  // duration
-		"0x13eb85e69dfbc0758b12acdaae36287d",       // hex
-		"-4.56",                                    // float
-		"123",                                      // int
+		"48757ec9f04efe7faacec8722f3476339b125a6b6172b8a69ff3aa329e0bd0ff", // hash(sha256)
+		"a94a8fe5ccb19ba61c4c0873d391e987982fbbd3",                         // hash(sha1)
+		"098f6bcd4621d373cade4e832627b4f6",                                 // hash(md5)
+		"s1mple falsehood",                                                 // no match
+		"test@host1.host2.com",                                             // email
+		"http://some.host.com/page1?a=1",                                   // url
+		"hello-world-123.COM",                                              // host
+		"7c1811ed-e98f-4c9c-a9f9-58c757ff494f",                             // uuid
+		"/home/user/photos",                                                // filepath
+		"2025-01-13T10:20:40Z",                                             // datetime
+		"1.2.3.4",                                                          // ip
+		"-1.2m5s",                                                          // duration
+		"0x13eb85e69dfbc0758b12acdaae36287d",                               // hex
+		"-4.56",                                                            // float
+		"123",                                                              // int
 		"truE faLse",
 	}
 
