@@ -2,7 +2,6 @@ package transform
 
 import (
 	"log"
-	"strings"
 
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/pipeline"
@@ -70,23 +69,4 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	}
 
 	return pipeline.ActionPass
-}
-
-type upcase struct{}
-
-func (upcase) Name() string { return "upcase" }
-
-func (upcase) Params() []Parameter {
-	return []Parameter{
-		{
-			Name:          "value",
-			Required:      true,
-			AcceptedKinds: []ValueKind{KindString},
-		},
-	}
-}
-
-func (upcase) Call(args map[string]Value) (Value, error) {
-	val := args["value"].(StringValue)
-	return StringValue{V: strings.ToUpper(val.V)}, nil
 }

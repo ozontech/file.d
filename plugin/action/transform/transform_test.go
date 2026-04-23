@@ -29,6 +29,7 @@ func TestLanguage(t *testing.T) {
 		caseForBlank,
 		caseDel,
 		caseNested,
+		caseUpcase,
 	})
 }
 
@@ -361,6 +362,24 @@ var caseNested = langCase{
 				"errors.0.critical": "",
 				"internal":          "",
 				"processed":         "true",
+			},
+		},
+	},
+}
+
+var caseUpcase = langCase{
+	name: "func_upcase",
+	source: `
+		.level = upcase(.level)
+		name = upcase(.user.name)
+		.user.name = name
+	`,
+	events: []eventCase{
+		{
+			in: `{"level":"info","user":{"name":"user321","password":"123"}}`,
+			fields: map[string]string{
+				"level":     "INFO",
+				"user.name": "USER321",
 			},
 		},
 	},
