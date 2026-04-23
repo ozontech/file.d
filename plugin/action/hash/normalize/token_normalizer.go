@@ -268,7 +268,7 @@ func (n *tokenNormalizer) normalizeByScanner(out []byte, scanner *lexmachine.Sca
 	prevEnd := 0
 	for tokRaw, err, eos := scanner.Next(); !eos; tokRaw, err, eos = scanner.Next() {
 		if ui, is := err.(*machines.UnconsumedInput); is {
-			scanner.TC = ui.FailTC // skip
+			scanner.TC = max(scanner.TC+1, ui.FailTC-1) // skip
 			continue
 		} else if err != nil {
 			out = out[:0]
@@ -484,7 +484,7 @@ var builtinTokenPatterns = []TokenPattern{
 	},
 	{
 		Placeholder: placeholderByPattern[pFilepath],
-		RE:          `(/[a-zA-Z0-9-_.]+)+`,
+		RE:          `(/[a-zA-Z-_.][a-zA-Z0-9-_.]*)+`,
 		mask:        pFilepath,
 	},
 	{
@@ -511,10 +511,10 @@ var builtinTokenPatterns = []TokenPattern{
 		mask: pHash,
 	},
 	{
-		// RFC3339, RFC3339Nano, DateTime, DateOnly, TimeOnly, Go time with monotonic clock
+		// RFC3339, RFC3339Nano, DateTime, DateOnly, TimeOnly, Go time with optional monotonic clock
 		Placeholder: placeholderByPattern[pDatetime],
 		RE: fmt.Sprintf(`(%s)|(%s)|(%s)|(%s)`,
-			`\d\d\d\d-\d\d-\d\d \d\d:\d\d:\d\d\.\d+ [+\-]\d\d\d\d [A-Z]+ m=[+\-]\d+\.\d+`,
+			`\d\d\d\d-\d\d-\d\d \d\d:\d\d:\d\d\.\d+ [+\-]\d\d\d\d [A-Z]+( m=[+\-]\d+\.\d+)?`,
 			`\d\d\d\d-\d\d-\d\dT\d\d:\d\d:\d\d(\.\d+)?(Z|[\+\-]\d\d:\d\d)`,
 			`\d\d:\d\d:\d\d`,
 			`\d\d\d\d-\d\d-\d\d( \d\d:\d\d:\d\d)?`,

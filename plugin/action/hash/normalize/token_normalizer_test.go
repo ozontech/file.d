@@ -265,6 +265,8 @@ func TestTokenNormalizerBuiltin(t *testing.T) {
 				"some 2025-01-13 20:58:04.019973588 +0000 UTC m=+1417512.275697914 here",
 				"some 2025-01-13 20:58:04.019973588 -0700 MST m=-123.456789012 here",
 				"some 2025-01-13 20:58:04.019973588 +0300 MSK m=+0.123456789 here",
+				"some 2025-01-13 20:58:04.019973588 -0700 MST here",
+				"some 2025-01-13 20:58:04.019973588 +0300 MSK here",
 				"some 2025-01-13T10:20:40Z here",
 				"some 2025-01-13T10:20:40.999999999Z here",
 				"some 2025-01-13T10:20:40-06:00 here",
@@ -470,9 +472,9 @@ func TestTokenNormalizerCustom(t *testing.T) {
 				},
 			},
 			inputs: []string{
-				`2006/01/02 15:04:05 error occurred, client: 10.125.172.251, upstream: "http://10.117.246.15:84/download", host: "mpm-youtube-downloader-38.name.com:84"`,
+				`2006/01/02 15:04:05 error occurred, client: 10.125.172.251, upstream: "http://10.117.246.15:84/download", host: "mpm-youtube-downloader-38.name.com:84", part/offset: 10117/2461584`,
 			},
-			want: "<nginx_datetime> error occurred, client: <ip>, upstream: <double_quoted>, host: <double_quoted>",
+			want: "<nginx_datetime> error occurred, client: <ip>, upstream: <double_quoted>, host: <double_quoted>, part/offset: <int>/<int>",
 		},
 		{
 			name:    "empty_patterns",
