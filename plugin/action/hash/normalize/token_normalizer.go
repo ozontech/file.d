@@ -268,7 +268,17 @@ func (n *tokenNormalizer) normalizeByScanner(out []byte, scanner *lexmachine.Sca
 	prevEnd := 0
 	for tokRaw, err, eos := scanner.Next(); !eos; tokRaw, err, eos = scanner.Next() {
 		if ui, is := err.(*machines.UnconsumedInput); is {
-			scanner.TC = max(scanner.TC+1, ui.FailTC-1) // skip
+			// Jumping to FailTC may skip start of the next token.
+			// Example: part/offset = 54/5990:
+			//    After matching 54, lexer reports unconsumed /5,
+			// 	  FailTC moves past /5, so 5 is skipped and next scan starts from 990,
+			// Result normalization before: part/offset = <int>/5990.
+			//
+			// Using max(scanner.TC+1, ui.FailTC-1):
+			// 	  FailTC-1 keeps last byte, which may be a token start,
+			// 	  scanner.TC+1 ensures forward progress, since FailTC-1 can be equal to scanner.TC,
+			// Result normalization after: part/offset = <int>/<int>.
+			scanner.TC = max(scanner.TC+1, ui.FailTC-1)
 			continue
 		} else if err != nil {
 			out = out[:0]
