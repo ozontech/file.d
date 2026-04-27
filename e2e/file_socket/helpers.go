@@ -14,6 +14,10 @@ import (
 const (
 	retryDelay = 250 * time.Millisecond
 	delimiter  = '\n'
+
+	networkTcp  = "tcp"
+	networkUdp  = "udp"
+	networkUnix = "unix"
 )
 
 type testServer struct {
@@ -33,8 +37,8 @@ func newTestServer(network, address string) (*testServer, error) {
 	}
 
 	switch network {
-	case "tcp", "unix":
-		if network == "unix" {
+	case networkTcp, networkUnix:
+		if network == networkUnix {
 			_ = os.Remove(address)
 		}
 		ln, err := net.Listen(network, address)
@@ -44,8 +48,8 @@ func newTestServer(network, address string) (*testServer, error) {
 		s.listener = ln
 		go s.acceptLoop()
 
-	case "udp":
-		pc, err := net.ListenPacket("udp", address)
+	case networkUdp:
+		pc, err := net.ListenPacket(networkUdp, address)
 		if err != nil {
 			return nil, fmt.Errorf("failed to listen UDP on %s: %w", address, err)
 		}
@@ -66,7 +70,7 @@ func (s *testServer) close() {
 	if s.packetConn != nil {
 		_ = s.packetConn.Close()
 	}
-	if s.network == "unix" {
+	if s.network == networkUnix {
 		_ = os.Remove(s.address)
 	}
 }

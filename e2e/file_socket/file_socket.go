@@ -49,7 +49,7 @@ func (c *Config) Send(t *testing.T) {
 	defer func() { _ = file.Close() }()
 
 	for i := 0; i < c.Count; i++ {
-		_, err = file.WriteString(fmt.Sprintf("{\"id\":%d,\"message\":\"test\"}\n", i))
+		_, err = fmt.Fprintf(file, "{\"id\":%d,\"message\":\"test\"}\n", i)
 		require.NoError(t, err)
 	}
 }
