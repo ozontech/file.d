@@ -15,6 +15,7 @@ import (
 	"github.com/ozontech/file.d/e2e/file_es_split"
 	"github.com/ozontech/file.d/e2e/file_file"
 	"github.com/ozontech/file.d/e2e/file_loki"
+	"github.com/ozontech/file.d/e2e/file_socket"
 	"github.com/ozontech/file.d/e2e/http_file"
 	"github.com/ozontech/file.d/e2e/join_throttle"
 	"github.com/ozontech/file.d/e2e/kafka_auth"
@@ -183,6 +184,15 @@ func TestE2EStabilityWorkCase(t *testing.T) {
 			e2eTest:       &redis_clients.Config{},
 			cfgPath:       "./redis_clients/config.yml",
 			onlyConfigure: true,
+		},
+		{
+			name: "file_socket",
+			e2eTest: &file_socket.Config{
+				Count:   10,
+				Network: "tcp",
+				Address: "127.0.0.1:0",
+			},
+			cfgPath: "./file_socket/config.yml",
 		},
 	}
 
