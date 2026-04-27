@@ -95,8 +95,6 @@ type Plugin struct {
 
 	cancel context.CancelFunc
 
-	cb *xhttp.CircuitBreaker[string]
-
 	// plugin metrics
 	sendErrorMetric *metric.CounterVec
 
@@ -249,16 +247,8 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.avgEventSize = params.PipelineSettings.AvgEventSize
 	p.config = config.(*Config)
 	p.registerMetrics(params.MetricCtl)
-	endpoints := []string{p.config.Endpoint}
-	p.prepareClient(endpoints)
+	p.prepareClient()
 
-	p.cb = xhttp.NewCircuitBreaker[string](
-		p.config.BanPeriod_,
-		1,
-	)
-	for _, endpoint := range endpoints {
-		p.cb.AddTarget(xhttp.TargetID(endpoint), endpoint, 1)
-	}
 	for _, cf := range p.config.CopyFields {
 		if cf.To == "" {
 			p.logger.Error("copies to the root are not allowed")
@@ -323,7 +313,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 
 	p.batcher.Start(ctx)
 
-	go xhttp.CheckBannedHosts(ctx, p.cb, p.config.ReconnectInterval_)
+	go p.client.CircuitBreaker.CheckBannedEndpoints(ctx, p.config.ReconnectInterval_)
 }
 
 func (p *Plugin) Stop() {
@@ -343,9 +333,9 @@ func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 	)
 }
 
-func (p *Plugin) prepareClient(endpoints []string) {
+func (p *Plugin) prepareClient() {
 	config := &xhttp.ClientConfig{
-		Endpoints:         endpoints,
+		Endpoints:         []string{p.config.Endpoint},
 		ConnectionTimeout: p.config.RequestTimeout_,
 		AuthHeader:        "Splunk " + p.config.Token,
 		KeepAlive: &xhttp.ClientKeepAliveConfig{
@@ -366,6 +356,8 @@ func (p *Plugin) prepareClient(endpoints []string) {
 	if err != nil {
 		p.logger.Fatal("can't create http client", zap.Error(err))
 	}
+
+	p.client.CircuitBreaker = xhttp.NewCircuitBreaker(p.client.GetEndpoints(), p.config.BanPeriod_)
 }
 
 func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) error {
@@ -403,12 +395,8 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 
 	p.logger.Debugf("trying to send: %s", outBuf)
 
-	code, endpoint, err := p.client.DoTimeout(http.MethodPost, "", outBuf,
+	code, err := p.client.DoTimeout(http.MethodPost, "", outBuf,
 		p.config.RequestTimeout_, parseSplunkError)
-
-	if err != nil && xhttp.ShouldBanEndpoint(code) {
-		p.cb.BanTarget(xhttp.TargetID(endpoint))
-	}
 
 	if err != nil {
 		p.sendErrorMetric.WithLabelValues(strconv.Itoa(code)).Inc()

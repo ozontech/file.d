@@ -35,6 +35,7 @@ type ClientConfig struct {
 type Client struct {
 	client               *fasthttp.Client
 	endpoints            []*fasthttp.URI
+	CircuitBreaker       *CircuitBreaker
 	authHeader           string
 	customHeaders        map[string]string
 	gzipCompressionLevel int
@@ -83,36 +84,38 @@ func (c *Client) DoTimeout(
 	body []byte,
 	timeout time.Duration,
 	processResponse func([]byte) error,
-) (int, string, error) {
+) (int, error) {
 	req := fasthttp.AcquireRequest()
 	defer fasthttp.ReleaseRequest(req)
 	resp := fasthttp.AcquireResponse()
 	defer fasthttp.ReleaseResponse(resp)
 
-	var endpoint *fasthttp.URI
-	if len(c.endpoints) == 1 {
-		endpoint = c.endpoints[0]
-	} else {
-		endpoint = c.endpoints[rand.Int()%len(c.endpoints)]
+	endpoint := c.getEndpoint()
+	if endpoint == nil {
+		return 0, fmt.Errorf("no available endpoints")
 	}
 
 	c.prepareRequest(req, endpoint, method, contentType, body)
 
 	if err := c.client.DoTimeout(req, resp, timeout); err != nil {
-		return 0, endpoint.String(), fmt.Errorf("can't send request to %s: %w", endpoint.String(), err)
+		c.CircuitBreaker.BanEndpoint(endpoint)
+		return 0, fmt.Errorf("can't send request to %s: %w", endpoint.String(), err)
 	}
 
 	respContent := resp.Body()
 	statusCode := resp.Header.StatusCode()
 
 	if !(http.StatusOK <= statusCode && statusCode <= http.StatusAccepted) {
-		return statusCode, endpoint.String(), fmt.Errorf("response status from %s isn't OK: status=%d, body=%s", endpoint.String(), statusCode, string(respContent))
+		if shouldBanEndpoint(statusCode) {
+			c.CircuitBreaker.BanEndpoint(endpoint)
+		}
+		return statusCode, fmt.Errorf("response status from %s isn't OK: status=%d, body=%s", endpoint.String(), statusCode, string(respContent))
 	}
 
 	if processResponse != nil {
-		return statusCode, endpoint.String(), processResponse(respContent)
+		return statusCode, processResponse(respContent)
 	}
-	return statusCode, endpoint.String(), nil
+	return statusCode, nil
 }
 
 func (c *Client) prepareRequest(req *fasthttp.Request, endpoint *fasthttp.URI, method, contentType string, body []byte) {
@@ -138,6 +141,10 @@ func (c *Client) prepareRequest(req *fasthttp.Request, endpoint *fasthttp.URI, m
 	} else {
 		req.SetBodyRaw(body)
 	}
+}
+
+func (c *Client) GetEndpoints() []*fasthttp.URI {
+	return c.endpoints
 }
 
 func parseEndpoints(endpoints []string) ([]*fasthttp.URI, error) {
@@ -169,7 +176,22 @@ func parseGzipCompressionLevel(level string) int {
 	}
 }
 
-func ShouldBanEndpoint(statusCode int) bool {
+func (c *Client) getEndpoint() *fasthttp.URI {
+	if c.CircuitBreaker != nil {
+		return c.CircuitBreaker.GetEndpoint()
+	}
+
+	switch len(c.endpoints) {
+	case 0:
+		return nil
+	case 1:
+		return c.endpoints[0]
+	default:
+		return c.endpoints[rand.Int()%len(c.endpoints)]
+	}
+}
+
+func shouldBanEndpoint(statusCode int) bool {
 	switch statusCode {
 	case http.StatusBadGateway,
 		http.StatusServiceUnavailable,

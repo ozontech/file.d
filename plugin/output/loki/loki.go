@@ -243,8 +243,6 @@ type Plugin struct {
 	client  *xhttp.Client
 	batcher *pipeline.RetriableBatcher
 
-	cb *xhttp.CircuitBreaker[string]
-
 	// plugin metrics
 	sendErrorMetric *metric.CounterVec
 
@@ -273,16 +271,8 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 
 	p.labels = p.parseLabels()
 
-	endpoints := []string{fmt.Sprintf("%s/loki/api/v1/push", p.config.Address)}
-	p.prepareClient(endpoints)
+	p.prepareClient()
 
-	p.cb = xhttp.NewCircuitBreaker[string](
-		p.config.BanPeriod_,
-		1,
-	)
-	for _, endpoint := range endpoints {
-		p.cb.AddTarget(xhttp.TargetID(endpoint), endpoint, 1)
-	}
 	batcherOpts := &pipeline.BatcherOptions{
 		PipelineName:   params.PipelineName,
 		OutputType:     outPluginType,
@@ -331,7 +321,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 
 	p.batcher.Start(ctx)
 
-	go xhttp.CheckBannedHosts(ctx, p.cb, p.config.ReconnectInterval_)
+	go p.client.CircuitBreaker.CheckBannedEndpoints(ctx, p.config.ReconnectInterval_)
 }
 
 func (p *Plugin) Stop() {
@@ -436,7 +426,7 @@ func (p *Plugin) send(root *insaneJSON.Root) (int, error) {
 
 	p.logger.Debug("sent", zap.String("data", string(data)))
 
-	statusCode, endpoint, err := p.client.DoTimeout(
+	statusCode, err := p.client.DoTimeout(
 		http.MethodPost,
 		"application/json",
 		data,
@@ -446,9 +436,6 @@ func (p *Plugin) send(root *insaneJSON.Root) (int, error) {
 	if statusCode != http.StatusNoContent {
 		return statusCode, fmt.Errorf("bad response: code=%d, err=%v", statusCode, err)
 	}
-	if err != nil && xhttp.ShouldBanEndpoint(statusCode) {
-		p.cb.BanTarget(xhttp.TargetID(endpoint))
-	}
 
 	return statusCode, nil
 }
@@ -457,9 +444,9 @@ func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 	p.sendErrorMetric = ctl.RegisterCounterVec("output_loki_send_error_total", "Total Loki send errors", "status_code")
 }
 
-func (p *Plugin) prepareClient(endpoints []string) {
+func (p *Plugin) prepareClient() {
 	config := &xhttp.ClientConfig{
-		Endpoints:         endpoints,
+		Endpoints:         []string{fmt.Sprintf("%s/loki/api/v1/push", p.config.Address)},
 		ConnectionTimeout: p.config.ConnectionTimeout_ * 2,
 		AuthHeader:        p.getAuthHeader(),
 		CustomHeaders:     p.getCustomHeaders(),
@@ -474,6 +461,8 @@ func (p *Plugin) prepareClient(endpoints []string) {
 	if err != nil {
 		p.logger.Fatal("can't create http client", zap.Error(err))
 	}
+
+	p.client.CircuitBreaker = xhttp.NewCircuitBreaker(p.client.GetEndpoints(), p.config.BanPeriod_)
 }
 
 func (p *Plugin) getCustomHeaders() map[string]string {

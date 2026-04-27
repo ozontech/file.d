@@ -2,71 +2,70 @@ package xhttp
 
 import (
 	"context"
+	"math/rand"
 	"sync"
 	"time"
 
 	"github.com/ozontech/file.d/xtime"
+	"github.com/valyala/fasthttp"
 )
 
-type TargetID string
-
-type Target[T any] struct {
-	ID     TargetID
-	Client T
-	Weight int
+type CircuitBreaker struct {
+	activeEndpoints []*fasthttp.URI
+	endpointsByID   map[string]*fasthttp.URI
+	bannedUntil     map[string]time.Time
+	banPeriod       time.Duration
+	mu              sync.RWMutex
 }
 
-type CircuitBreaker[T any] struct {
-	activeTargets []Target[T]
-	targetsByID   map[TargetID]T
-	weightsByID   map[TargetID]int
-	bannedUntil   map[TargetID]time.Time
-	banPeriod     time.Duration
-	mu            sync.RWMutex
+func NewCircuitBreaker(endpoints []*fasthttp.URI, banPeriod time.Duration) *CircuitBreaker {
+	cb := &CircuitBreaker{
+		activeEndpoints: make([]*fasthttp.URI, 0, len(endpoints)),
+		endpointsByID:   make(map[string]*fasthttp.URI, len(endpoints)),
+		bannedUntil:     make(map[string]time.Time, len(endpoints)),
+		banPeriod:       banPeriod,
+	}
+
+	for _, endpoint := range endpoints {
+		id := endpoint.String()
+		cb.endpointsByID[id] = endpoint
+		cb.activeEndpoints = append(cb.activeEndpoints, endpoint)
+	}
+
+	return cb
 }
 
-func NewCircuitBreaker[T any](banPeriod time.Duration, activeTargetsCap int) *CircuitBreaker[T] {
-	return &CircuitBreaker[T]{
-		activeTargets: make([]Target[T], 0, activeTargetsCap),
-		targetsByID:   make(map[TargetID]T, activeTargetsCap),
-		weightsByID:   make(map[TargetID]int, activeTargetsCap),
-		bannedUntil:   make(map[TargetID]time.Time, activeTargetsCap),
-		banPeriod:     banPeriod,
+func (cb *CircuitBreaker) GetEndpoint() *fasthttp.URI {
+	cb.mu.RLock()
+	defer cb.mu.RUnlock()
+
+	switch len(cb.activeEndpoints) {
+	case 0:
+		return nil
+	case 1:
+		return cb.activeEndpoints[0]
+	default:
+		return cb.activeEndpoints[rand.Int()%len(cb.activeEndpoints)]
 	}
 }
 
-func (cb *CircuitBreaker[T]) AddTarget(id TargetID, client T, weight int) {
+func (cb *CircuitBreaker) BanEndpoint(endpoint *fasthttp.URI) {
 	cb.mu.Lock()
 	defer cb.mu.Unlock()
 
-	cb.targetsByID[id] = client
-	cb.weightsByID[id] = weight
-
-	for i := 0; i < weight; i++ {
-		cb.activeTargets = append(cb.activeTargets, Target[T]{
-			ID:     id,
-			Client: client,
-			Weight: weight,
-		})
-	}
-}
-
-func (cb *CircuitBreaker[T]) BanTarget(id TargetID) {
-	cb.mu.Lock()
-	defer cb.mu.Unlock()
-
-	filtered := cb.activeTargets[:0]
-	for _, target := range cb.activeTargets {
-		if target.ID != id {
-			filtered = append(filtered, target)
+	id := endpoint.String()
+	filtered := cb.activeEndpoints[:0]
+	for _, endpoint := range cb.activeEndpoints {
+		if endpoint.String() != id {
+			filtered = append(filtered, endpoint)
 		}
 	}
 
-	cb.activeTargets = filtered
+	cb.activeEndpoints = filtered
 	cb.bannedUntil[id] = xtime.GetInaccurateTime().Add(cb.banPeriod)
 }
 
-func (cb *CircuitBreaker[T]) RestoreBannedTargets() {
+func (cb *CircuitBreaker) RestoreBannedEndpoints() {
 	cb.mu.Lock()
 	defer cb.mu.Unlock()
 
@@ -74,46 +73,13 @@ func (cb *CircuitBreaker[T]) RestoreBannedTargets() {
 		if xtime.GetInaccurateTime().Before(until) {
 			continue
 		}
-
-		client := cb.targetsByID[id]
-		weight := cb.weightsByID[id]
-
-		for i := 0; i < weight; i++ {
-			cb.activeTargets = append(cb.activeTargets, Target[T]{
-				ID:     id,
-				Client: client,
-				Weight: weight,
-			})
-		}
-
+		endpoint := cb.endpointsByID[id]
+		cb.activeEndpoints = append(cb.activeEndpoints, endpoint)
 		delete(cb.bannedUntil, id)
 	}
 }
 
-func (cb *CircuitBreaker[T]) ActiveCount() int {
-	cb.mu.RLock()
-	defer cb.mu.RUnlock()
-
-	return len(cb.activeTargets)
-}
-
-func (cb *CircuitBreaker[T]) GetActiveTargetByIndex(idx int) Target[T] {
-	cb.mu.RLock()
-	defer cb.mu.RUnlock()
-
-	return cb.activeTargets[idx]
-}
-
-func CalcActiveTargetsCapacity[T any](target []T, getWeight func(T) int) int {
-	totalCap := 0
-	for _, t := range target {
-		w := getWeight(t)
-		totalCap += w
-	}
-	return totalCap
-}
-
-func CheckBannedHosts[T any](ctx context.Context, cb *CircuitBreaker[T], reconnectInterval time.Duration) {
+func (cb *CircuitBreaker) CheckBannedEndpoints(ctx context.Context, reconnectInterval time.Duration) {
 	ticker := time.NewTicker(reconnectInterval)
 	defer ticker.Stop()
 
@@ -122,7 +88,7 @@ func CheckBannedHosts[T any](ctx context.Context, cb *CircuitBreaker[T], reconne
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			cb.RestoreBannedTargets()
+			cb.RestoreBannedEndpoints()
 		}
 	}
 }

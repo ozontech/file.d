@@ -42,7 +42,6 @@ type Plugin struct {
 	cancel context.CancelFunc
 	mu     *sync.Mutex
 
-	cb *xhttp.CircuitBreaker[string]
 	// plugin metrics
 	sendErrorMetric *metric.CounterVec
 
@@ -212,21 +211,9 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.config = config.(*Config)
 	p.registerMetrics(params.MetricCtl)
 	p.mu = &sync.Mutex{}
-	endpoints := p.prepareEndpoints()
 
-	p.prepareClient(endpoints)
+	p.prepareClient()
 
-	capacity := xhttp.CalcActiveTargetsCapacity(
-		endpoints,
-		func(_ string) int { return 1 },
-	)
-	p.cb = xhttp.NewCircuitBreaker[string](
-		p.config.BanPeriod_,
-		capacity,
-	)
-	for _, endpoint := range endpoints {
-		p.cb.AddTarget(xhttp.TargetID(endpoint), endpoint, 1)
-	}
 	p.logger.Info("starting batcher", zap.Duration("timeout", p.config.BatchFlushTimeout_))
 
 	batcherOpts := pipeline.BatcherOptions{
@@ -279,7 +266,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 
 	p.batcher.Start(ctx)
 
-	go xhttp.CheckBannedHosts(ctx, p.cb, p.config.ReconnectInterval_)
+	go p.client.CircuitBreaker.CheckBannedEndpoints(ctx, p.config.ReconnectInterval_)
 }
 
 func (p *Plugin) Stop() {
@@ -295,9 +282,9 @@ func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 	p.sendErrorMetric = ctl.RegisterCounterVec("output_http_send_error_total", "Total HTTP send errors", "status_code")
 }
 
-func (p *Plugin) prepareClient(endpoints []string) {
+func (p *Plugin) prepareClient() {
 	config := &xhttp.ClientConfig{
-		Endpoints:         endpoints,
+		Endpoints:         p.prepareEndpoints(),
 		ConnectionTimeout: p.config.ConnectionTimeout_ * 2,
 		AuthHeader:        p.getAuthHeader(),
 		KeepAlive: &xhttp.ClientKeepAliveConfig{
@@ -319,6 +306,8 @@ func (p *Plugin) prepareClient(endpoints []string) {
 	if err != nil {
 		p.logger.Fatal("can't create http client", zap.Error(err))
 	}
+
+	p.client.CircuitBreaker = xhttp.NewCircuitBreaker(p.client.GetEndpoints(), p.config.BanPeriod_)
 }
 
 func (p *Plugin) prepareEndpoints() []string {
@@ -388,19 +377,13 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 }
 
 func (p *Plugin) send(data []byte) (int, error) {
-	statusCode, endpoint, err := p.client.DoTimeout(
+	return p.client.DoTimeout(
 		http.MethodPost,
 		p.config.ContentType,
 		data,
 		p.config.ConnectionTimeout_,
 		nil,
 	)
-
-	if err != nil && xhttp.ShouldBanEndpoint(statusCode) {
-		p.cb.BanTarget(xhttp.TargetID(endpoint))
-	}
-
-	return statusCode, err
 }
 
 func (p *Plugin) sendSplit(left int, right int, begin []int, data []byte) (int, error) {
@@ -408,17 +391,13 @@ func (p *Plugin) sendSplit(left int, right int, begin []int, data []byte) (int, 
 		return http.StatusOK, nil
 	}
 
-	statusCode, endpoint, err := p.client.DoTimeout(
+	statusCode, err := p.client.DoTimeout(
 		http.MethodPost,
 		p.config.ContentType,
 		data[begin[left]:begin[right]],
 		p.config.ConnectionTimeout_,
 		nil,
 	)
-
-	if err != nil && xhttp.ShouldBanEndpoint(statusCode) {
-		p.cb.BanTarget(xhttp.TargetID(endpoint))
-	}
 
 	if err != nil {
 		p.sendErrorMetric.WithLabelValues(strconv.Itoa(statusCode)).Inc()
