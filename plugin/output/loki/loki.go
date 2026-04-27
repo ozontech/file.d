@@ -178,6 +178,18 @@ type Config struct {
 	// >
 	// > Multiplier for exponential increase of retention between retries
 	RetentionExponentMultiplier int `json:"retention_exponentially_multiplier" default:"2"` // *
+
+	// > @3@4@5@6
+	// >
+	// > Period for which addresses will be banned in case of unavailability.
+	BanPeriod  cfg.Duration `json:"ban_period" default:"10s" parse:"duration"` // *
+	BanPeriod_ time.Duration
+
+	// > @3@4@5@6
+	// >
+	// > Interval for reconnecting to addresses that are unavailable during initialization.
+	ReconnectInterval  cfg.Duration `json:"reconnect_interval" default:"5s" parse:"duration"` // *
+	ReconnectInterval_ time.Duration
 }
 
 type AuthStrategy byte
@@ -259,6 +271,13 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 
 	p.labels = p.parseLabels()
 
+	if p.config.ReconnectInterval_ < 1 {
+		p.logger.Fatal("'reconnect_interval' can't be <1")
+	}
+	if p.config.BanPeriod_ < 1 {
+		p.logger.Fatal("'ban_period' cant't be <1")
+	}
+
 	p.prepareClient()
 
 	batcherOpts := &pipeline.BatcherOptions{
@@ -308,6 +327,8 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.cancel = cancel
 
 	p.batcher.Start(ctx)
+
+	go p.client.CircuitBreaker.CheckBannedEndpoints(ctx, p.config.ReconnectInterval_)
 }
 
 func (p *Plugin) Stop() {
@@ -447,6 +468,8 @@ func (p *Plugin) prepareClient() {
 	if err != nil {
 		p.logger.Fatal("can't create http client", zap.Error(err))
 	}
+
+	p.client.CircuitBreaker = xhttp.NewCircuitBreaker(p.client.GetEndpoints(), p.config.BanPeriod_)
 }
 
 func (p *Plugin) getCustomHeaders() map[string]string {

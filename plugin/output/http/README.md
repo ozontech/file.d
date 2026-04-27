@@ -133,5 +133,17 @@ After a non-retryable write error, fall with a non-zero exit code or not
 
 <br>
 
+**`ban_period`** *`cfg.Duration`* *`default=10s`* 
+
+Period for which addresses will be banned in case of unavailability.
+
+<br>
+
+**`reconnect_interval`** *`cfg.Duration`* *`default=5s`* 
+
+Interval for reconnecting to addresses that are unavailable during initialization.
+
+<br>
+
 
 <br>*Generated using [__insane-doc__](https://github.com/vitkovskii/insane-doc)*

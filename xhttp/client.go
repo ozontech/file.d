@@ -35,6 +35,7 @@ type ClientConfig struct {
 type Client struct {
 	client               *fasthttp.Client
 	endpoints            []*fasthttp.URI
+	CircuitBreaker       *CircuitBreaker
 	authHeader           string
 	customHeaders        map[string]string
 	gzipCompressionLevel int
@@ -89,16 +90,15 @@ func (c *Client) DoTimeout(
 	resp := fasthttp.AcquireResponse()
 	defer fasthttp.ReleaseResponse(resp)
 
-	var endpoint *fasthttp.URI
-	if len(c.endpoints) == 1 {
-		endpoint = c.endpoints[0]
-	} else {
-		endpoint = c.endpoints[rand.Int()%len(c.endpoints)]
+	endpoint := c.getEndpoint()
+	if endpoint == nil {
+		return 0, fmt.Errorf("no available endpoints")
 	}
 
 	c.prepareRequest(req, endpoint, method, contentType, body)
 
 	if err := c.client.DoTimeout(req, resp, timeout); err != nil {
+		c.CircuitBreaker.BanEndpoint(endpoint)
 		return 0, fmt.Errorf("can't send request to %s: %w", endpoint.String(), err)
 	}
 
@@ -106,6 +106,9 @@ func (c *Client) DoTimeout(
 	statusCode := resp.Header.StatusCode()
 
 	if !(http.StatusOK <= statusCode && statusCode <= http.StatusAccepted) {
+		if shouldBanEndpoint(statusCode) {
+			c.CircuitBreaker.BanEndpoint(endpoint)
+		}
 		return statusCode, fmt.Errorf("response status from %s isn't OK: status=%d, body=%s", endpoint.String(), statusCode, string(respContent))
 	}
 
@@ -140,6 +143,10 @@ func (c *Client) prepareRequest(req *fasthttp.Request, endpoint *fasthttp.URI, m
 	}
 }
 
+func (c *Client) GetEndpoints() []*fasthttp.URI {
+	return c.endpoints
+}
+
 func parseEndpoints(endpoints []string) ([]*fasthttp.URI, error) {
 	res := make([]*fasthttp.URI, 0, len(endpoints))
 	for _, e := range endpoints {
@@ -166,5 +173,32 @@ func parseGzipCompressionLevel(level string) int {
 		return fasthttp.CompressHuffmanOnly
 	default:
 		return -1
+	}
+}
+
+func (c *Client) getEndpoint() *fasthttp.URI {
+	if c.CircuitBreaker != nil {
+		return c.CircuitBreaker.GetEndpoint()
+	}
+
+	switch len(c.endpoints) {
+	case 0:
+		return nil
+	case 1:
+		return c.endpoints[0]
+	default:
+		return c.endpoints[rand.Int()%len(c.endpoints)]
+	}
+}
+
+func shouldBanEndpoint(statusCode int) bool {
+	switch statusCode {
+	case http.StatusBadGateway,
+		http.StatusServiceUnavailable,
+		http.StatusGatewayTimeout,
+		http.StatusTooManyRequests:
+		return true
+	default:
+		return false
 	}
 }
