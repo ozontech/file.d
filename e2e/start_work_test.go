@@ -190,7 +190,7 @@ func TestE2EStabilityWorkCase(t *testing.T) {
 			e2eTest: &file_socket.Config{
 				Count:   10,
 				Network: "tcp",
-				Address: "127.0.0.1:0",
+				Address: "localhost:9202",
 			},
 			cfgPath: "./file_socket/config.yml",
 		},
