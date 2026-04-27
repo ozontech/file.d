@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/timtadh/lexmachine"
@@ -278,22 +279,18 @@ func newIpToken(placeholder string) lexmachine.Action {
 			return nil, nil
 		}
 
-		// Fallback IP parser.
 		// Scans for IP-like patterns until end, then validates with net.ParseIP.
 		// Necessary because lexer's own pattern matching can be incomplete.
 		begin, end := m.TC, m.TC
-
-		for end < len(s.Text) {
-			if !isIPChar(s.Text[end]) {
-				break
-			}
+		for end < len(s.Text) && isIPChar(s.Text[end]) {
 			end++
 		}
 
 		candidate := string(s.Text[begin:end])
 		trimmedCandidate := strings.TrimSuffix(candidate, ":")
-		// classic ip (IPv4+IPv6)
-		if ip := net.ParseIP(candidate); ip != nil {
+
+		// IPv4 / IPv6
+		if net.ParseIP(candidate) != nil {
 			return token{
 				placeholder: placeholder,
 				begin:       begin,
@@ -301,47 +298,32 @@ func newIpToken(placeholder string) lexmachine.Action {
 			}, nil
 		}
 
-		if strings.Count(trimmedCandidate, ":") >= 2 {
-			// IPv6+:
-			if ip := net.ParseIP(trimmedCandidate); ip != nil {
-				return token{
-					placeholder: placeholder,
-					begin:       begin,
-					end:         end - 1,
-				}, nil
-			}
-		} else {
-			// IPv4+:
-			if ip := net.ParseIP(trimmedCandidate); ip != nil {
-				return token{
-					placeholder: placeholder,
-					begin:       begin,
-					end:         end - 1,
-				}, nil
-			}
+		// IPv4: / IPv6:
+		if net.ParseIP(trimmedCandidate) != nil {
+			return token{
+				placeholder: placeholder,
+				begin:       begin,
+				end:         end - 1,
+			}, nil
+		}
 
+		if strings.Count(trimmedCandidate, ":") < 2 {
 			// IPv4:port
-			host, _, err := net.SplitHostPort(candidate)
-			if err == nil {
-				if ip := net.ParseIP(host); ip != nil {
-					return token{
-						placeholder: placeholder,
-						begin:       begin,
-						end:         end,
-					}, nil
-				}
+			if parseHostPort(candidate) {
+				return token{
+					placeholder: placeholder,
+					begin:       begin,
+					end:         end,
+				}, nil
 			}
 
-			// IPv4:port+:
-			host, _, err = net.SplitHostPort(trimmedCandidate)
-			if err == nil {
-				if ip := net.ParseIP(host); ip != nil {
-					return token{
-						placeholder: placeholder,
-						begin:       begin,
-						end:         end - 1,
-					}, nil
-				}
+			// IPv4:port:
+			if parseHostPort(trimmedCandidate) {
+				return token{
+					placeholder: placeholder,
+					begin:       begin,
+					end:         end - 1,
+				}, nil
 			}
 		}
 		return nil, nil
@@ -533,6 +515,20 @@ func (t *tokenizer) processQuotes(c byte, pattern int, pos int) (token, int, boo
 		}, 0, true
 	}
 	return token{}, 0, false
+}
+
+func parseHostPort(candidate string) bool {
+	host, port, err := net.SplitHostPort(candidate)
+	if err != nil {
+		return false
+	}
+
+	// SplitHostPort doesn't validate port, ensure it's a number in [0;65535]
+	if _, err := strconv.ParseUint(port, 10, 16); err != nil {
+		return false
+	}
+
+	return net.ParseIP(host) != nil
 }
 
 func isWord(c byte) bool {
