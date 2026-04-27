@@ -3,13 +3,11 @@ package clickhouse
 import (
 	"bytes"
 	"context"
-	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/ClickHouse/ch-go"
@@ -19,7 +17,6 @@ import (
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
-	"github.com/ozontech/file.d/xhttp"
 	"github.com/ozontech/file.d/xtls"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
@@ -56,6 +53,7 @@ type Plugin struct {
 	query string
 
 	// TODO: support shards
+	instances []Clickhouse
 	requestID atomic.Int64
 
 	// plugin metrics
@@ -63,14 +61,6 @@ type Plugin struct {
 	queriesCountMetric *metric.Counter
 
 	router *pipeline.Router
-
-	compression ch.Compression
-	tlsConfig   *tls.Config
-
-	cb           *xhttp.CircuitBreaker[Clickhouse]
-	poolsByAddr  map[Address]Clickhouse
-	pendingHosts map[Address]struct{}
-	mu           sync.RWMutex
 }
 
 type Setting struct {
@@ -344,18 +334,6 @@ type Config struct {
 	// > After this timeout batch will be sent even if batch isn't completed.
 	BatchFlushTimeout  cfg.Duration `json:"batch_flush_timeout" default:"200ms" parse:"duration"` // *
 	BatchFlushTimeout_ time.Duration
-
-	// > @3@4@5@6
-	// >
-	// > Period for which addresses will be banned in case of unavailability.
-	BanPeriod  cfg.Duration `json:"ban_period" default:"10s" parse:"duration"` // *
-	BanPeriod_ time.Duration
-
-	// > @3@4@5@6
-	// >
-	// > Interval for reconnecting to addresses that are unavailable during initialization.
-	ReconnectInterval  cfg.Duration `json:"reconnect_interval" default:"5s" parse:"duration"` // *
-	ReconnectInterval_ time.Duration
 }
 
 func init() {
@@ -376,11 +354,8 @@ func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginParams) {
 	p.logger = params.Logger.Desugar()
+
 	p.config = config.(*Config)
-
-	p.pendingHosts = make(map[Address]struct{}, len(p.config.Addresses))
-	p.poolsByAddr = make(map[Address]Clickhouse, len(p.config.Addresses))
-
 	p.registerMetrics(params.MetricCtl)
 	p.ctx, p.cancelFunc = context.WithCancel(context.Background())
 
@@ -389,12 +364,6 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	}
 	if p.config.InsertTimeout_ < 1 {
 		p.logger.Fatal("'db_request_timeout' can't be <1")
-	}
-	if p.config.ReconnectInterval_ < 1 {
-		p.logger.Fatal("'reconnect_interval' can't be <1")
-	}
-	if p.config.BanPeriod_ < 1 {
-		p.logger.Fatal("'failure_cooldown_period' cant't be <1")
 	}
 
 	schema, err := inferInsaneColInputs(p.config.Columns)
@@ -411,61 +380,62 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		p.config.InsertStrategy_ = StrategyInOrder
 	}
 
+	var compression ch.Compression
 	switch strings.ToLower(p.config.Compression) {
 	default:
 		fallthrough
 	case "disabled":
-		p.compression = ch.CompressionDisabled
+		compression = ch.CompressionDisabled
 	case "lz4":
-		p.compression = ch.CompressionLZ4
+		compression = ch.CompressionLZ4
 	case "zstd":
-		p.compression = ch.CompressionZSTD
+		compression = ch.CompressionZSTD
 	case "none":
-		p.compression = ch.CompressionNone
+		compression = ch.CompressionNone
 	}
 
+	var b xtls.ConfigBuilder
 	if p.config.CACert != "" {
 		b := xtls.NewConfigBuilder()
-		if err := b.AppendCARoot(p.config.CACert); err != nil {
+		err := b.AppendCARoot(p.config.CACert)
+		if err != nil {
 			p.logger.Fatal("can't append CA root", zap.Error(err))
 		}
-		p.tlsConfig = b.Build()
 	}
 
-	capacity := xhttp.CalcActiveTargetsCapacity(
-		p.config.Addresses,
-		func(addr Address) int {
-			return *addr.Weight
-		},
-	)
-
-	p.cb = xhttp.NewCircuitBreaker[Clickhouse](
-		p.config.BanPeriod_,
-		capacity,
-	)
 	for _, addr := range p.config.Addresses {
-		pool, err := p.createConnection(addr)
+		addr.Addr = addrWithDefaultPort(addr.Addr, "9000")
+		pool, err := chpool.New(p.ctx, chpool.Options{
+			ClientOptions: ch.Options{
+				Logger:           p.logger.Named("driver"),
+				Address:          addr.Addr,
+				Database:         p.config.Database,
+				User:             p.config.User,
+				Password:         p.config.Password,
+				QuotaKey:         p.config.QuotaKey,
+				Compression:      compression,
+				Settings:         p.config.ClickhouseSettings.toProtoSettings(),
+				DialTimeout:      time.Second * 10,
+				TLS:              b.Build(),
+				HandshakeTimeout: time.Minute,
+			},
+			MaxConnLifetime:   p.config.MaxConnLifetime_,
+			MaxConnIdleTime:   p.config.MaxConnIdleTime_,
+			MaxConns:          p.config.MaxConns_,
+			MinConns:          p.config.MinConns_,
+			HealthCheckPeriod: p.config.HealthCheckPeriod_,
+		})
 		if err != nil {
-			var netError net.Error
-			if errors.As(err, &netError) {
-				p.pendingHosts[addr] = struct{}{}
-			}
 			p.logger.Error("create clickhouse connection pool", zap.Error(err), zap.String("addr", addr.Addr))
-			continue
+		} else {
+			for j := 0; j < *addr.Weight; j++ {
+				p.instances = append(p.instances, pool)
+			}
 		}
-
-		p.poolsByAddr[addr] = pool
-		p.cb.AddTarget(xhttp.TargetID(addr.Addr), pool, *addr.Weight)
 	}
 
-	if p.cb.ActiveCount() == 0 && p.config.FatalOnFailedInsert {
+	if len(p.instances) == 0 {
 		p.logger.Fatal("cannot start: no available clickhouse addresses in config")
-	}
-
-	go xhttp.CheckBannedHosts(p.ctx, p.cb, p.config.ReconnectInterval_)
-
-	if len(p.pendingHosts) > 0 {
-		go p.checkPendingHosts()
 	}
 
 	batcherOpts := pipeline.BatcherOptions{
@@ -514,68 +484,11 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.batcher.Start(p.ctx)
 }
 
-func (p *Plugin) createConnection(addr Address) (*chpool.Pool, error) {
-	addr.Addr = addrWithDefaultPort(addr.Addr, "9000")
-	pool, err := chpool.New(p.ctx, chpool.Options{
-		ClientOptions: ch.Options{
-			Logger:           p.logger.Named("driver"),
-			Address:          addr.Addr,
-			Database:         p.config.Database,
-			User:             p.config.User,
-			Password:         p.config.Password,
-			QuotaKey:         p.config.QuotaKey,
-			Compression:      p.compression,
-			Settings:         p.config.ClickhouseSettings.toProtoSettings(),
-			DialTimeout:      time.Second * 10,
-			TLS:              p.tlsConfig,
-			HandshakeTimeout: time.Minute,
-		},
-		MaxConnLifetime:   p.config.MaxConnLifetime_,
-		MaxConnIdleTime:   p.config.MaxConnIdleTime_,
-		MaxConns:          p.config.MaxConns_,
-		MinConns:          p.config.MinConns_,
-		HealthCheckPeriod: p.config.HealthCheckPeriod_,
-	})
-
-	return pool, err
-}
-
-func (p *Plugin) checkPendingHosts() {
-	ticker := time.NewTicker(p.config.ReconnectInterval_)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-p.ctx.Done():
-			return
-		case <-ticker.C:
-			if len(p.pendingHosts) == 0 {
-				return
-			}
-
-			for addr := range p.pendingHosts {
-				pool, err := p.createConnection(addr)
-				if err != nil {
-					p.logger.Error("failed to reconnect to pending host", zap.Error(err), zap.String("addr", addr.Addr))
-					continue
-				}
-
-				p.mu.Lock()
-				p.poolsByAddr[addr] = pool
-				delete(p.pendingHosts, addr)
-				p.mu.Unlock()
-
-				p.cb.AddTarget(xhttp.TargetID(addr.Addr), pool, *addr.Weight)
-			}
-		}
-	}
-}
-
 func (p *Plugin) Stop() {
 	p.cancelFunc()
 	p.batcher.Stop()
-
-	for _, pool := range p.poolsByAddr {
-		pool.Close()
+	for _, clickhouse := range p.instances {
+		clickhouse.Close()
 	}
 }
 
@@ -638,25 +551,13 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 		}
 	})
 
-	instancesCount := p.cb.ActiveCount()
-
-	if instancesCount == 0 && p.config.FatalOnFailedInsert {
-		p.logger.Fatal("no available clickhouse addresses")
-	}
-
 	var err error
-	for i := 0; i < instancesCount; i++ {
+	for i := range p.instances {
 		requestID := p.requestID.Inc()
-		idx := p.getInstanceIndex(requestID, i, instancesCount)
-		instance := p.cb.GetActiveTargetByIndex(idx)
-		err = p.do(instance.Client, data.input)
+		clickhouse := p.getInstance(requestID, i)
+		err = p.do(clickhouse, data.input)
 		if err == nil {
 			return nil
-		}
-
-		var netErr net.Error
-		if errors.As(err, &netErr) {
-			p.cb.BanTarget(instance.ID)
 		}
 	}
 	if err != nil {
@@ -682,17 +583,15 @@ func (p *Plugin) do(clickhouse Clickhouse, queryInput proto.Input) error {
 	})
 }
 
-func (p *Plugin) getInstanceIndex(requestID int64, retry, instanceCount int) int {
-	p.mu.RLock()
-	defer p.mu.RUnlock()
+func (p *Plugin) getInstance(requestID int64, retry int) Clickhouse {
 	var instanceIdx int
 	switch p.config.InsertStrategy_ {
 	case StrategyInOrder:
-		instanceIdx = retry % instanceCount
+		instanceIdx = retry % len(p.instances)
 	case StrategyRoundRobin:
-		instanceIdx = int(requestID) % instanceCount
+		instanceIdx = int(requestID) % len(p.instances)
 	}
-	return instanceIdx
+	return p.instances[instanceIdx]
 }
 
 func addrWithDefaultPort(addr string, defaultPort string) string {

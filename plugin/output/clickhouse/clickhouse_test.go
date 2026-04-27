@@ -1,14 +1,11 @@
 package clickhouse
 
 import (
-	"fmt"
 	"math/rand"
 	"testing"
-	"time"
 
 	"github.com/golang/mock/gomock"
 	mockclickhouse "github.com/ozontech/file.d/plugin/output/clickhouse/mock"
-	"github.com/ozontech/file.d/xhttp"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -17,7 +14,7 @@ func TestPlugin_getInstance(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 
-	pools := []Clickhouse{
+	instances := []Clickhouse{
 		mockclickhouse.NewMockClickhouse(ctrl),
 		mockclickhouse.NewMockClickhouse(ctrl),
 		mockclickhouse.NewMockClickhouse(ctrl),
@@ -30,55 +27,55 @@ func TestPlugin_getInstance(t *testing.T) {
 		retry int
 	}
 	tests := []struct {
-		name          string
-		stategy       InsertStrategy
-		args          args
-		instanceCount int
-		want          Clickhouse
+		name      string
+		instances []Clickhouse
+		stategy   InsertStrategy
+		args      args
+		want      Clickhouse
 	}{
 		// in-order
 		{
-			name:          "one instance and first retry",
-			stategy:       StrategyInOrder,
-			args:          args{id: rand.Int63(), retry: 0},
-			instanceCount: 1,
-			want:          pools[0],
+			name:      "one instance and first retry",
+			instances: instances[:1],
+			stategy:   StrategyInOrder,
+			args:      args{id: rand.Int63(), retry: 0},
+			want:      instances[0],
 		},
 		{
-			name:          "one instance and some retry",
-			stategy:       StrategyInOrder,
-			args:          args{id: rand.Int63(), retry: 123},
-			instanceCount: 1,
-			want:          pools[0],
+			name:      "one instance and some retry",
+			instances: instances[:1],
+			stategy:   StrategyInOrder,
+			args:      args{id: rand.Int63(), retry: 123},
+			want:      instances[0],
 		},
 		{
-			name:          "many instances and some retry",
-			stategy:       StrategyInOrder,
-			args:          args{id: rand.Int63(), retry: 123},
-			instanceCount: 2,
-			want:          pools[1], // 123%2
+			name:      "many instances and some retry",
+			instances: instances,
+			stategy:   StrategyInOrder,
+			args:      args{id: rand.Int63(), retry: 123},
+			want:      instances[3], // 123%3
 		},
 		// round-robin
 		{
-			name:          "many instances and first retry",
-			stategy:       StrategyRoundRobin,
-			args:          args{id: 123, retry: 0},
-			instanceCount: 3,
-			want:          pools[0], // 123%3
+			name:      "many instances and first retry",
+			instances: instances,
+			stategy:   StrategyRoundRobin,
+			args:      args{id: 123, retry: 0},
+			want:      instances[3], // 123%3
 		},
 		{
-			name:          "many instances and rand retry",
-			stategy:       StrategyRoundRobin,
-			args:          args{id: 0, retry: rand.Int()},
-			instanceCount: 5,
-			want:          pools[0],
+			name:      "many instances and rand retry",
+			instances: instances,
+			stategy:   StrategyRoundRobin,
+			args:      args{id: 0, retry: rand.Int()},
+			want:      instances[0],
 		},
 		{
-			name:          "one instances and rand retry",
-			stategy:       StrategyRoundRobin,
-			args:          args{id: rand.Int63(), retry: rand.Int()},
-			instanceCount: 1,
-			want:          pools[0],
+			name:      "one instances and rand retry",
+			instances: instances[:1],
+			stategy:   StrategyRoundRobin,
+			args:      args{id: rand.Int63(), retry: rand.Int()},
+			want:      instances[0],
 		},
 	}
 
@@ -87,15 +84,10 @@ func TestPlugin_getInstance(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			cb := xhttp.NewCircuitBreaker[Clickhouse](time.Second, tt.instanceCount)
-			for i := 0; i < tt.instanceCount; i++ {
-				cb.AddTarget(xhttp.TargetID(fmt.Sprintf("addr%d", i)), pools[i], 1)
-			}
-			p := &Plugin{cb: cb, config: &Config{InsertStrategy_: tt.stategy}}
+			p := &Plugin{instances: tt.instances, config: &Config{InsertStrategy_: tt.stategy}}
 
-			idx := p.getInstanceIndex(tt.args.id, tt.args.retry, tt.instanceCount)
-			instance := p.cb.GetActiveTargetByIndex(idx)
-			if instance.Client != tt.want {
+			instance := p.getInstance(tt.args.id, tt.args.retry)
+			if instance != tt.want {
 				t.Fatal("instances are not equal")
 			}
 		})
