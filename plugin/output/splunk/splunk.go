@@ -247,6 +247,14 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.avgEventSize = params.PipelineSettings.AvgEventSize
 	p.config = config.(*Config)
 	p.registerMetrics(params.MetricCtl)
+
+	if p.config.ReconnectInterval_ < 1 {
+		p.logger.Fatal("'reconnect_interval' can't be <1")
+	}
+	if p.config.BanPeriod_ < 1 {
+		p.logger.Fatal("'ban_period' cant't be <1")
+	}
+
 	p.prepareClient()
 
 	for _, cf := range p.config.CopyFields {

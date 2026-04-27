@@ -271,6 +271,13 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 
 	p.labels = p.parseLabels()
 
+	if p.config.ReconnectInterval_ < 1 {
+		p.logger.Fatal("'reconnect_interval' can't be <1")
+	}
+	if p.config.BanPeriod_ < 1 {
+		p.logger.Fatal("'ban_period' cant't be <1")
+	}
+
 	p.prepareClient()
 
 	batcherOpts := &pipeline.BatcherOptions{
