@@ -159,5 +159,11 @@ Multiplier for exponential increase of retention between retries
 
 <br>
 
+**`delimiter`** *`string`* *`default=\n`* 
+
+Delimiter to append after each event. Must be exactly one byte.
+
+<br>
+
 
 <br>*Generated using [__insane-doc__](https://github.com/vitkovskii/insane-doc)*
