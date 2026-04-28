@@ -33,6 +33,7 @@ func (c *Config) Configure(t *testing.T, conf *cfg.Config, pipelineName string) 
 	output := conf.Pipelines[pipelineName].Raw.Get("output")
 	output.Set("network", c.Network)
 	output.Set("address", c.Address)
+	output.Set("delimiter", "\n")
 
 	srv, err := newTestServer(c.Network, c.Address)
 	require.NoError(t, err)

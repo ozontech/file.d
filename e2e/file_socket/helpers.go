@@ -12,8 +12,8 @@ import (
 )
 
 const (
-	retryDelay = 250 * time.Millisecond
-	delimiter  = '\n'
+	retryDelay = 3250 * time.Millisecond
+	delimiter  = byte('\n')
 
 	networkTcp  = "tcp"
 	networkUdp  = "udp"
@@ -94,7 +94,7 @@ func (s *testServer) handleConn(conn net.Conn) {
 		if err != nil {
 			return
 		}
-		msg := bytes.TrimRight(raw, "\x00")
+		msg := bytes.TrimRight(raw, "\n")
 		if len(msg) == 0 {
 			continue
 		}
@@ -106,6 +106,7 @@ func (s *testServer) readUDPLoop() {
 	buf := make([]byte, 65535)
 	for {
 		n, _, err := s.packetConn.ReadFrom(buf)
+		fmt.Println(123123)
 		if err != nil {
 			return
 		}
@@ -133,6 +134,8 @@ func (s *testServer) collected() []string {
 }
 
 func (s *testServer) waitForMessages(minCount, retries int, delay time.Duration) ([]map[string]interface{}, error) {
+	time.Sleep(2 * time.Second)
+
 	for i := 0; i < retries; i++ {
 		msgs := s.collected()
 		if len(msgs) >= minCount {

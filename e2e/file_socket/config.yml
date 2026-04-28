@@ -8,5 +8,5 @@ pipelines:
       offsets_op: reset
     output:
       type: socket
-      network: tcp
+      network: SOME_NETWORK
       address: SOME_ADDRESS
