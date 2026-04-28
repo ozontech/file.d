@@ -28,7 +28,7 @@ func TestEventToMetrics(t *testing.T) {
 			},
 			Metric{
 				Name:  "checkout_response_time",
-				Value: []cfg.FieldSelector{"info", "response_time"},
+				Value: []cfg.FieldSelector{"info.response_time"},
 				Type:  "gauge",
 				Labels: map[string]string{
 					"zone": "info.zone",

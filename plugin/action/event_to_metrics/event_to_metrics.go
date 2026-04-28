@@ -1,7 +1,6 @@
 package event_to_metrics
 
 import (
-	"maps"
 	"sync"
 	"time"
 
@@ -18,6 +17,8 @@ import (
 Get metric from event
 
 This plugin transforms incoming events into metric data. Each event can generate one or more metrics with configurable labels and values. Using the Prometheus output plugin, you can send the generated metrics to Prometheus.
+
+**Important:** This action should be the last one in the pipeline, as it consumes events and does not pass them further.
 }*/
 
 /*{ examples
@@ -250,7 +251,7 @@ type Metric struct {
 	// >
 	// > Field selector(s) to extract the metric value from the event. If not specified or empty, the value defaults to 1 (useful for counters).
 	Value       []cfg.FieldSelector `json:"value"` // *
-	valueFields []string
+	valueFields [][]string
 
 	// > @3@4@5@6
 	// >
@@ -315,15 +316,13 @@ func prepareCheckersForMetrics(metrics []Metric, logger *zap.Logger) []Metric {
 			m.use = true
 		}
 
-		fields := make([]string, 0, len(m.Value))
+		m.valueFields = make([][]string, 0, len(m.Value))
 		for _, fs := range m.Value {
 			if fs == "" {
 				continue
 			}
-			parsed := cfg.ParseFieldSelector(string(fs))
-			fields = append(fields, parsed...)
+			m.valueFields = append(m.valueFields, cfg.ParseFieldSelector(string(fs)))
 		}
-		m.valueFields = fields
 	}
 
 	return metrics
@@ -333,24 +332,11 @@ func (p *Plugin) Stop() {
 }
 
 func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
-	p.mu.Lock()
 	metricIndices := make([]int, 0, len(p.Metrics))
 	for i := range p.Metrics {
-		if p.Metrics[i].DoIfChecker == nil || p.config.Metrics[i].DoIfChecker.Check(event.Root) {
+		if p.Metrics[i].DoIfChecker == nil || p.Metrics[i].DoIfChecker.Check(event.Root) {
 			metricIndices = append(metricIndices, i)
 		}
-	}
-	p.mu.Unlock()
-
-	copyMetrics := make([]Metric, 0, len(metricIndices))
-	for _, idx := range metricIndices {
-		metric := p.Metrics[idx]
-		if metric.Labels != nil {
-			labels := make(map[string]string, len(metric.Labels))
-			maps.Copy(labels, metric.Labels)
-			metric.Labels = labels
-		}
-		copyMetrics = append(copyMetrics, metric)
 	}
 
 	var ts time.Time
@@ -373,9 +359,9 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 		ts = xtime.GetInaccurateTime()
 	}
 
-	children := make([]*insaneJSON.Node, 0, len(copyMetrics))
-	for i := range copyMetrics {
-		metric := &copyMetrics[i]
+	children := make([]*insaneJSON.Node, 0, len(metricIndices))
+	for _, idx := range metricIndices {
+		metric := &p.Metrics[idx]
 		elem := new(insaneJSON.Node)
 		object := elem.MutateToObject()
 
@@ -387,8 +373,11 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 		if len(metric.Value) == 0 {
 			object.AddField("value").MutateToInt(1)
 		} else {
-			valueNode := event.Root.Dig(metric.valueFields...).AsFloat()
-			object.AddField("value").MutateToFloat(valueNode)
+			var total float64
+			for _, fieldPath := range metric.valueFields {
+				total += event.Root.Dig(fieldPath...).AsFloat()
+			}
+			object.AddField("value").MutateToFloat(total)
 		}
 
 		if len(metric.Labels) > 0 {

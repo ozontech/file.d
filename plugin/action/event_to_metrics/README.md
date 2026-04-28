@@ -3,6 +3,8 @@ Get metric from event
 
 This plugin transforms incoming events into metric data. Each event can generate one or more metrics with configurable labels and values. Using the Prometheus output plugin, you can send the generated metrics to Prometheus.
 
+**Important:** This action should be the last one in the pipeline, as it consumes events and does not pass them further.
+
 ## Examples
 **Example 1: Simple counter**
 
