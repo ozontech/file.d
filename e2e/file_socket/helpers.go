@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	retryDelay = 3250 * time.Millisecond
+	retryDelay = 250 * time.Millisecond
 	delimiter  = byte('\n')
 
 	networkTcp  = "tcp"
@@ -106,7 +106,6 @@ func (s *testServer) readUDPLoop() {
 	buf := make([]byte, 65535)
 	for {
 		n, _, err := s.packetConn.ReadFrom(buf)
-		fmt.Println(123123)
 		if err != nil {
 			return
 		}
