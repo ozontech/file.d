@@ -195,6 +195,12 @@ type Config struct {
 	// >
 	// > Multiplier for exponential increase of retention between retries
 	RetentionExponentMultiplier int `json:"retention_exponentially_multiplier" default:"2"` // *
+
+	// > @3@4@5@6
+	// >
+	// > Delimiter to append after each event. Must be exactly one byte.
+	Delimiter  string `json:"delimiter" default:"\n"` // *
+	Delimiter_ byte
 }
 
 type data struct {
@@ -220,6 +226,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.registerMetrics(params.MetricCtl)
 
 	p.buildTLSConfig()
+	p.validateDelimiter()
 
 	batcherOpts := pipeline.BatcherOptions{
 		PipelineName:        params.PipelineName,
@@ -298,6 +305,13 @@ func (p *Plugin) buildTLSConfig() {
 	p.tlsConfig = tlsBuilder.Build()
 }
 
+func (p *Plugin) validateDelimiter() {
+	if len(p.config.Delimiter) != 1 {
+		p.logger.Fatal("delimiter must be exactly 1 byte", zap.String("delimiter", p.config.Delimiter))
+	}
+	p.config.Delimiter_ = p.config.Delimiter[0]
+}
+
 func (p *Plugin) maintenance(workerData *pipeline.WorkerData) {
 	if *workerData == nil {
 		return
@@ -338,7 +352,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 	outBuf := data.outBuf[:0]
 	batch.ForEach(func(event *pipeline.Event) {
 		outBuf, _ = event.Encode(outBuf)
-		outBuf = append(outBuf, byte(0))
+		outBuf = append(outBuf, p.config.Delimiter_)
 	})
 	data.outBuf = outBuf
 
