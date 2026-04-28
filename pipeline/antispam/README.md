@@ -4,7 +4,7 @@ In some systems services might explode with logs due to different circumstances.
 
 ## Antispammer
 
-The main entity is `Antispammer`. It counts input data from the sources (e.g. if data comes from [file input plugin](/plugin/input/file/README.md), source can be filename) and decides whether to ban it or not. For each source it counts how many logs it has got, in other words the counter for the source is incremented for each incoming log. When the counter is greater or equal to the threshold value the source is banned until its counter is less than the threshold value. The counter value is decremented once in maintenance interval by the threshold value.
+The main entity is `Antispammer`. It counts input data from the sources (e.g. if data comes from [file input plugin](/plugin/input/file/README.md), source can be filename) and decides whether to ban it or not. For each source it counts how many logs it has got, in other words the counter for the source is incremented for each incoming log. When the counter is greater or equal to the threshold value, the source is banned and its counter is set to `unbanIterations * threshold` (where `unbanIterations = 4`). The source remains banned until its counter falls below the `threshold`. Additionally, during each maintenance interval, if the counter is found to be greater than `unbanIterations * threshold`, it is also reset to this maximum value. The counter value is then decremented by the threshold once per maintenance interval.
 
 ## Rules
 

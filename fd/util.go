@@ -110,7 +110,7 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 		}
 
 		antispamThreshold = antispamSettings.Get("threshold").MustInt(pipeline.DefaultAntispamThreshold)
-		if antispamThreshold == pipeline.DefaultAntispamThreshold {
+		if mp, _ := antispamSettings.Map(); mp == nil {
 			antispamThreshold = settings.Get("antispam_threshold").MustInt(pipeline.DefaultAntispamThreshold)
 		}
 		if antispamThreshold < pipeline.DefaultAntispamThreshold {

@@ -8,7 +8,6 @@ import (
 	"slices"
 
 	"github.com/ozontech/file.d/cfg"
-	insaneJSON "github.com/ozontech/insane-json"
 )
 
 // ! do-if-field-op
@@ -282,31 +281,6 @@ func NewFieldOpNode(op string, field string, caseSensitive bool, values [][]byte
 
 func (n *fieldOpNode) Type() NodeType {
 	return NodeFieldOp
-}
-
-type rootData struct {
-	root *insaneJSON.Root
-}
-
-func NewRootData(root *insaneJSON.Root) rootData {
-	return rootData{
-		root: root,
-	}
-}
-
-func (d rootData) Get(path ...string) []byte {
-	var data []byte
-	if d.root == nil {
-		return nil
-	}
-	node := d.root.Dig(path...)
-	if node.IsArray() || node.IsObject() {
-		return make([]byte, 1)
-	}
-	if !node.IsNull() {
-		data = node.AsBytes()
-	}
-	return data
 }
 
 func (n *fieldOpNode) Check(data Data) bool {

@@ -64,7 +64,7 @@ How long the event can process in action plugins and block stream in streamer un
 
 <br>
 
-**`antispam_threshold`** *`int`* *`default=0`* 
+**`antispam_threshold`** *`int`* *`default=-1`* 
 
 Threshold value for the [antispammer](/pipeline/antispam/README.md#antispammer) to ban sources. If set to -1 antispammer is disabled. If set to the value greater than -1 antispammer is enabled and bans sources which write `antispam_threshold` or more logs in `maintenance_interval` time.
 
@@ -207,7 +207,7 @@ How often to perform antispammer maintenance. The value must be passed in format
 
 **`threshold`** *`int`* *`default=-1`*
 
-Threshold value for the [antispammer](/pipeline/antispam/README.md#antispammer) to ban sources. If set to -1 antispammer is disabled. If set to the value greater than -1 antispammer is enabled and bans sources which write `threshold` or more logs in `maintenance_interval` time.
+Threshold value for the [antispammer](/pipeline/antispam/README.md#antispammer) to ban sources. If set to -1 antispammer is disabled. If set to the value greater than -1 antispammer is enabled and bans sources which write `threshold` or more logs in `maintenance_interval` time. If the `antispam` section is not specified, then `antispam_threshold` is used.
 
 <br>
 
