@@ -1,5 +1,5 @@
 pipelines:
-  file_clickhouse_dlq:
+  file_clickhouse_main_output_no_available_hosts_dlq:
     input:
       type: file
     actions:
