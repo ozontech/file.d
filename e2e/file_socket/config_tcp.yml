@@ -1,5 +1,5 @@
 pipelines:
-  file_socket:
+  file_socket_tcp:
     input:
       type: file
       persistence_mode: async
