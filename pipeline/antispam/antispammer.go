@@ -118,20 +118,19 @@ func (a *Antispammer) IsSpam(id string, name string, isNewSource bool, event []b
 			meta:       meta,
 		}
 		for _, rule := range a.rules {
-			if rule.DoIfChecker.Check(data) {
-				switch rule.Threshold {
-				case thresholdUnlimited:
-					if rule.Name != "" {
-						a.exceptionMetric.WithLabelValues(rule.Name).Inc()
-					}
-					return false
-				case thresholdBlocked:
-					return true
-				}
-
-				threshold = rule.Threshold
-				break
+			if !rule.DoIfChecker.Check(data) {
+				continue
 			}
+			switch rule.Threshold {
+			case thresholdUnlimited:
+				a.exceptionMetric.WithLabelValues(rule.Name).Inc()
+				return false
+			case thresholdBlocked:
+				return true
+			}
+
+			threshold = rule.Threshold
+			break
 		}
 	}
 

@@ -229,7 +229,7 @@ func extractAntispamRules(settings *simplejson.Json, antispamMaintenanceInterval
 		}
 
 		if doIfChecker == nil {
-			return nil, fmt.Errorf("missing do_if section, ruleName=%s", name)
+			return nil, fmt.Errorf("missing do_if section, rule #%d", i)
 		}
 
 		rules = append(rules, antispam.Rule{

@@ -33,6 +33,16 @@ Values:
 
 Condition tree. Checks if the event matches the rule(see [doc](/pipeline/doif/README.md)).
 
+> **Note:**
+> In the current implementation for this specific context, only the following Do If node types are supported:
+> * **`field_op`**
+> * **`logical_op`**
+>
+> Within a `field_op` node, the field path can only reference the following allowed paths:
+> * `source_name` — the event source name.
+> * `event` — the event content.
+> * `meta.field_name` — where `field_name` is a field name within the `meta` object.
+
 <br>
 
 ## Exceptions

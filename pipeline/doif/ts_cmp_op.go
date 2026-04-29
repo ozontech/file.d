@@ -137,7 +137,7 @@ func (n *tsCmpOpNode) Type() NodeType {
 }
 
 func (n *tsCmpOpNode) Check(data Data) bool {
-	eventData, ok := data.(rootData)
+	eventData, ok := data.(eventData)
 	if !ok {
 		return false
 	}

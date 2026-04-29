@@ -2,17 +2,17 @@ package doif
 
 import insaneJSON "github.com/ozontech/insane-json"
 
-type rootData struct {
+type eventData struct {
 	root *insaneJSON.Root
 }
 
-func NewRootData(root *insaneJSON.Root) rootData {
-	return rootData{
+func NewRootData(root *insaneJSON.Root) eventData {
+	return eventData{
 		root: root,
 	}
 }
 
-func (d rootData) Get(path ...string) []byte {
+func (d eventData) Get(path ...string) []byte {
 	var data []byte
 	if d.root == nil {
 		return nil
