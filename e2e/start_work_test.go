@@ -15,6 +15,7 @@ import (
 	"github.com/ozontech/file.d/e2e/file_es_split"
 	"github.com/ozontech/file.d/e2e/file_file"
 	"github.com/ozontech/file.d/e2e/file_loki"
+	"github.com/ozontech/file.d/e2e/file_socket"
 	"github.com/ozontech/file.d/e2e/http_file"
 	"github.com/ozontech/file.d/e2e/join_throttle"
 	"github.com/ozontech/file.d/e2e/kafka_auth"
@@ -67,6 +68,7 @@ import (
 	_ "github.com/ozontech/file.d/plugin/output/loki"
 	_ "github.com/ozontech/file.d/plugin/output/postgres"
 	_ "github.com/ozontech/file.d/plugin/output/s3"
+	_ "github.com/ozontech/file.d/plugin/output/socket"
 	_ "github.com/ozontech/file.d/plugin/output/splunk"
 	_ "github.com/ozontech/file.d/plugin/output/stdout"
 	"github.com/stretchr/testify/assert"
@@ -182,6 +184,24 @@ func TestE2EStabilityWorkCase(t *testing.T) {
 			e2eTest:       &redis_clients.Config{},
 			cfgPath:       "./redis_clients/config.yml",
 			onlyConfigure: true,
+		},
+		{
+			name: "file_socket_tcp",
+			e2eTest: &file_socket.Config{
+				Count:   10,
+				Network: "tcp",
+				Address: ":9202",
+			},
+			cfgPath: "./file_socket/config_tcp.yml",
+		},
+		{
+			name: "file_socket_udp",
+			e2eTest: &file_socket.Config{
+				Count:   10,
+				Network: "udp",
+				Address: ":9203",
+			},
+			cfgPath: "./file_socket/config_udp.yml",
 		},
 	}
 
