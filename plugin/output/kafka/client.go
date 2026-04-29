@@ -12,7 +12,6 @@ import (
 type KafkaClient interface {
 	ProduceSync(ctx context.Context, rs ...*kgo.Record) kgo.ProduceResults
 	Close()
-	ForceMetadataRefresh()
 }
 
 func NewClient(c *Config, l *zap.Logger) *kgo.Client {
