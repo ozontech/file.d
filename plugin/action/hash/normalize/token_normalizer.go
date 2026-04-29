@@ -208,7 +208,12 @@ func initTokens(lexer *lexmachine.Lexer,
 	addTokens := func(patterns []TokenPattern) {
 		for _, p := range patterns {
 			if p.mask == 0 || builtinPatterns&p.mask != 0 {
-				lexer.Add([]byte(p.RE), newToken(p.Placeholder))
+				switch p.mask {
+				case pFilepath:
+					lexer.Add([]byte(p.RE), newFilepathToken(p.Placeholder))
+				default:
+					lexer.Add([]byte(p.RE), newToken(p.Placeholder))
+				}
 			}
 		}
 	}
@@ -264,21 +269,28 @@ func newToken(placeholder string) lexmachine.Action {
 	}
 }
 
+func newFilepathToken(placeholder string) lexmachine.Action {
+	return func(s *lexmachine.Scanner, m *machines.Match) (any, error) {
+		// skip `\w<match>\w`
+		if m.TC > 0 && isWord(s.Text[m.TC-1]) ||
+			m.TC+len(m.Bytes) < len(s.Text) && isWord(s.Text[m.TC+len(m.Bytes)]) {
+			s.TC = m.TC + 1
+			return nil, nil
+		}
+
+		return token{
+			placeholder: placeholder,
+			begin:       m.TC,
+			end:         m.TC + len(m.Bytes),
+		}, nil
+	}
+}
+
 func (n *tokenNormalizer) normalizeByScanner(out []byte, scanner *lexmachine.Scanner) []byte {
 	prevEnd := 0
 	for tokRaw, err, eos := scanner.Next(); !eos; tokRaw, err, eos = scanner.Next() {
 		if ui, is := err.(*machines.UnconsumedInput); is {
-			// Jumping to FailTC may skip start of the next token.
-			// Example: part/offset = 54/5990:
-			//    After matching 54, lexer reports unconsumed /5,
-			// 	  FailTC moves past /5, so 5 is skipped and next scan starts from 990,
-			// Result normalization before: part/offset = <int>/5990.
-			//
-			// Using max(scanner.TC+1, ui.FailTC-1):
-			// 	  FailTC-1 keeps last byte, which may be a token start,
-			// 	  scanner.TC+1 ensures forward progress, since FailTC-1 can be equal to scanner.TC,
-			// Result normalization after: part/offset = <int>/<int>.
-			scanner.TC = max(scanner.TC+1, ui.FailTC-1)
+			scanner.TC = ui.FailTC // skip
 			continue
 		} else if err != nil {
 			out = out[:0]
@@ -494,7 +506,7 @@ var builtinTokenPatterns = []TokenPattern{
 	},
 	{
 		Placeholder: placeholderByPattern[pFilepath],
-		RE:          `(/[a-zA-Z-_.][a-zA-Z0-9-_.]*)+`,
+		RE:          `(/[a-zA-Z0-9-_.]+)+`,
 		mask:        pFilepath,
 	},
 	{
