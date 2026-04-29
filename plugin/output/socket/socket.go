@@ -11,6 +11,7 @@ import (
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/xtime"
 	"github.com/ozontech/file.d/xtls"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -20,7 +21,8 @@ import (
 It sends events to a socket endpoint.
 Supports TCP, UDP, and Unix socket protocols.
 
-Events are sent in batches serialized as newline-delimited JSON, compatible with the socket input plugin.
+Events are sent in batches serialized as newline-delimited JSON by default, compatible with the socket input plugin.
+The delimiter used to separate messages is configurable and can be changed in the plugin configuration (default: `\n`).
 If a network error occurs, the batch will be retried according to the backoff settings.
 
 Supports [dead queue](/plugin/output/README.md#dead-queue).
@@ -36,6 +38,7 @@ pipelines:
       type: socket
       network: tcp
       address: ':6666'
+      delimiter: '\t'
     ...
 ```
 ---
@@ -48,6 +51,7 @@ pipelines:
       type: socket
       network: tcp
       address: ':6666'
+      delimiter: '\n'
       ca_cert: './client.pem'
       private_key: './client.key'
     ...
@@ -120,6 +124,12 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
+	// > Delimiter to append after each event. Must be exactly one byte.
+	Delimiter  string `json:"delimiter" default:"\n"` // *
+	Delimiter_ byte
+
+	// > @3@4@5@6
+	// >
 	// > Client certificate in PEM encoding. This can be a path or the contents of the file.
 	// >> Enables TLS. Works only when `network` is `tcp`.
 	CACert string `json:"ca_cert" default:""` // *
@@ -140,6 +150,7 @@ type Config struct {
 	// >
 	// > Timeout for writing a single batch to the socket.
 	// >> Set to `0` to disable.
+	// >> **Must be at least `1s` if non-zero.**
 	WriteTimeout  cfg.Duration `json:"write_timeout" default:"5s" parse:"duration"` // *
 	WriteTimeout_ time.Duration
 
@@ -195,12 +206,6 @@ type Config struct {
 	// >
 	// > Multiplier for exponential increase of retention between retries
 	RetentionExponentMultiplier int `json:"retention_exponentially_multiplier" default:"2"` // *
-
-	// > @3@4@5@6
-	// >
-	// > Delimiter to append after each event. Must be exactly one byte.
-	Delimiter  string `json:"delimiter" default:"\n"` // *
-	Delimiter_ byte
 }
 
 type data struct {
@@ -357,7 +362,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 	data.outBuf = outBuf
 
 	if p.config.WriteTimeout_ > 0 {
-		_ = data.conn.SetWriteDeadline(time.Now().Add(p.config.WriteTimeout_))
+		_ = data.conn.SetWriteDeadline(xtime.GetInaccurateTime().Add(p.config.WriteTimeout_))
 	}
 
 	if err := writeAll(data.conn, data.outBuf); err != nil {

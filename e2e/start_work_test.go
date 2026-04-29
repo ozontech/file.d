@@ -186,7 +186,7 @@ func TestE2EStabilityWorkCase(t *testing.T) {
 			onlyConfigure: true,
 		},
 		{
-			name: "file_socket",
+			name: "file_socket_tcp",
 			e2eTest: &file_socket.Config{
 				Count:   10,
 				Network: "tcp",
@@ -195,7 +195,7 @@ func TestE2EStabilityWorkCase(t *testing.T) {
 			cfgPath: "./file_socket/config.yml",
 		},
 		{
-			name: "file_socket",
+			name: "file_socket_udp",
 			e2eTest: &file_socket.Config{
 				Count:   10,
 				Network: "udp",

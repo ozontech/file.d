@@ -914,7 +914,8 @@ pipelines:
 It sends events to a socket endpoint.
 Supports TCP, UDP, and Unix socket protocols.
 
-Events are sent in batches serialized as newline-delimited JSON, compatible with the socket input plugin.
+Events are sent in batches serialized as newline-delimited JSON by default, compatible with the socket input plugin.
+The delimiter used to separate messages is configurable and can be changed in the plugin configuration (default: `\n`).
 If a network error occurs, the batch will be retried according to the backoff settings.
 
 Supports [dead queue](/plugin/output/README.md#dead-queue).
