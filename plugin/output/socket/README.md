@@ -2,7 +2,8 @@
 It sends events to a socket endpoint.
 Supports TCP, UDP, and Unix socket protocols.
 
-Events are sent in batches serialized as newline-delimited JSON, compatible with the socket input plugin.
+Events are sent in batches serialized as newline-delimited JSON by default, compatible with the socket input plugin.
+The delimiter used to separate messages is configurable and can be changed in the plugin configuration (default: `\n`).
 If a network error occurs, the batch will be retried according to the backoff settings.
 
 Supports [dead queue](/plugin/output/README.md#dead-queue).
@@ -17,6 +18,7 @@ pipelines:
       type: socket
       network: tcp
       address: ':6666'
+      delimiter: '\t'
     ...
 ```
 ---
@@ -29,6 +31,7 @@ pipelines:
       type: socket
       network: tcp
       address: ':6666'
+      delimiter: '\n'
       ca_cert: './client.pem'
       private_key: './client.key'
     ...
@@ -76,6 +79,12 @@ Examples:
 
 <br>
 
+**`delimiter`** *`string`* *`default=\n`* 
+
+Delimiter to append after each event. Must be exactly one byte.
+
+<br>
+
 **`ca_cert`** *`string`* 
 
 Client certificate in PEM encoding. This can be a path or the contents of the file.
@@ -100,6 +109,7 @@ It defines how much time to wait for the connection.
 
 Timeout for writing a single batch to the socket.
 > Set to `0` to disable.
+> **Must be at least `1s` if non-zero.**
 
 <br>
 
@@ -156,12 +166,6 @@ Retention milliseconds for retry to socket.
 **`retention_exponentially_multiplier`** *`int`* *`default=2`* 
 
 Multiplier for exponential increase of retention between retries
-
-<br>
-
-**`delimiter`** *`string`* *`default=\n`* 
-
-Delimiter to append after each event. Must be exactly one byte.
 
 <br>
 
