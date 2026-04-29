@@ -203,24 +203,6 @@ func TestE2EStabilityWorkCase(t *testing.T) {
 			},
 			cfgPath: "./file_socket/config_udp.yml",
 		},
-		{
-			name: "file_socket_tcp",
-			e2eTest: &file_socket.Config{
-				Count:   10,
-				Network: "tcp",
-				Address: ":9202",
-			},
-			cfgPath: "./file_socket/config_tcp.yml",
-		},
-		{
-			name: "file_socket_udp",
-			e2eTest: &file_socket.Config{
-				Count:   10,
-				Network: "udp",
-				Address: ":9203",
-			},
-			cfgPath: "./file_socket/config_udp.yml",
-		},
 	}
 
 	for num, test := range testsList {
