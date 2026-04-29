@@ -210,7 +210,7 @@ func TestE2EStabilityWorkCase(t *testing.T) {
 				Network: "tcp",
 				Address: ":9202",
 			},
-			cfgPath: "./file_socket/config.yml",
+			cfgPath: "./file_socket/config_tcp.yml",
 		},
 		{
 			name: "file_socket_udp",
@@ -219,7 +219,7 @@ func TestE2EStabilityWorkCase(t *testing.T) {
 				Network: "udp",
 				Address: ":9203",
 			},
-			cfgPath: "./file_socket/config.yml",
+			cfgPath: "./file_socket/config_udp.yml",
 		},
 	}
 
