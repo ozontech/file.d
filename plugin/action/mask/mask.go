@@ -269,7 +269,7 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	if p.hasMaskSpecificDoIf {
 		for i := range p.config.Masks {
 			if p.config.Masks[i].DoIfChecker != nil {
-				p.config.Masks[i].use = p.config.Masks[i].DoIfChecker.Check(doif.NewRootData(event.Root))
+				p.config.Masks[i].use = p.config.Masks[i].DoIfChecker.Check(doif.NewEventData(event.Root))
 			}
 		}
 	}

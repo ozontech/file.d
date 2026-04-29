@@ -6,7 +6,7 @@ type eventData struct {
 	root *insaneJSON.Root
 }
 
-func NewRootData(root *insaneJSON.Root) eventData {
+func NewEventData(root *insaneJSON.Root) eventData {
 	return eventData{
 		root: root,
 	}

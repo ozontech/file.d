@@ -332,7 +332,7 @@ func (p *processor) isMatch(index int, event *Event) bool {
 	info := p.actionInfos[index]
 
 	if info.DoIfChecker != nil {
-		return info.DoIfChecker.Check(doif.NewRootData(event.Root))
+		return info.DoIfChecker.Check(doif.NewEventData(event.Root))
 	}
 
 	conds := info.MatchConditions
