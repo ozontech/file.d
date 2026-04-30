@@ -1,5 +1,5 @@
 pipelines:
-  file_clickhouse:
+  file_clickhouse_main_output_no_available_hosts_dlq:
     input:
       type: file
     actions:
@@ -70,7 +70,7 @@ pipelines:
             type: Nullable(UUID)
       type: clickhouse
       addresses:
-        - 127.0.0.1:9001
+        - doesnotexist
       table: test_table_insert_not_exists
       insert_timeout: 1m
       retry: 0
