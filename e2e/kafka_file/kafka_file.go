@@ -50,6 +50,7 @@ func (c *Config) Send(t *testing.T) {
 		Brokers:          c.Brokers,
 		MaxMessageBytes_: 512,
 		BatchSize_:       c.Count,
+		Timeout_:         10 * time.Second,
 	}
 
 	client := kafka_out.NewClient(config,

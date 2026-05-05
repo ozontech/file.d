@@ -77,6 +77,7 @@ func (s *splitConsume) Lost(_ context.Context, _ *kgo.Client, lost map[string][]
 func (s *splitConsume) consume(ctx context.Context, cl *kgo.Client) {
 	for {
 		fetches := cl.PollRecords(ctx, s.bufferSize)
+
 		if fetches.IsClientClosed() {
 			return
 		}

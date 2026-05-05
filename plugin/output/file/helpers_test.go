@@ -51,10 +51,12 @@ func newPipeline(t *testing.T, configOutput *Config) *pipeline.Pipeline {
 	settings := &pipeline.Settings{
 		Capacity:            4096,
 		MaintenanceInterval: time.Second * 10,
-		AntispamThreshold:   0,
-		AvgEventSize:        2048,
-		StreamField:         "stream",
-		Decoder:             "json",
+		Antispam: pipeline.AntispamSettings{
+			Threshold: pipeline.DefaultAntispamThreshold,
+		},
+		AvgEventSize: 2048,
+		StreamField:  "stream",
+		Decoder:      "json",
 		Metric: &pipeline.MetricSettings{
 			HoldDuration:        pipeline.DefaultMetricHoldDuration,
 			MaxLabelValueLength: pipeline.DefaultMetricMaxLabelValueLength,

@@ -88,6 +88,9 @@ func (h *playground) Play(ctx context.Context, req PlayRequest) (PlayResponse, e
 		Metric: &pipeline.MetricSettings{
 			HoldDuration: time.Minute,
 		},
+		Antispam: pipeline.AntispamSettings{
+			Threshold: pipeline.DefaultAntispamThreshold,
+		},
 	}
 	metricsRegistry := prometheus.NewRegistry()
 	p := pipeline.New(pipelineName, settings, metricsRegistry, stdout)

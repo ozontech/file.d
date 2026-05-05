@@ -14,12 +14,28 @@ func TestPlugin_getInstance(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 
-	instances := []Clickhouse{
+	pools := []Clickhouse{
 		mockclickhouse.NewMockClickhouse(ctrl),
 		mockclickhouse.NewMockClickhouse(ctrl),
 		mockclickhouse.NewMockClickhouse(ctrl),
 		mockclickhouse.NewMockClickhouse(ctrl),
 		mockclickhouse.NewMockClickhouse(ctrl),
+	}
+
+	addrs := []Address{
+		{Addr: "addr1", Weight: intPtr(1)},
+		{Addr: "addr2", Weight: intPtr(2)},
+		{Addr: "addr3", Weight: intPtr(3)},
+		{Addr: "addr4", Weight: intPtr(4)},
+		{Addr: "addr5", Weight: intPtr(5)},
+	}
+
+	instances := []instance{
+		{addr: addrs[0], pool: pools[0]},
+		{addr: addrs[1], pool: pools[1]},
+		{addr: addrs[2], pool: pools[2]},
+		{addr: addrs[3], pool: pools[3]},
+		{addr: addrs[4], pool: pools[4]},
 	}
 
 	type args struct {
@@ -28,10 +44,10 @@ func TestPlugin_getInstance(t *testing.T) {
 	}
 	tests := []struct {
 		name      string
-		instances []Clickhouse
+		instances []instance
 		stategy   InsertStrategy
 		args      args
-		want      Clickhouse
+		want      instance
 	}{
 		// in-order
 		{
@@ -222,4 +238,8 @@ func TestAddress_UnmarshalJSON(t *testing.T) {
 			}
 		})
 	}
+}
+
+func intPtr(a int) *int {
+	return &a
 }

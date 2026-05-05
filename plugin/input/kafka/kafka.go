@@ -313,7 +313,11 @@ func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 
 func (p *Plugin) Stop() {
 	p.logger.Infof("Stopping")
-	err := p.client.CommitMarkedOffsets(context.Background())
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	err := p.client.CommitMarkedOffsets(ctx)
 	if err != nil {
 		p.commitErrorsMetric.Inc()
 		p.logger.Errorf("can't commit marked offsets: %s", err.Error())

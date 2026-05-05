@@ -4,7 +4,7 @@ pipelines:
       type: kafka
       offset: oldest
       meta:
-        partition: 'partition_{{ .partition }}'
-        topic: '{{ .topic }}'
+        partition: "partition_{{ .partition }}"
+        topic: "{{ .topic }}"
     output:
       type: file

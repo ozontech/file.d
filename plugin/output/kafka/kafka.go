@@ -2,14 +2,12 @@ package kafka
 
 import (
 	"context"
-	"errors"
 	"time"
 
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
-	"github.com/twmb/franz-go/pkg/kerr"
 	"github.com/twmb/franz-go/pkg/kgo"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -36,8 +34,10 @@ type Plugin struct {
 	avgEventSize int
 	controller   pipeline.OutputPluginController
 
-	client  KafkaClient
-	batcher *pipeline.RetriableBatcher
+	client     KafkaClient
+	batcher    *pipeline.RetriableBatcher
+	ctx        context.Context
+	cancelFunc context.CancelFunc
 
 	// plugin metrics
 	sendErrorMetric *metric.Counter
@@ -96,6 +96,12 @@ type Config struct {
 	// > After this timeout the batch will be sent even if batch isn't full.
 	BatchFlushTimeout  cfg.Duration `json:"batch_flush_timeout" default:"200ms" parse:"duration"` // *
 	BatchFlushTimeout_ time.Duration
+
+	// > @3@4@5@6
+	// >
+	// > Timeout for the produce request
+	Timeout  cfg.Duration `json:"timeout" default:"15s" parse:"duration"` // *
+	Timeout_ time.Duration
 
 	// > @3@4@5@6
 	// >
@@ -238,6 +244,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.avgEventSize = params.PipelineSettings.AvgEventSize
 	p.controller = params.Controller
 	p.registerMetrics(params.MetricCtl)
+	p.ctx, p.cancelFunc = context.WithCancel(context.Background())
 
 	if p.config.Retention_ < 1 {
 		p.logger.Fatal("'retention' can't be <1")
@@ -290,7 +297,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		onError,
 	)
 
-	p.batcher.Start(context.TODO())
+	p.batcher.Start(p.ctx)
 }
 
 func (p *Plugin) Out(event *pipeline.Event) {
@@ -318,6 +325,10 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 	outBuf := data.outBuf[:0]
 	start := 0
 	i := 0
+
+	ctx, cancel := context.WithTimeout(p.ctx, p.config.Timeout_)
+	defer cancel()
+
 	batch.ForEach(func(event *pipeline.Event) {
 		outBuf, start = event.Encode(outBuf)
 
@@ -335,13 +346,11 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 		data.messages[i].Timestamp = time.Now()
 		data.messages[i].Value = outBuf[start:]
 		data.messages[i].Topic = topic
+		data.messages[i].Context = nil // cause we set context on produce batch
 		i++
 	})
 
-	if err := p.client.ProduceSync(context.Background(), data.messages[:i]...).FirstErr(); err != nil {
-		if errors.Is(err, kerr.LeaderNotAvailable) || errors.Is(err, kerr.NotLeaderForPartition) {
-			p.client.ForceMetadataRefresh()
-		}
+	if err := p.client.ProduceSync(ctx, data.messages[:i]...).FirstErr(); err != nil {
 		p.logger.Errorf("can't write batch: %v", err)
 		p.sendErrorMetric.Inc()
 		return err
@@ -352,5 +361,6 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 
 func (p *Plugin) Stop() {
 	p.batcher.Stop()
+	p.cancelFunc()
 	p.client.Close()
 }

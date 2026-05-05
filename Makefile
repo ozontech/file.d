@@ -36,7 +36,7 @@ test-e2e:
 .PHONY: test-e2e-docker-up
 test-e2e-docker-up:
 	for dc in $(shell find e2e -name 'docker-compose.yml') ; do \
-		docker compose -f $$dc up -d ; \
+		docker compose -f $$dc up -d --wait; \
 	done
 
 .PHONY: test-e2e-docker-down

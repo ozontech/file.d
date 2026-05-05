@@ -1,0 +1,12 @@
+pipelines:
+  file_socket_udp:
+    input:
+      type: file
+      persistence_mode: async
+      watching_dir: SOME_DIR
+      offsets_file: SOME_FILE
+      offsets_op: reset
+    output:
+      type: socket
+      network: SOME_NETWORK
+      address: SOME_ADDRESS
