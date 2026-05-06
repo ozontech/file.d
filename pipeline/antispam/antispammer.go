@@ -12,6 +12,11 @@ import (
 	"go.uber.org/zap"
 )
 
+const (
+	thresholdUnlimited = -1
+	thresholdBlocked   = 0
+)
+
 // Antispammer makes a decision on the need to parse the input log.
 // It can be useful when any application writes logs at speed faster than File.d can read it.
 //
@@ -22,7 +27,9 @@ type Antispammer struct {
 	maintenanceInterval time.Duration
 	mu                  sync.RWMutex
 	sources             map[string]source
+	sourcesThresholds   map[string]int
 	exceptions          Exceptions
+	rules               Rules
 
 	logger *zap.Logger
 
@@ -43,6 +50,7 @@ type Options struct {
 	Threshold           int
 	UnbanIterations     int
 	Exceptions          Exceptions
+	Rules               Rules
 
 	Logger            *zap.Logger
 	MetricsController *metric.Ctl
@@ -60,7 +68,9 @@ func NewAntispammer(o *Options) *Antispammer {
 		threshold:           o.Threshold,
 		maintenanceInterval: o.MaintenanceInterval,
 		sources:             make(map[string]source),
+		sourcesThresholds:   make(map[string]int),
 		exceptions:          o.Exceptions,
+		rules:               o.Rules,
 		logger:              o.Logger,
 		activeMetric: o.MetricsController.RegisterGauge("antispam_active",
 			"Gauge indicates whether the antispam is enabled",
@@ -81,23 +91,54 @@ func NewAntispammer(o *Options) *Antispammer {
 	return a
 }
 
-func (a *Antispammer) IsSpam(id string, name string, isNewSource bool, event []byte, timeEvent time.Time) bool {
-	if a.threshold <= 0 {
+func (a *Antispammer) IsSpam(id string, name string, isNewSource bool, event []byte, timeEvent time.Time, meta map[string]string) bool {
+	if a.rules == nil && a.threshold == -1 {
 		return false
 	}
 
-	for i := 0; i < len(a.exceptions); i++ {
-		e := &a.exceptions[i]
-		checkData := event
-		if e.CheckSourceName {
-			checkData = []byte(name)
-		}
-		if e.Match(checkData) {
-			if e.Name != "" {
-				a.exceptionMetric.WithLabelValues(e.Name).Inc()
+	threshold := a.threshold
+	if a.rules == nil {
+		for i := 0; i < len(a.exceptions); i++ {
+			e := &a.exceptions[i]
+			checkData := event
+			if e.CheckSourceName {
+				checkData = []byte(name)
 			}
-			return false
+			if e.Match(checkData) {
+				if e.Name != "" {
+					a.exceptionMetric.WithLabelValues(e.Name).Inc()
+				}
+				return false
+			}
 		}
+	} else {
+		data := &antispamData{
+			eventBytes: event,
+			sourceName: name,
+			meta:       meta,
+		}
+		for _, rule := range a.rules {
+			if !rule.DoIfChecker.Check(data) {
+				continue
+			}
+			switch rule.Threshold {
+			case thresholdUnlimited:
+				a.exceptionMetric.WithLabelValues(rule.Name).Inc()
+				return false
+			case thresholdBlocked:
+				return true
+			}
+
+			threshold = rule.Threshold
+			break
+		}
+	}
+
+	switch threshold {
+	case thresholdUnlimited:
+		return false
+	case thresholdBlocked:
+		return true
 	}
 
 	a.mu.RLock()
@@ -118,6 +159,7 @@ func (a *Antispammer) IsSpam(id string, name string, isNewSource bool, event []b
 			}
 			src.timestamp.Add(timeEventSeconds)
 			a.sources[id] = src
+			a.sourcesThresholds[id] = threshold
 		}
 		a.mu.Unlock()
 	}
@@ -132,8 +174,8 @@ func (a *Antispammer) IsSpam(id string, name string, isNewSource bool, event []b
 	if diff < a.maintenanceInterval.Nanoseconds() {
 		x = src.counter.Inc()
 	}
-	if x == int32(a.threshold) {
-		src.counter.Swap(int32(a.unbanIterations * a.threshold))
+	if x == int32(threshold) {
+		src.counter.Swap(int32(a.unbanIterations * threshold))
 		a.activeMetric.Set(1)
 		a.banMetric.WithLabelValues(name).Inc()
 		a.logger.Warn("source has been banned",
@@ -144,7 +186,7 @@ func (a *Antispammer) IsSpam(id string, name string, isNewSource bool, event []b
 		)
 	}
 
-	return x >= int32(a.threshold)
+	return x >= int32(threshold)
 }
 
 func (a *Antispammer) Maintenance() {
@@ -156,27 +198,29 @@ func (a *Antispammer) Maintenance() {
 
 		if x == 0 {
 			delete(a.sources, sourceID)
+			delete(a.sourcesThresholds, sourceID)
 			a.banMetric.DeleteLabelValues(source.name)
 			continue
 		}
 
-		isMore := x >= a.threshold
-		x -= a.threshold
+		threshold := a.sourcesThresholds[sourceID]
+		isMore := x >= threshold
+		x -= threshold
 		if x < 0 {
 			x = 0
 		}
 
-		if isMore && x < a.threshold {
+		if isMore && x < threshold {
 			a.banMetric.WithLabelValues(source.name).Dec()
 			a.logger.Info("source has been unbanned", zap.Any("id", sourceID))
 		}
 
-		if x >= a.threshold {
+		if x >= threshold {
 			allUnbanned = false
 		}
 
-		if x > a.unbanIterations*a.threshold {
-			x = a.unbanIterations * a.threshold
+		if x > a.unbanIterations*threshold {
+			x = a.unbanIterations * threshold
 		}
 
 		source.counter.Swap(int32(x))

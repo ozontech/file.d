@@ -81,7 +81,7 @@ func checkNode(t *testing.T, want, got Node) {
 		wantNode := want.(*fieldOpNode)
 		gotNode := got.(*fieldOpNode)
 		assert.Equal(t, wantNode.op, gotNode.op)
-		assert.Equal(t, 0, slices.Compare[[]string](wantNode.fieldPath, gotNode.fieldPath))
+		assert.Equal(t, 0, slices.Compare(wantNode.fieldPath, gotNode.fieldPath))
 		assert.Equal(t, wantNode.fieldPathStr, gotNode.fieldPathStr)
 		assert.Equal(t, wantNode.caseSensitive, gotNode.caseSensitive)
 		if wantNode.values == nil {
@@ -91,7 +91,7 @@ func checkNode(t *testing.T, want, got Node) {
 			for i := 0; i < len(wantNode.values); i++ {
 				wantValues := wantNode.values[i]
 				gotValues := gotNode.values[i]
-				assert.Equal(t, 0, slices.Compare[[]byte](wantValues, gotValues))
+				assert.Equal(t, 0, slices.Compare(wantValues, gotValues))
 			}
 		}
 		if wantNode.valuesBySize == nil {
@@ -104,7 +104,7 @@ func checkNode(t *testing.T, want, got Node) {
 				if ok {
 					require.Equal(t, len(wantVals), len(gotVals))
 					for i := 0; i < len(wantVals); i++ {
-						assert.Equal(t, 0, slices.Compare[[]byte](wantVals[i], gotVals[i]))
+						assert.Equal(t, 0, slices.Compare(wantVals[i], gotVals[i]))
 					}
 				}
 			}
@@ -125,7 +125,7 @@ func checkNode(t *testing.T, want, got Node) {
 		assert.Equal(t, wantNode.lenCmpOp, gotNode.lenCmpOp)
 		assert.Equal(t, wantNode.cmpValue, gotNode.cmpValue)
 		assert.Equal(t, wantNode.cmpOp, gotNode.cmpOp)
-		assert.Equal(t, 0, slices.Compare[[]string](wantNode.fieldPath, gotNode.fieldPath))
+		assert.Equal(t, 0, slices.Compare(wantNode.fieldPath, gotNode.fieldPath))
 	case NodeTimestampCmpOp:
 		wantNode := want.(*tsCmpOpNode)
 		gotNode := got.(*tsCmpOpNode)
@@ -135,7 +135,7 @@ func checkNode(t *testing.T, want, got Node) {
 		assert.Equal(t, wantNode.constCmpValue, gotNode.constCmpValue)
 		assert.Equal(t, wantNode.cmpValueShift, gotNode.cmpValueShift)
 		assert.Equal(t, wantNode.updateInterval, gotNode.updateInterval)
-		assert.Equal(t, 0, slices.Compare[[]string](wantNode.fieldPath, gotNode.fieldPath))
+		assert.Equal(t, 0, slices.Compare(wantNode.fieldPath, gotNode.fieldPath))
 	default:
 		t.Error("unknown node type")
 	}
@@ -165,14 +165,14 @@ func TestBuildNodes(t *testing.T) {
 				caseSensitive: true,
 				values:        nil,
 				valuesBySize: map[int][][]byte{
-					6: [][]byte{
+					6: {
 						[]byte(`test-2`),
 						[]byte(`test-3`),
 					},
-					8: [][]byte{
+					8: {
 						[]byte(`test-111`),
 					},
-					10: [][]byte{
+					10: {
 						[]byte(`test-12345`),
 					},
 				},
@@ -195,14 +195,14 @@ func TestBuildNodes(t *testing.T) {
 				caseSensitive: false,
 				values:        nil,
 				valuesBySize: map[int][][]byte{
-					6: [][]byte{
+					6: {
 						[]byte(`test-2`),
 						[]byte(`test-3`),
 					},
-					8: [][]byte{
+					8: {
 						[]byte(`test-111`),
 					},
-					10: [][]byte{
+					10: {
 						[]byte(`test-12345`),
 					},
 				},
@@ -239,14 +239,14 @@ func TestBuildNodes(t *testing.T) {
 						caseSensitive: true,
 						values:        nil,
 						valuesBySize: map[int][][]byte{
-							6: [][]byte{
+							6: {
 								[]byte(`test-2`),
 								[]byte(`test-3`),
 							},
-							8: [][]byte{
+							8: {
 								[]byte(`test-111`),
 							},
-							10: [][]byte{
+							10: {
 								[]byte(`test-12345`),
 							},
 						},
@@ -1117,7 +1117,7 @@ func TestCheck(t *testing.T) {
 					eventRoot, err = insaneJSON.DecodeString(d.eventStr)
 					require.NoError(t, err)
 				}
-				got := checker.Check(eventRoot)
+				got := checker.Check(eventData{eventRoot})
 				assert.Equal(t, d.want, got, "invalid result for event %q", d.eventStr)
 			}
 		})
@@ -1185,7 +1185,7 @@ func TestCheckLenCmpLtObject(t *testing.T) {
 		require.NoError(t, err)
 
 		checker := newChecker(root)
-		result := checker.Check(eventRoot)
+		result := checker.Check(eventData{eventRoot})
 		require.Equal(t, test.result, result, "invalid result; test id: %d", index)
 	}
 
@@ -1202,7 +1202,7 @@ func TestCheckLenCmpLtObject(t *testing.T) {
 		require.NoError(t, err)
 
 		checker := newChecker(root)
-		result := checker.Check(eventRoot)
+		result := checker.Check(eventData{eventRoot})
 		require.Equal(t, test.result, result, "invalid result (empty selector); test id: %d", index)
 	}
 }
@@ -1235,13 +1235,13 @@ func TestCheckTsCmpValChangeModeNow(t *testing.T) {
 	eventRoot2, err := timeToJSON(ts2)
 	require.NoError(t, err)
 
-	require.True(t, checker.Check(eventRoot1))
-	require.False(t, checker.Check(eventRoot2))
+	require.True(t, checker.Check(eventData{eventRoot1}))
+	require.False(t, checker.Check(eventData{eventRoot2}))
 
 	time.Sleep(4 * dt)
 
-	require.True(t, checker.Check(eventRoot1))
-	require.True(t, checker.Check(eventRoot2))
+	require.True(t, checker.Check(eventData{eventRoot1}))
+	require.True(t, checker.Check(eventData{eventRoot2}))
 }
 
 func TestNodeIsEqual(t *testing.T) {

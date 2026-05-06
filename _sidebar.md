@@ -62,6 +62,7 @@
     - [loki](plugin/output/loki/README.md)
     - [postgres](plugin/output/postgres/README.md)
     - [s3](plugin/output/s3/README.md)
+    - [socket](plugin/output/socket/README.md)
     - [splunk](plugin/output/splunk/README.md)
     - [stdout](plugin/output/stdout/README.md)
 
