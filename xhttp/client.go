@@ -1,6 +1,7 @@
 package xhttp
 
 import (
+	"context"
 	"fmt"
 	"math/rand"
 	"net/http"
@@ -30,12 +31,15 @@ type ClientConfig struct {
 	GzipCompressionLevel string
 	TLS                  *ClientTLSConfig
 	KeepAlive            *ClientKeepAliveConfig
+	BanPeriod            time.Duration
+	ReconnectInterval    time.Duration
 }
 
 type Client struct {
 	client               *fasthttp.Client
 	endpoints            []*fasthttp.URI
-	CircuitBreaker       *CircuitBreaker
+	cb                   *circuitBreaker
+	reconnectInterval    time.Duration
 	authHeader           string
 	customHeaders        map[string]string
 	gzipCompressionLevel int
@@ -70,13 +74,27 @@ func NewClient(cfg *ClientConfig) (*Client, error) {
 		return nil, err
 	}
 
-	return &Client{
+	c := &Client{
 		client:               client,
 		endpoints:            endpoints,
 		authHeader:           cfg.AuthHeader,
 		customHeaders:        cfg.CustomHeaders,
 		gzipCompressionLevel: parseGzipCompressionLevel(cfg.GzipCompressionLevel),
-	}, nil
+	}
+
+	if cfg.BanPeriod > 0 {
+		c.cb = NewCircuitBreaker(endpoints, cfg.BanPeriod)
+	}
+
+	return c, nil
+}
+
+func (c *Client) Start(ctx context.Context) {
+	if c.cb == nil {
+		return
+	}
+
+	go c.cb.checkBannedEndpoints(ctx, c.reconnectInterval)
 }
 
 func (c *Client) DoTimeout(
@@ -98,7 +116,7 @@ func (c *Client) DoTimeout(
 	c.prepareRequest(req, endpoint, method, contentType, body)
 
 	if err := c.client.DoTimeout(req, resp, timeout); err != nil {
-		c.CircuitBreaker.BanEndpoint(endpoint)
+		c.banEndpoint(endpoint)
 		return 0, fmt.Errorf("can't send request to %s: %w", endpoint.String(), err)
 	}
 
@@ -107,7 +125,7 @@ func (c *Client) DoTimeout(
 
 	if !(http.StatusOK <= statusCode && statusCode <= http.StatusAccepted) {
 		if shouldBanEndpoint(statusCode) {
-			c.CircuitBreaker.BanEndpoint(endpoint)
+			c.banEndpoint(endpoint)
 		}
 		return statusCode, fmt.Errorf("response status from %s isn't OK: status=%d, body=%s", endpoint.String(), statusCode, string(respContent))
 	}
@@ -143,10 +161,6 @@ func (c *Client) prepareRequest(req *fasthttp.Request, endpoint *fasthttp.URI, m
 	}
 }
 
-func (c *Client) GetEndpoints() []*fasthttp.URI {
-	return c.endpoints
-}
-
 func parseEndpoints(endpoints []string) ([]*fasthttp.URI, error) {
 	res := make([]*fasthttp.URI, 0, len(endpoints))
 	for _, e := range endpoints {
@@ -177,8 +191,8 @@ func parseGzipCompressionLevel(level string) int {
 }
 
 func (c *Client) getEndpoint() *fasthttp.URI {
-	if c.CircuitBreaker != nil {
-		return c.CircuitBreaker.GetEndpoint()
+	if c.cb != nil {
+		return c.cb.getEndpoint()
 	}
 
 	switch len(c.endpoints) {
@@ -188,6 +202,12 @@ func (c *Client) getEndpoint() *fasthttp.URI {
 		return c.endpoints[0]
 	default:
 		return c.endpoints[rand.Int()%len(c.endpoints)]
+	}
+}
+
+func (c *Client) banEndpoint(endpoint *fasthttp.URI) {
+	if c.cb != nil {
+		c.cb.banEndpoint(endpoint)
 	}
 }
 

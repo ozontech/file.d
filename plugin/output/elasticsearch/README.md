@@ -173,6 +173,7 @@ Process ES response and report errors, if any.
 **`ban_period`** *`cfg.Duration`* *`default=10s`* 
 
 Period for which addresses will be banned in case of unavailability.
+If set to 0, circuit breaker is disabled.
 
 <br>
 

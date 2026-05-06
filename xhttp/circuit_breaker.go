@@ -10,76 +10,77 @@ import (
 	"github.com/valyala/fasthttp"
 )
 
-type CircuitBreaker struct {
-	activeEndpoints []*fasthttp.URI
-	endpointsByID   map[string]*fasthttp.URI
-	bannedUntil     map[string]time.Time
-	banPeriod       time.Duration
-	mu              sync.RWMutex
+type endpoint struct {
+	uri      *fasthttp.URI
+	banUntil time.Time
 }
 
-func NewCircuitBreaker(endpoints []*fasthttp.URI, banPeriod time.Duration) *CircuitBreaker {
-	cb := &CircuitBreaker{
-		activeEndpoints: make([]*fasthttp.URI, 0, len(endpoints)),
-		endpointsByID:   make(map[string]*fasthttp.URI, len(endpoints)),
-		bannedUntil:     make(map[string]time.Time, len(endpoints)),
-		banPeriod:       banPeriod,
+type circuitBreaker struct {
+	endpoints []endpoint
+	idxByURI  map[string]int
+	banPeriod time.Duration
+	mu        sync.RWMutex
+}
+
+func NewCircuitBreaker(uris []*fasthttp.URI, banPeriod time.Duration) *circuitBreaker {
+	cb := &circuitBreaker{
+		endpoints: make([]endpoint, 0, len(uris)),
+		idxByURI:  make(map[string]int, len(uris)),
+		banPeriod: banPeriod,
 	}
 
-	for _, endpoint := range endpoints {
-		id := endpoint.String()
-		cb.endpointsByID[id] = endpoint
-		cb.activeEndpoints = append(cb.activeEndpoints, endpoint)
+	for i, uri := range uris {
+		cb.endpoints = append(cb.endpoints, endpoint{uri: uri})
+		cb.idxByURI[uri.String()] = i
 	}
 
 	return cb
 }
 
-func (cb *CircuitBreaker) GetEndpoint() *fasthttp.URI {
+func (cb *circuitBreaker) getEndpoint() *fasthttp.URI {
 	cb.mu.RLock()
 	defer cb.mu.RUnlock()
 
-	switch len(cb.activeEndpoints) {
+	now := xtime.GetInaccurateTime()
+	activeEndpoints := make([]*fasthttp.URI, 0, len(cb.endpoints))
+	for i := range cb.endpoints {
+		e := cb.endpoints[i]
+		if e.banUntil.IsZero() || now.After(e.banUntil) {
+			activeEndpoints = append(activeEndpoints, e.uri)
+		}
+	}
+	switch len(activeEndpoints) {
 	case 0:
 		return nil
 	case 1:
-		return cb.activeEndpoints[0]
+		return activeEndpoints[0]
 	default:
-		return cb.activeEndpoints[rand.Int()%len(cb.activeEndpoints)]
+		return activeEndpoints[rand.Int()%len(activeEndpoints)]
 	}
 }
 
-func (cb *CircuitBreaker) BanEndpoint(endpoint *fasthttp.URI) {
+func (cb *circuitBreaker) banEndpoint(uri *fasthttp.URI) {
 	cb.mu.Lock()
 	defer cb.mu.Unlock()
 
-	id := endpoint.String()
-	filtered := cb.activeEndpoints[:0]
-	for _, endpoint := range cb.activeEndpoints {
-		if endpoint.String() != id {
-			filtered = append(filtered, endpoint)
-		}
-	}
-
-	cb.activeEndpoints = filtered
-	cb.bannedUntil[id] = xtime.GetInaccurateTime().Add(cb.banPeriod)
+	idx := cb.idxByURI[uri.String()]
+	cb.endpoints[idx].banUntil = xtime.GetInaccurateTime().Add(cb.banPeriod)
 }
 
-func (cb *CircuitBreaker) RestoreBannedEndpoints() {
+func (cb *circuitBreaker) restoreBannedEndpoints() {
 	cb.mu.Lock()
 	defer cb.mu.Unlock()
 
-	for id, until := range cb.bannedUntil {
-		if xtime.GetInaccurateTime().Before(until) {
-			continue
+	now := xtime.GetInaccurateTime()
+	for i := range cb.endpoints {
+		e := &cb.endpoints[i]
+		if !e.banUntil.IsZero() && now.After(e.banUntil) {
+			e.banUntil = time.Time{}
 		}
-		endpoint := cb.endpointsByID[id]
-		cb.activeEndpoints = append(cb.activeEndpoints, endpoint)
-		delete(cb.bannedUntil, id)
 	}
 }
 
-func (cb *CircuitBreaker) CheckBannedEndpoints(ctx context.Context, reconnectInterval time.Duration) {
+func (cb *circuitBreaker) checkBannedEndpoints(ctx context.Context, reconnectInterval time.Duration) {
 	ticker := time.NewTicker(reconnectInterval)
 	defer ticker.Stop()
 
@@ -88,7 +89,7 @@ func (cb *CircuitBreaker) CheckBannedEndpoints(ctx context.Context, reconnectInt
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			cb.RestoreBannedEndpoints()
+			cb.restoreBannedEndpoints()
 		}
 	}
 }

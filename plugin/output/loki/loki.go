@@ -182,6 +182,7 @@ type Config struct {
 	// > @3@4@5@6
 	// >
 	// > Period for which addresses will be banned in case of unavailability.
+	// > If set to 0, circuit breaker is disabled.
 	BanPeriod  cfg.Duration `json:"ban_period" default:"10s" parse:"duration"` // *
 	BanPeriod_ time.Duration
 
@@ -274,8 +275,8 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	if p.config.ReconnectInterval_ < 1 {
 		p.logger.Fatal("'reconnect_interval' can't be <1")
 	}
-	if p.config.BanPeriod_ < 1 {
-		p.logger.Fatal("'ban_period' cant't be <1")
+	if p.config.BanPeriod_ < 0 {
+		p.logger.Fatal("'ban_period' cant't be <0")
 	}
 
 	p.prepareClient()
@@ -328,7 +329,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 
 	p.batcher.Start(ctx)
 
-	go p.client.CircuitBreaker.CheckBannedEndpoints(ctx, p.config.ReconnectInterval_)
+	p.client.Start(ctx)
 }
 
 func (p *Plugin) Stop() {
@@ -457,6 +458,8 @@ func (p *Plugin) prepareClient() {
 		ConnectionTimeout: p.config.ConnectionTimeout_ * 2,
 		AuthHeader:        p.getAuthHeader(),
 		CustomHeaders:     p.getCustomHeaders(),
+		BanPeriod:         p.config.BanPeriod_,
+		ReconnectInterval: p.config.ReconnectInterval_,
 		KeepAlive: &xhttp.ClientKeepAliveConfig{
 			MaxConnDuration:     p.config.KeepAlive.MaxConnDuration_,
 			MaxIdleConnDuration: p.config.KeepAlive.MaxIdleConnDuration_,
@@ -468,8 +471,6 @@ func (p *Plugin) prepareClient() {
 	if err != nil {
 		p.logger.Fatal("can't create http client", zap.Error(err))
 	}
-
-	p.client.CircuitBreaker = xhttp.NewCircuitBreaker(p.client.GetEndpoints(), p.config.BanPeriod_)
 }
 
 func (p *Plugin) getCustomHeaders() map[string]string {

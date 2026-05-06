@@ -136,6 +136,7 @@ After a non-retryable write error, fall with a non-zero exit code or not
 **`ban_period`** *`cfg.Duration`* *`default=10s`* 
 
 Period for which addresses will be banned in case of unavailability.
+If set to 0, circuit breaker is disabled.
 
 <br>
 
