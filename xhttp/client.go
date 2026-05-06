@@ -77,13 +77,14 @@ func NewClient(cfg *ClientConfig) (*Client, error) {
 	c := &Client{
 		client:               client,
 		endpoints:            endpoints,
+		reconnectInterval:    cfg.ReconnectInterval,
 		authHeader:           cfg.AuthHeader,
 		customHeaders:        cfg.CustomHeaders,
 		gzipCompressionLevel: parseGzipCompressionLevel(cfg.GzipCompressionLevel),
 	}
 
 	if cfg.BanPeriod > 0 {
-		c.cb = NewCircuitBreaker(endpoints, cfg.BanPeriod)
+		c.cb = newCircuitBreaker(endpoints, cfg.BanPeriod)
 	}
 
 	return c, nil

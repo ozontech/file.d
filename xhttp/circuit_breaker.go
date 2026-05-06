@@ -22,7 +22,7 @@ type circuitBreaker struct {
 	mu        sync.RWMutex
 }
 
-func NewCircuitBreaker(uris []*fasthttp.URI, banPeriod time.Duration) *circuitBreaker {
+func newCircuitBreaker(uris []*fasthttp.URI, banPeriod time.Duration) *circuitBreaker {
 	cb := &circuitBreaker{
 		endpoints: make([]endpoint, 0, len(uris)),
 		idxByURI:  make(map[string]int, len(uris)),
