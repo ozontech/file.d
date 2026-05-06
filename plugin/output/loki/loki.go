@@ -178,6 +178,19 @@ type Config struct {
 	// >
 	// > Multiplier for exponential increase of retention between retries
 	RetentionExponentMultiplier int `json:"retention_exponentially_multiplier" default:"2"` // *
+
+	// > @3@4@5@6
+	// >
+	// > Period for which addresses will be banned in case of unavailability.
+	// > If set to 0, circuit breaker is disabled.
+	BanPeriod  cfg.Duration `json:"ban_period" default:"10s" parse:"duration"` // *
+	BanPeriod_ time.Duration
+
+	// > @3@4@5@6
+	// >
+	// > Interval for reconnecting to addresses that are unavailable during initialization.
+	ReconnectInterval  cfg.Duration `json:"reconnect_interval" default:"5s" parse:"duration"` // *
+	ReconnectInterval_ time.Duration
 }
 
 type AuthStrategy byte
@@ -259,6 +272,13 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 
 	p.labels = p.parseLabels()
 
+	if p.config.ReconnectInterval_ < 1 {
+		p.logger.Fatal("'reconnect_interval' can't be <1")
+	}
+	if p.config.BanPeriod_ < 0 {
+		p.logger.Fatal("'ban_period' cant't be <0")
+	}
+
 	p.prepareClient()
 
 	batcherOpts := &pipeline.BatcherOptions{
@@ -308,6 +328,8 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.cancel = cancel
 
 	p.batcher.Start(ctx)
+
+	p.client.Start(ctx)
 }
 
 func (p *Plugin) Stop() {
@@ -436,6 +458,8 @@ func (p *Plugin) prepareClient() {
 		ConnectionTimeout: p.config.ConnectionTimeout_ * 2,
 		AuthHeader:        p.getAuthHeader(),
 		CustomHeaders:     p.getCustomHeaders(),
+		BanPeriod:         p.config.BanPeriod_,
+		ReconnectInterval: p.config.ReconnectInterval_,
 		KeepAlive: &xhttp.ClientKeepAliveConfig{
 			MaxConnDuration:     p.config.KeepAlive.MaxConnDuration_,
 			MaxIdleConnDuration: p.config.KeepAlive.MaxIdleConnDuration_,
