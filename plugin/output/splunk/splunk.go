@@ -256,7 +256,10 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		p.logger.Fatal("'ban_period' cant't be <0")
 	}
 
-	p.prepareClient()
+	ctx, cancel := context.WithCancel(context.Background())
+	p.cancel = cancel
+
+	p.prepareClient(ctx)
 
 	for _, cf := range p.config.CopyFields {
 		if cf.To == "" {
@@ -317,12 +320,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		onError,
 	)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	p.cancel = cancel
-
 	p.batcher.Start(ctx)
-
-	p.client.Start(ctx)
 }
 
 func (p *Plugin) Stop() {
@@ -342,7 +340,7 @@ func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 	)
 }
 
-func (p *Plugin) prepareClient() {
+func (p *Plugin) prepareClient(ctx context.Context) {
 	config := &xhttp.ClientConfig{
 		Endpoints:         []string{p.config.Endpoint},
 		ConnectionTimeout: p.config.RequestTimeout_,
@@ -363,7 +361,7 @@ func (p *Plugin) prepareClient() {
 	}
 
 	var err error
-	p.client, err = xhttp.NewClient(config)
+	p.client, err = xhttp.NewClient(ctx, config)
 	if err != nil {
 		p.logger.Fatal("can't create http client", zap.Error(err))
 	}

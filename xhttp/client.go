@@ -39,13 +39,12 @@ type Client struct {
 	client               *fasthttp.Client
 	endpoints            []*fasthttp.URI
 	cb                   *circuitBreaker
-	reconnectInterval    time.Duration
 	authHeader           string
 	customHeaders        map[string]string
 	gzipCompressionLevel int
 }
 
-func NewClient(cfg *ClientConfig) (*Client, error) {
+func NewClient(ctx context.Context, cfg *ClientConfig) (*Client, error) {
 	client := &fasthttp.Client{
 		ReadTimeout:  cfg.ConnectionTimeout,
 		WriteTimeout: cfg.ConnectionTimeout,
@@ -74,28 +73,14 @@ func NewClient(cfg *ClientConfig) (*Client, error) {
 		return nil, err
 	}
 
-	c := &Client{
+	return &Client{
 		client:               client,
 		endpoints:            endpoints,
-		reconnectInterval:    cfg.ReconnectInterval,
+		cb:                   newCircuitBreaker(ctx, endpoints, cfg.BanPeriod, cfg.ReconnectInterval),
 		authHeader:           cfg.AuthHeader,
 		customHeaders:        cfg.CustomHeaders,
 		gzipCompressionLevel: parseGzipCompressionLevel(cfg.GzipCompressionLevel),
-	}
-
-	if cfg.BanPeriod > 0 {
-		c.cb = newCircuitBreaker(endpoints, cfg.BanPeriod)
-	}
-
-	return c, nil
-}
-
-func (c *Client) Start(ctx context.Context) {
-	if c.cb == nil {
-		return
-	}
-
-	go c.cb.checkBannedEndpoints(ctx, c.reconnectInterval)
+	}, nil
 }
 
 func (c *Client) DoTimeout(
