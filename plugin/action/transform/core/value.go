@@ -1,4 +1,4 @@
-package transform
+package core
 
 import (
 	"fmt"
@@ -248,12 +248,12 @@ func resolve(v Value) Value {
 	if !ok {
 		return v
 	}
-	return jsonNodeToValue(jv.N)
+	return JsonNodeToValue(jv.N)
 }
 
-// jsonNodeToValue converts a single insaneJSON node to a Value.
+// JsonNodeToValue converts a single insaneJSON node to a Value.
 // The conversion is recursive for arrays and objects.
-func jsonNodeToValue(node *insaneJSON.Node) Value {
+func JsonNodeToValue(node *insaneJSON.Node) Value {
 	if node == nil {
 		return NullValue{}
 	}
@@ -275,7 +275,7 @@ func jsonNodeToValue(node *insaneJSON.Node) Value {
 		nodes := node.AsArray()
 		arr := make([]Value, len(nodes))
 		for i, n := range nodes {
-			arr[i] = jsonNodeToValue(n)
+			arr[i] = JsonNodeToValue(n)
 		}
 		return ArrayValue{V: arr}
 	case node.IsObject():
@@ -284,7 +284,7 @@ func jsonNodeToValue(node *insaneJSON.Node) Value {
 		for _, field := range fields {
 			key := field.AsString()
 			val := node.Dig(key)
-			obj[key] = jsonNodeToValue(val)
+			obj[key] = JsonNodeToValue(val)
 		}
 		return ObjectValue{V: obj}
 	}

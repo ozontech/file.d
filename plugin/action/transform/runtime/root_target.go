@@ -1,10 +1,11 @@
-package transform
+package runtime
 
 import (
 	"fmt"
 	"strconv"
 	"strings"
 
+	"github.com/ozontech/file.d/plugin/action/transform/core"
 	insaneJSON "github.com/ozontech/insane-json"
 )
 
@@ -26,26 +27,26 @@ func NewRootTarget(root *insaneJSON.Root, sourceName string, metadata map[string
 	}
 }
 
-func (t *RootTarget) Get(path Path) (Value, error) {
-	if path.Root == MetadataRoot {
+func (t *RootTarget) Get(path core.Path) (core.Value, error) {
+	if path.Root == core.MetadataRoot {
 		return t.getMetadata(path)
 	}
 
 	if len(path.Segments) == 0 {
-		return jsonNodeToValue(t.Root.Node), nil
+		return core.JsonNodeToValue(t.Root.Node), nil
 	}
 
 	t.pathBuffer = toInsaneJSONPath(path.Segments, t.pathBuffer)
 	node := t.Root.Dig(t.pathBuffer...)
 	if node == nil {
-		return NullValue{}, nil
+		return core.NullValue{}, nil
 	}
 
-	return JSONNodeValue{N: node}, nil
+	return core.JSONNodeValue{N: node}, nil
 }
 
-func (t *RootTarget) Set(path Path, value Value) error {
-	if path.Root == MetadataRoot {
+func (t *RootTarget) Set(path core.Path, value core.Value) error {
+	if path.Root == core.MetadataRoot {
 		return t.setMetadata(path, value)
 	}
 
@@ -85,8 +86,8 @@ func (t *RootTarget) Set(path Path, value Value) error {
 	return nil
 }
 
-func (t *RootTarget) Delete(path Path) error {
-	if path.Root == MetadataRoot {
+func (t *RootTarget) Delete(path core.Path) error {
+	if path.Root == core.MetadataRoot {
 		return t.deleteMetadata(path)
 	}
 
@@ -105,32 +106,32 @@ func (t *RootTarget) Delete(path Path) error {
 	return nil
 }
 
-func (t *RootTarget) getMetadata(path Path) (Value, error) {
+func (t *RootTarget) getMetadata(path core.Path) (core.Value, error) {
 	if len(path.Segments) == 0 {
-		obj := make(map[string]Value, len(t.metadata))
+		obj := make(map[string]core.Value, len(t.metadata))
 		for k, v := range t.metadata {
-			obj[k] = StringValue{V: v}
+			obj[k] = core.StringValue{V: v}
 		}
-		return ObjectValue{V: obj}, nil
+		return core.ObjectValue{V: obj}, nil
 	}
 
 	if len(path.Segments) != 1 || !path.Segments[0].IsField() {
-		return NullValue{}, fmt.Errorf("metadata path must be a single field name")
+		return core.NullValue{}, fmt.Errorf("metadata path must be a single field name")
 	}
 
 	key := path.Segments[0].Field
 	val, ok := t.metadata[key]
 	if !ok {
-		return NullValue{}, nil
+		return core.NullValue{}, nil
 	}
-	return StringValue{V: val}, nil
+	return core.StringValue{V: val}, nil
 }
 
-func (t *RootTarget) setMetadata(path Path, value Value) error {
+func (t *RootTarget) setMetadata(path core.Path, value core.Value) error {
 	if len(path.Segments) != 1 || !path.Segments[0].IsField() {
 		return fmt.Errorf("metadata path must be a single field name")
 	}
-	s, ok := value.(StringValue)
+	s, ok := value.(core.StringValue)
 	if !ok {
 		return fmt.Errorf("metadata values must be strings, got %s", value.Kind())
 	}
@@ -138,7 +139,7 @@ func (t *RootTarget) setMetadata(path Path, value Value) error {
 	return nil
 }
 
-func (t *RootTarget) deleteMetadata(path Path) error {
+func (t *RootTarget) deleteMetadata(path core.Path) error {
 	if len(path.Segments) != 1 || !path.Segments[0].IsField() {
 		return fmt.Errorf("metadata path must be a single field name")
 	}
@@ -146,7 +147,7 @@ func (t *RootTarget) deleteMetadata(path Path) error {
 	return nil
 }
 
-func toInsaneJSONPath(segments []Segment, pathBuffer []string) []string {
+func toInsaneJSONPath(segments []core.Segment, pathBuffer []string) []string {
 	lseg := len(segments)
 	lpb := len(pathBuffer)
 
@@ -167,23 +168,23 @@ func toInsaneJSONPath(segments []Segment, pathBuffer []string) []string {
 	return pathBuffer
 }
 
-// valueToJSON serialises a Value to a JSON string.
-func valueToJSON(v Value) (string, error) {
+// valueToJSON serialises a core.Value to a JSON string.
+func valueToJSON(v core.Value) (string, error) {
 	switch val := v.(type) {
-	case NullValue:
+	case core.NullValue:
 		return "null", nil
-	case BoolValue:
+	case core.BoolValue:
 		if val.V {
 			return "true", nil
 		}
 		return "false", nil
-	case IntegerValue:
+	case core.IntegerValue:
 		return strconv.FormatInt(val.V, 10), nil
-	case FloatValue:
+	case core.FloatValue:
 		return strconv.FormatFloat(val.V, 'f', -1, 64), nil
-	case StringValue:
+	case core.StringValue:
 		return strconv.Quote(val.V), nil
-	case ArrayValue:
+	case core.ArrayValue:
 		parts := make([]string, len(val.V))
 		for i, el := range val.V {
 			s, err := valueToJSON(el)
@@ -193,7 +194,7 @@ func valueToJSON(v Value) (string, error) {
 			parts[i] = s
 		}
 		return "[" + strings.Join(parts, ",") + "]", nil
-	case ObjectValue:
+	case core.ObjectValue:
 		parts := make([]string, 0, len(val.V))
 		for k, el := range val.V {
 			s, err := valueToJSON(el)
@@ -203,8 +204,8 @@ func valueToJSON(v Value) (string, error) {
 			parts = append(parts, strconv.Quote(k)+":"+s)
 		}
 		return "{" + strings.Join(parts, ",") + "}", nil
-	case JSONNodeValue:
-		node := v.(JSONNodeValue).N
+	case core.JSONNodeValue:
+		node := v.(core.JSONNodeValue).N
 		if node == nil {
 			return "null", nil
 		}
@@ -214,7 +215,7 @@ func valueToJSON(v Value) (string, error) {
 	return "", fmt.Errorf("cannot serialise %s to JSON", v.Kind())
 }
 
-func formatSegments(segs []Segment) string {
+func formatSegments(segs []core.Segment) string {
 	var b strings.Builder
 	for _, s := range segs {
 		if s.IsIndex() {

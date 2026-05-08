@@ -1,4 +1,4 @@
-package transform
+package core
 
 import (
 	"fmt"
@@ -7,75 +7,75 @@ import (
 	"time"
 )
 
-type Position struct {
-	Line   int
-	Column int
+type EvalContext interface {
+	GetVar(string) (Value, bool)
+	SetVar(string, Value)
+	DeleteVar(string)
+	GetTarget() Target
+	CallFunc(pos Position, name string, positional []Value, named map[string]Value) (Value, error)
 }
 
-func (p Position) String() string {
-	return fmt.Sprintf("%d:%d", p.Line, p.Column)
+type Position interface {
+	String() string
 }
 
 type Expr interface {
 	Pos() Position
-	Eval(ctx *Context) (Value, error)
+	Eval(ctx EvalContext) (Value, error)
 }
 
-type node struct {
+type Node struct {
 	pos Position
 }
 
-func (n node) Pos() Position {
+func NewNode(pos Position) Node {
+	return Node{pos: pos}
+}
+
+func (n Node) Pos() Position {
 	return n.pos
 }
 
 type IntLit struct {
-	node
+	Node
 	Value int64
 }
 
 type FloatLit struct {
-	node
+	Node
 	Value float64
 }
 
 type StringLit struct {
-	node
+	Node
 	Value string
 }
 
 type BoolLit struct {
-	node
+	Node
 	Value bool
 }
 
 type NullLit struct {
-	node
+	Node
 }
 
 type RegexLit struct {
-	node
+	Node
 	Pattern  string
-	compiled *regexp.Regexp
+	Compiled *regexp.Regexp
 }
 
 type TimestampLit struct {
-	node
+	Node
 	Value  string
-	parsed time.Time
+	Parsed time.Time
 }
 
 type IdentExpr struct {
-	node
+	Node
 	Name string
 }
-
-type PathRoot int
-
-const (
-	EventRoot PathRoot = iota
-	MetadataRoot
-)
 
 type PathSegment struct {
 	Field string
@@ -86,13 +86,13 @@ func (s PathSegment) IsField() bool { return s.Field != "" }
 func (s PathSegment) IsIndex() bool { return s.Index != nil }
 
 type PathExpr struct {
-	node
+	Node
 	Root     PathRoot
 	Segments []PathSegment
 }
 
 type ArrayExpr struct {
-	node
+	Node
 	Elements []Expr
 }
 
@@ -102,31 +102,31 @@ type KVPair struct {
 }
 
 type ObjectExpr struct {
-	node
+	Node
 	Pairs []KVPair
 }
 
 type UnaryExpr struct {
-	node
+	Node
 	Op      string
 	Operand Expr
 }
 
 type BinaryExpr struct {
-	node
+	Node
 	Left  Expr
 	Op    string
 	Right Expr
 }
 
 type AssignExpr struct {
-	node
+	Node
 	Target Expr
 	Value  Expr
 }
 
 type IndexExpr struct {
-	node
+	Node
 	Object Expr
 	Index  Expr
 }
@@ -137,29 +137,29 @@ type Argument struct {
 }
 
 type CallExpr struct {
-	node
+	Node
 	Name string
 	Args []Argument
 }
 
 type IfExpr struct {
-	node
+	Node
 	Condition Expr
 	Then      []Expr
 	Else      []Expr
 }
 
 type AbortExpr struct {
-	node
+	Node
 }
 
 type DelExpr struct {
-	node
+	Node
 	Target *PathExpr
 }
 
 type ForExpr struct {
-	node
+	Node
 	Index string
 	Item  string
 	Iter  Expr
@@ -280,5 +280,5 @@ func DumpAST(expr Expr, depth int) string {
 		return fmt.Sprintf("%sDel\n%s", pad, DumpAST(e.Target, p))
 	}
 
-	return fmt.Sprintf("%s<unknown node %T>", pad, expr)
+	return fmt.Sprintf("%s<unknown Node %T>", pad, expr)
 }

@@ -1,46 +1,49 @@
-package transform
+package compiler
 
 import (
 	"fmt"
 	"strconv"
+
+	"github.com/ozontech/file.d/plugin/action/transform/core"
+	"github.com/ozontech/file.d/plugin/action/transform/parser"
 )
 
 type ParseError struct {
-	Pos     Position
+	Pos     parser.Position
 	Message string
 }
 
 func (e *ParseError) Error() string {
-	return fmt.Sprintf("parse error at %s: %s", e.Pos, e.Message)
+	return fmt.Sprintf("parse error at (%s): %s", e.Pos, e.Message)
 }
 
-// Parser builds an AST from a slice of tokens.
-type Parser struct {
-	tokens []Token
+// Compiler builds an AST from a slice of tokens.
+type Compiler struct {
+	tokens []parser.Token
 	pos    int
 }
 
-func NewParser(tokens []Token) *Parser {
-	filtered := make([]Token, 0, len(tokens))
+func NewCompiler(tokens []parser.Token) *Compiler {
+	filtered := make([]parser.Token, 0, len(tokens))
 	for _, t := range tokens {
-		if t.Type != WHITESPACE && t.Type != COMMENT {
+		if t.Type != parser.WHITESPACE && t.Type != parser.COMMENT {
 			filtered = append(filtered, t)
 		}
 	}
-	return &Parser{tokens: filtered}
+	return &Compiler{tokens: filtered}
 }
 
-func (p *Parser) Parse() ([]Expr, error) {
-	var exprs []Expr
+func (p *Compiler) Compile() ([]core.Expr, error) {
+	var exprs []core.Expr
 
 	for !p.atEnd() {
-		for p.match(SEMICOLON) {
+		for p.match(parser.SEMICOLON) {
 		}
 		if p.atEnd() {
 			break
 		}
 
-		expr, err := p.parseExpr(bpLowest)
+		expr, err := p.parseExpr(parser.BpLowest)
 		if err != nil {
 			return nil, err
 		}
@@ -52,25 +55,25 @@ func (p *Parser) Parse() ([]Expr, error) {
 
 // Returns the current token without advancing.
 // Returns the EOF token when the stream is finished.
-func (p *Parser) peek() Token {
+func (p *Compiler) peek() parser.Token {
 	if p.pos >= len(p.tokens) {
-		return Token{Type: EOF}
+		return parser.Token{Type: parser.EOF}
 	}
 	return p.tokens[p.pos]
 }
 
 // Returns the token at pos+offset without advancing.
 // Returns the EOF token when out of bounds.
-func (p *Parser) peekAt(offset int) Token {
+func (p *Compiler) peekAt(offset int) parser.Token {
 	idx := p.pos + offset
 	if idx >= len(p.tokens) {
-		return Token{Type: EOF}
+		return parser.Token{Type: parser.EOF}
 	}
 	return p.tokens[idx]
 }
 
 // Returns the current token and moves the position forward.
-func (p *Parser) advance() Token {
+func (p *Compiler) advance() parser.Token {
 	tok := p.peek()
 	if !p.atEnd() {
 		p.pos++
@@ -79,20 +82,20 @@ func (p *Parser) advance() Token {
 }
 
 // Consumes the current token if it matches typ, or returns an error.
-func (p *Parser) expect(typ TokenType) (Token, error) {
+func (p *Compiler) expect(typ parser.TokenType) (parser.Token, error) {
 	tok := p.peek()
 	if tok.Type != typ {
 		return tok, &ParseError{
-			Pos: tok.Pos(),
+			Pos: tok.StartPos(),
 			Message: fmt.Sprintf("expected %s, got %s (%q)",
-				TokenNames[typ], tok.Name(), tok.Lexeme),
+				parser.TokenNames[typ], tok.Name(), tok.Lexeme),
 		}
 	}
 	return p.advance(), nil
 }
 
 // Consumes the current token if it matches typ; returns true on success.
-func (p *Parser) match(typ TokenType) bool {
+func (p *Compiler) match(typ parser.TokenType) bool {
 	if p.peek().Type == typ {
 		p.pos++
 		return true
@@ -100,17 +103,17 @@ func (p *Parser) match(typ TokenType) bool {
 	return false
 }
 
-func (p *Parser) check(typ TokenType) bool {
+func (p *Compiler) check(typ parser.TokenType) bool {
 	return p.peek().Type == typ
 }
 
-func (p *Parser) atEnd() bool {
+func (p *Compiler) atEnd() bool {
 	return p.pos >= len(p.tokens)
 }
 
-func (p *Parser) errorf(tok Token, format string, args ...any) *ParseError {
+func (p *Compiler) errorf(tok parser.Token, format string, args ...any) *ParseError {
 	return &ParseError{
-		Pos:     tok.Pos(),
+		Pos:     tok.StartPos(),
 		Message: fmt.Sprintf(format, args...),
 	}
 }
@@ -118,11 +121,11 @@ func (p *Parser) errorf(tok Token, format string, args ...any) *ParseError {
 // parseExpr main function of the Pratt parser.
 //
 // minBP is the minimum binding power that an infix operator must exceed
-// in order to be consumed. Calling with bpLowest parses a full expression.
+// in order to be consumed. Calling with parser.BpLowest parses a full expression.
 //
 //   - Left-associative:  infix calls parseExpr(bp(op))   - same BP blocks re-entry
 //   - Right-associative: infix calls parseExpr(bp(op)-1) - same BP is allowed on the right
-func (p *Parser) parseExpr(minBP int) (Expr, error) {
+func (p *Compiler) parseExpr(minBP int) (core.Expr, error) {
 	// parse the left operand via a prefix handler
 	left, err := p.parsePrefix()
 	if err != nil {
@@ -146,64 +149,64 @@ func (p *Parser) parseExpr(minBP int) (Expr, error) {
 }
 
 // Called when a token appears at the start of an expression.
-func (p *Parser) parsePrefix() (Expr, error) {
+func (p *Compiler) parsePrefix() (core.Expr, error) {
 	tok := p.peek()
 
 	switch tok.Type {
 
 	// Literals
-	case INTEGER:
+	case parser.LIT_INTEGER:
 		return p.parseIntLit()
-	case FLOAT:
+	case parser.LIT_FLOAT:
 		return p.parseFloatLit()
-	case STRING, STRING_RAW:
+	case parser.LIT_STRING, parser.LIT_STRING_RAW:
 		return p.parseStringLit()
-	case KW_TRUE:
-		return &BoolLit{node: nodeAt(p.advance()), Value: true}, nil
-	case KW_FALSE:
-		return &BoolLit{node: nodeAt(p.advance()), Value: false}, nil
-	case KW_NULL:
-		return &NullLit{node: nodeAt(p.advance())}, nil
-	case KW_DEL:
+	case parser.KW_TRUE:
+		return &core.BoolLit{Node: nodeAt(p.advance()), Value: true}, nil
+	case parser.KW_FALSE:
+		return &core.BoolLit{Node: nodeAt(p.advance()), Value: false}, nil
+	case parser.KW_NULL:
+		return &core.NullLit{Node: nodeAt(p.advance())}, nil
+	case parser.KW_DEL:
 		return p.parseDel()
-	case REGEX_LIT:
+	case parser.LIT_REGEX:
 		t := p.advance()
-		return &RegexLit{node: nodeAt(t), Pattern: unwrap(t.Lexeme, 2)}, nil
-	case TIMESTAMP_LIT:
+		return &core.RegexLit{Node: nodeAt(t), Pattern: unwrap(t.Lexeme, 2)}, nil
+	case parser.LIT_TIMESTAMP:
 		t := p.advance()
-		return &TimestampLit{node: nodeAt(t), Value: unwrap(t.Lexeme, 2)}, nil
+		return &core.TimestampLit{Node: nodeAt(t), Value: unwrap(t.Lexeme, 2)}, nil
 
 	// Identifier - variable or function call
-	case ID:
+	case parser.IDENT:
 		t := p.advance()
-		return &IdentExpr{node: nodeAt(t), Name: t.Lexeme}, nil
+		return &core.IdentExpr{Node: nodeAt(t), Name: t.Lexeme}, nil
 
 	// Paths
-	case DOT:
+	case parser.DOT:
 		return p.parseEventPath()
-	case PERCENT:
+	case parser.PERCENT:
 		return p.parseMetadataPath()
 
 	// Unary operators
-	case BANG, MINUS:
+	case parser.BANG, parser.MINUS:
 		return p.parseUnary()
 
 	// Grouped expression
-	case LPAREN:
+	case parser.LPAREN:
 		return p.parseGrouped()
 
 	// Collection literals
-	case LBRACKET:
+	case parser.LBRACKET:
 		return p.parseArray()
-	case LBRACE:
+	case parser.LBRACE:
 		return p.parseObject()
 
 	// Control flow
-	case KW_IF:
+	case parser.KW_IF:
 		return p.parseIf()
-	case KW_ABORT:
-		return &AbortExpr{node: nodeAt(p.advance())}, nil
-	case KW_FOR:
+	case parser.KW_ABORT:
+		return &core.AbortExpr{Node: nodeAt(p.advance())}, nil
+	case parser.KW_FOR:
 		return p.parseFor()
 	}
 
@@ -211,42 +214,42 @@ func (p *Parser) parsePrefix() (Expr, error) {
 }
 
 // Called when a token appears between two expressions.
-func (p *Parser) parseInfix(left Expr, op Token) (Expr, error) {
+func (p *Compiler) parseInfix(left core.Expr, op parser.Token) (core.Expr, error) {
 	switch op.Type {
 
-	case ASSIGN:
+	case parser.OP_ASSIGN:
 		if !isLValue(left) {
 			return nil, p.errorf(op, "left side of assignment must be a variable, path, or index expression")
 		}
 		// right-associative: bp-1 allows chaining a = b = c -> a = (b = c)
-		right, err := p.parseExpr(bpAssign - 1)
+		right, err := p.parseExpr(parser.BpAssign - 1)
 		if err != nil {
 			return nil, err
 		}
-		return &AssignExpr{
-			node:   node{pos: left.Pos()},
+		return &core.AssignExpr{
+			Node:   core.NewNode(left.Pos()),
 			Target: left,
 			Value:  right,
 		}, nil
-	case OR, AND,
-		EQ, NEQ,
-		LT, LTE, GT, GTE,
-		PLUS, MINUS,
-		STAR, SLASH, PERCENT:
+	case parser.OP_OR, parser.OP_AND,
+		parser.OP_EQ, parser.OP_NEQ,
+		parser.OP_LT, parser.OP_LTE, parser.OP_GT, parser.OP_GTE,
+		parser.PLUS, parser.MINUS,
+		parser.STAR, parser.SLASH, parser.PERCENT:
 		right, err := p.parseExpr(op.Type.BindingPower())
 		if err != nil {
 			return nil, err
 		}
-		return &BinaryExpr{
-			node:  node{pos: left.Pos()},
+		return &core.BinaryExpr{
+			Node:  core.NewNode(left.Pos()),
 			Left:  left,
 			Op:    op.Lexeme,
 			Right: right,
 		}, nil
 
 	// function call
-	case LPAREN:
-		ident, ok := left.(*IdentExpr)
+	case parser.LPAREN:
+		ident, ok := left.(*core.IdentExpr)
 		if !ok {
 			return nil, p.errorf(op, "function call requires an identifier on the left, got %T", left)
 		}
@@ -254,23 +257,23 @@ func (p *Parser) parseInfix(left Expr, op Token) (Expr, error) {
 		if err != nil {
 			return nil, err
 		}
-		if _, err := p.expect(RPAREN); err != nil {
+		if _, err := p.expect(parser.RPAREN); err != nil {
 			return nil, err
 		}
-		return &CallExpr{node: ident.node, Name: ident.Name, Args: args}, nil
+		return &core.CallExpr{Node: ident.Node, Name: ident.Name, Args: args}, nil
 
 	// index access
 	// path indexing (.field[0]) is handled inside parseEventPath.
-	case LBRACKET:
-		index, err := p.parseExpr(bpLowest)
+	case parser.LBRACKET:
+		index, err := p.parseExpr(parser.BpLowest)
 		if err != nil {
 			return nil, err
 		}
-		if _, err := p.expect(RBRACKET); err != nil {
+		if _, err := p.expect(parser.RBRACKET); err != nil {
 			return nil, err
 		}
-		return &IndexExpr{
-			node:   node{pos: left.Pos()},
+		return &core.IndexExpr{
+			Node:   core.NewNode(left.Pos()),
 			Object: left,
 			Index:  index,
 		}, nil
@@ -279,146 +282,146 @@ func (p *Parser) parseInfix(left Expr, op Token) (Expr, error) {
 	return nil, p.errorf(op, "unknown infix operator %q", op.Lexeme)
 }
 
-func (p *Parser) parseIntLit() (Expr, error) {
+func (p *Compiler) parseIntLit() (core.Expr, error) {
 	tok := p.advance()
 	v, err := strconv.ParseInt(tok.Lexeme, 10, 64)
 	if err != nil {
 		return nil, p.errorf(tok, "invalid integer literal %q", tok.Lexeme)
 	}
-	return &IntLit{node: nodeAt(tok), Value: v}, nil
+	return &core.IntLit{Node: nodeAt(tok), Value: v}, nil
 }
 
-func (p *Parser) parseFloatLit() (Expr, error) {
+func (p *Compiler) parseFloatLit() (core.Expr, error) {
 	tok := p.advance()
 	v, err := strconv.ParseFloat(tok.Lexeme, 64)
 	if err != nil {
 		return nil, p.errorf(tok, "invalid float literal %q", tok.Lexeme)
 	}
-	return &FloatLit{node: nodeAt(tok), Value: v}, nil
+	return &core.FloatLit{Node: nodeAt(tok), Value: v}, nil
 }
 
-func (p *Parser) parseStringLit() (Expr, error) {
+func (p *Compiler) parseStringLit() (core.Expr, error) {
 	tok := p.advance()
 	switch tok.Type {
-	case STRING:
+	case parser.LIT_STRING:
 		// process escape sequences.
 		v, err := strconv.Unquote(tok.Lexeme)
 		if err != nil {
 			return nil, p.errorf(tok, "invalid string literal: %v", err)
 		}
-		return &StringLit{node: nodeAt(tok), Value: v}, nil
+		return &core.StringLit{Node: nodeAt(tok), Value: v}, nil
 
-	case STRING_RAW:
-		return &StringLit{node: nodeAt(tok), Value: unwrap(tok.Lexeme, 2)}, nil
+	case parser.LIT_STRING_RAW:
+		return &core.StringLit{Node: nodeAt(tok), Value: unwrap(tok.Lexeme, 2)}, nil
 	}
 	return nil, p.errorf(tok, "expected string, got %s", tok.Name())
 }
 
-func (p *Parser) parseUnary() (Expr, error) {
+func (p *Compiler) parseUnary() (core.Expr, error) {
 	op := p.advance()
-	operand, err := p.parseExpr(bpUnary)
+	operand, err := p.parseExpr(parser.BpUnary)
 	if err != nil {
 		return nil, err
 	}
-	return &UnaryExpr{node: nodeAt(op), Op: op.Lexeme, Operand: operand}, nil
+	return &core.UnaryExpr{Node: nodeAt(op), Op: op.Lexeme, Operand: operand}, nil
 }
 
-func (p *Parser) parseGrouped() (Expr, error) {
+func (p *Compiler) parseGrouped() (core.Expr, error) {
 	// consume (
 	p.advance()
 
-	expr, err := p.parseExpr(bpLowest)
+	expr, err := p.parseExpr(parser.BpLowest)
 	if err != nil {
 		return nil, err
 	}
-	if _, err := p.expect(RPAREN); err != nil {
+	if _, err := p.expect(parser.RPAREN); err != nil {
 		return nil, err
 	}
 	return expr, nil
 }
 
-func (p *Parser) parseArray() (Expr, error) {
+func (p *Compiler) parseArray() (core.Expr, error) {
 	// consume [
 	start := p.advance()
 
-	var elements []Expr
-	for !p.check(RBRACKET) && !p.atEnd() {
-		el, err := p.parseExpr(bpLowest)
+	var elements []core.Expr
+	for !p.check(parser.RBRACKET) && !p.atEnd() {
+		el, err := p.parseExpr(parser.BpLowest)
 		if err != nil {
 			return nil, err
 		}
 		elements = append(elements, el)
-		if !p.match(COMMA) {
+		if !p.match(parser.COMMA) {
 			break
 		}
 	}
 
-	if _, err := p.expect(RBRACKET); err != nil {
+	if _, err := p.expect(parser.RBRACKET); err != nil {
 		return nil, err
 	}
-	return &ArrayExpr{node: nodeAt(start), Elements: elements}, nil
+	return &core.ArrayExpr{Node: nodeAt(start), Elements: elements}, nil
 }
 
-func (p *Parser) parseObject() (Expr, error) {
+func (p *Compiler) parseObject() (core.Expr, error) {
 	// consume {
 	start := p.advance()
 
-	var pairs []KVPair
-	for !p.check(RBRACE) && !p.atEnd() {
+	var pairs []core.KVPair
+	for !p.check(parser.RBRACE) && !p.atEnd() {
 		kv, err := p.parseKVPair()
 		if err != nil {
 			return nil, err
 		}
 		pairs = append(pairs, kv)
-		if !p.match(COMMA) {
+		if !p.match(parser.COMMA) {
 			break
 		}
 	}
 
-	if _, err := p.expect(RBRACE); err != nil {
+	if _, err := p.expect(parser.RBRACE); err != nil {
 		return nil, err
 	}
-	return &ObjectExpr{node: nodeAt(start), Pairs: pairs}, nil
+	return &core.ObjectExpr{Node: nodeAt(start), Pairs: pairs}, nil
 }
 
-func (p *Parser) parseKVPair() (KVPair, error) {
+func (p *Compiler) parseKVPair() (core.KVPair, error) {
 	tok := p.peek()
 
 	var key string
 	switch tok.Type {
-	case STRING:
+	case parser.LIT_STRING:
 		t := p.advance()
 		v, err := strconv.Unquote(t.Lexeme)
 		if err != nil {
-			return KVPair{}, p.errorf(t, "invalid object key: %v", err)
+			return core.KVPair{}, p.errorf(t, "invalid object key: %v", err)
 		}
 		key = v
-	case STRING_RAW:
+	case parser.LIT_STRING_RAW:
 		t := p.advance()
 		key = unwrap(t.Lexeme, 2)
-	case ID:
+	case parser.IDENT:
 		key = p.advance().Lexeme
 	default:
-		return KVPair{}, p.errorf(tok, "object key must be a string or identifier, got %s", tok.Name())
+		return core.KVPair{}, p.errorf(tok, "object key must be a string or identifier, got %s", tok.Name())
 	}
 
-	if _, err := p.expect(COLON); err != nil {
-		return KVPair{}, err
+	if _, err := p.expect(parser.COLON); err != nil {
+		return core.KVPair{}, err
 	}
 
-	val, err := p.parseExpr(bpLowest)
+	val, err := p.parseExpr(parser.BpLowest)
 	if err != nil {
-		return KVPair{}, err
+		return core.KVPair{}, err
 	}
 
-	return KVPair{Key: key, Value: val}, nil
+	return core.KVPair{Key: key, Value: val}, nil
 }
 
-func (p *Parser) parseEventPath() (Expr, error) {
+func (p *Compiler) parseEventPath() (core.Expr, error) {
 	// consume .
 	start := p.advance()
 
-	var segments []PathSegment
+	var segments []core.PathSegment
 	if seg, ok, err := p.tryFieldSegment(); err != nil {
 		return nil, err
 	} else if ok {
@@ -430,19 +433,19 @@ func (p *Parser) parseEventPath() (Expr, error) {
 		}
 	}
 
-	return &PathExpr{node: nodeAt(start), Root: EventRoot, Segments: segments}, nil
+	return &core.PathExpr{Node: nodeAt(start), Root: core.EventRoot, Segments: segments}, nil
 }
 
-func (p *Parser) parseMetadataPath() (Expr, error) {
+func (p *Compiler) parseMetadataPath() (core.Expr, error) {
 	// consume %
 	start := p.advance()
 
 	tok := p.peek()
-	if tok.Type != ID {
+	if tok.Type != parser.IDENT {
 		return nil, p.errorf(tok, "expected metadata field name after %%, got %s", tok.Name())
 	}
 
-	segments := []PathSegment{{Field: p.advance().Lexeme}}
+	segments := []core.PathSegment{{Field: p.advance().Lexeme}}
 
 	var err error
 	segments, err = p.continueSegments(segments)
@@ -450,33 +453,33 @@ func (p *Parser) parseMetadataPath() (Expr, error) {
 		return nil, err
 	}
 
-	return &PathExpr{node: nodeAt(start), Root: MetadataRoot, Segments: segments}, nil
+	return &core.PathExpr{Node: nodeAt(start), Root: core.MetadataRoot, Segments: segments}, nil
 }
 
 // Attempts to read a named path segment.
-func (p *Parser) tryFieldSegment() (PathSegment, bool, error) {
+func (p *Compiler) tryFieldSegment() (core.PathSegment, bool, error) {
 	switch p.peek().Type {
-	case ID:
-		return PathSegment{Field: p.advance().Lexeme}, true, nil
-	case STRING:
+	case parser.IDENT:
+		return core.PathSegment{Field: p.advance().Lexeme}, true, nil
+	case parser.LIT_STRING:
 		t := p.advance()
 		v, err := strconv.Unquote(t.Lexeme)
 		if err != nil {
-			return PathSegment{}, false, p.errorf(t, "invalid field name: %v", err)
+			return core.PathSegment{}, false, p.errorf(t, "invalid field name: %v", err)
 		}
-		return PathSegment{Field: v}, true, nil
-	case STRING_RAW:
+		return core.PathSegment{Field: v}, true, nil
+	case parser.LIT_STRING_RAW:
 		t := p.advance()
-		return PathSegment{Field: unwrap(t.Lexeme, 2)}, true, nil
+		return core.PathSegment{Field: unwrap(t.Lexeme, 2)}, true, nil
 	}
-	return PathSegment{}, false, nil
+	return core.PathSegment{}, false, nil
 }
 
 // Greedily consumes path continuations: .field and [index].
-func (p *Parser) continueSegments(segments []PathSegment) ([]PathSegment, error) {
+func (p *Compiler) continueSegments(segments []core.PathSegment) ([]core.PathSegment, error) {
 	for {
 		switch p.peek().Type {
-		case DOT:
+		case parser.DOT:
 			if p.pos-1 >= 0 && p.pos-1 < len(p.tokens) {
 				dot := p.peek()
 				prev := p.tokens[p.pos-1]
@@ -495,16 +498,16 @@ func (p *Parser) continueSegments(segments []PathSegment) ([]PathSegment, error)
 			}
 			segments = append(segments, seg)
 
-		case LBRACKET:
+		case parser.LBRACKET:
 			p.advance()
-			index, err := p.parseExpr(bpLowest)
+			index, err := p.parseExpr(parser.BpLowest)
 			if err != nil {
 				return nil, err
 			}
-			if _, err := p.expect(RBRACKET); err != nil {
+			if _, err := p.expect(parser.RBRACKET); err != nil {
 				return nil, err
 			}
-			segments = append(segments, PathSegment{Index: index})
+			segments = append(segments, core.PathSegment{Index: index})
 
 		default:
 			return segments, nil
@@ -513,11 +516,11 @@ func (p *Parser) continueSegments(segments []PathSegment) ([]PathSegment, error)
 }
 
 // Parses If expressions (e.g. if condition { ... } else { ... })
-func (p *Parser) parseIf() (Expr, error) {
+func (p *Compiler) parseIf() (core.Expr, error) {
 	// consume if
 	start := p.advance()
 
-	condition, err := p.parseExpr(bpLowest)
+	condition, err := p.parseExpr(parser.BpLowest)
 	if err != nil {
 		return nil, err
 	}
@@ -527,14 +530,14 @@ func (p *Parser) parseIf() (Expr, error) {
 		return nil, err
 	}
 
-	var elseBranch []Expr
-	if p.match(KW_ELSE) {
-		if p.check(KW_IF) {
+	var elseBranch []core.Expr
+	if p.match(parser.KW_ELSE) {
+		if p.check(parser.KW_IF) {
 			elseIf, err := p.parseIf()
 			if err != nil {
 				return nil, err
 			}
-			elseBranch = []Expr{elseIf}
+			elseBranch = []core.Expr{elseIf}
 		} else {
 			elseBranch, err = p.parseBlock()
 			if err != nil {
@@ -543,8 +546,8 @@ func (p *Parser) parseIf() (Expr, error) {
 		}
 	}
 
-	return &IfExpr{
-		node:      nodeAt(start),
+	return &core.IfExpr{
+		Node:      nodeAt(start),
 		Condition: condition,
 		Then:      then,
 		Else:      elseBranch,
@@ -553,37 +556,37 @@ func (p *Parser) parseIf() (Expr, error) {
 
 // Parses If block (e.g. { expr; expr; ... })
 // Semicolons between expressions are optional.
-func (p *Parser) parseBlock() ([]Expr, error) {
-	if _, err := p.expect(LBRACE); err != nil {
+func (p *Compiler) parseBlock() ([]core.Expr, error) {
+	if _, err := p.expect(parser.LBRACE); err != nil {
 		return nil, err
 	}
 
-	var exprs []Expr
-	for !p.check(RBRACE) && !p.atEnd() {
-		e, err := p.parseExpr(bpLowest)
+	var exprs []core.Expr
+	for !p.check(parser.RBRACE) && !p.atEnd() {
+		e, err := p.parseExpr(parser.BpLowest)
 		if err != nil {
 			return nil, err
 		}
 		exprs = append(exprs, e)
-		for p.match(SEMICOLON) {
+		for p.match(parser.SEMICOLON) {
 		}
 	}
 
-	if _, err := p.expect(RBRACE); err != nil {
+	if _, err := p.expect(parser.RBRACE); err != nil {
 		return nil, err
 	}
 	return exprs, nil
 }
 
-func (p *Parser) parseArgList() ([]Argument, error) {
-	var args []Argument
-	for !p.check(RPAREN) && !p.atEnd() {
+func (p *Compiler) parseArgList() ([]core.Argument, error) {
+	var args []core.Argument
+	for !p.check(parser.RPAREN) && !p.atEnd() {
 		arg, err := p.parseArgument()
 		if err != nil {
 			return nil, err
 		}
 		args = append(args, arg)
-		if !p.match(COMMA) {
+		if !p.match(parser.COMMA) {
 			break
 		}
 	}
@@ -591,69 +594,69 @@ func (p *Parser) parseArgList() ([]Argument, error) {
 }
 
 // Parses function arguments: named (key: expr) or positional (expr).
-func (p *Parser) parseArgument() (Argument, error) {
-	if p.peek().Type == ID && p.peekAt(1).Type == COLON {
+func (p *Compiler) parseArgument() (core.Argument, error) {
+	if p.peek().Type == parser.IDENT && p.peekAt(1).Type == parser.COLON {
 		name := p.advance().Lexeme
 		p.advance()
-		val, err := p.parseExpr(bpLowest)
+		val, err := p.parseExpr(parser.BpLowest)
 		if err != nil {
-			return Argument{}, err
+			return core.Argument{}, err
 		}
-		return Argument{Name: name, Value: val}, nil
+		return core.Argument{Name: name, Value: val}, nil
 	}
 
-	val, err := p.parseExpr(bpLowest)
+	val, err := p.parseExpr(parser.BpLowest)
 	if err != nil {
-		return Argument{}, err
+		return core.Argument{}, err
 	}
-	return Argument{Value: val}, nil
+	return core.Argument{Value: val}, nil
 }
 
 // Parses delete expressions (e.g. del .field | del .field.nested[0] | del %meta.key)
 //
-// Only PathExpr is a valid target - anything else is a compile-time error.
-func (p *Parser) parseDel() (Expr, error) {
+// Only core.PathExpr is a valid target - anything else is a compile-time error.
+func (p *Compiler) parseDel() (core.Expr, error) {
 	start := p.advance()
 
 	tok := p.peek()
 
-	var pathExpr *PathExpr
+	var pathExpr *core.PathExpr
 
 	switch tok.Type {
-	case DOT:
+	case parser.DOT:
 		raw, err := p.parseEventPath()
 		if err != nil {
 			return nil, err
 		}
-		pathExpr = raw.(*PathExpr)
+		pathExpr = raw.(*core.PathExpr)
 
-	case PERCENT:
+	case parser.PERCENT:
 		raw, err := p.parseMetadataPath()
 		if err != nil {
 			return nil, err
 		}
-		pathExpr = raw.(*PathExpr)
+		pathExpr = raw.(*core.PathExpr)
 
 	default:
 		return nil, p.errorf(tok, "del requires a path (.field or %%field), got %s", tok.Name())
 	}
 
-	return &DelExpr{node: nodeAt(start), Target: pathExpr}, nil
+	return &core.DelExpr{Node: nodeAt(start), Target: pathExpr}, nil
 }
 
 // Parses for expressions (e.g. for i in expr { ... } | for i, item in expr { ... })
-func (p *Parser) parseFor() (Expr, error) {
+func (p *Compiler) parseFor() (core.Expr, error) {
 	start := p.advance()
 
-	first, err := p.expect(ID)
+	first, err := p.expect(parser.IDENT)
 	if err != nil {
 		return nil, err
 	}
 
 	var indexName, itemName string
 
-	if p.match(COMMA) {
-		second, err := p.expect(ID)
+	if p.match(parser.COMMA) {
+		second, err := p.expect(parser.IDENT)
 		if err != nil {
 			return nil, err
 		}
@@ -672,11 +675,11 @@ func (p *Parser) parseFor() (Expr, error) {
 		return nil, p.errorf(first, "for loop must bind at least one variable: : use 'for i in ...' or 'for i, item in ...'")
 	}
 
-	if _, err := p.expect(KW_IN); err != nil {
+	if _, err := p.expect(parser.KW_IN); err != nil {
 		return nil, err
 	}
 
-	iter, err := p.parseExpr(bpLowest)
+	iter, err := p.parseExpr(parser.BpLowest)
 	if err != nil {
 		return nil, err
 	}
@@ -686,8 +689,8 @@ func (p *Parser) parseFor() (Expr, error) {
 		return nil, err
 	}
 
-	return &ForExpr{
-		node:  nodeAt(start),
+	return &core.ForExpr{
+		Node:  nodeAt(start),
 		Index: indexName,
 		Item:  itemName,
 		Iter:  iter,
@@ -696,20 +699,20 @@ func (p *Parser) parseFor() (Expr, error) {
 }
 
 // isLValue reports whether expr is a valid assignment target.
-func isLValue(expr Expr) bool {
+func isLValue(expr core.Expr) bool {
 	switch expr.(type) {
-	case *IdentExpr:
+	case *core.IdentExpr:
 		return true
-	case *PathExpr:
+	case *core.PathExpr:
 		return true
-	case *IndexExpr:
+	case *core.IndexExpr:
 		return true
 	}
 	return false
 }
 
-func nodeAt(tok Token) node {
-	return node{pos: tok.Pos()}
+func nodeAt(tok parser.Token) core.Node {
+	return core.NewNode(tok.StartPos())
 }
 
 // Strips prefixLen bytes from the front and 1 byte from the end.

@@ -1,11 +1,22 @@
 package transform
 
 import (
-	"log"
+	"errors"
+	"fmt"
 
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/plugin/action/transform/compiler"
+	"github.com/ozontech/file.d/plugin/action/transform/core"
+	"github.com/ozontech/file.d/plugin/action/transform/parser"
+	"github.com/ozontech/file.d/plugin/action/transform/runtime"
+	"github.com/ozontech/file.d/plugin/action/transform/stdlib"
 	"go.uber.org/zap"
+)
+
+var (
+	globalLexer   = parser.NewCompiledLexer()
+	compilerCache = map[string]*compiler.Compiler{}
 )
 
 /*{ introduction
@@ -13,8 +24,8 @@ import (
 
 type Plugin struct {
 	config           *Config
-	registry         *Registry
-	program          *Program
+	registry         *core.Registry
+	expressions      []core.Expr
 	logger           *zap.Logger
 	pluginController pipeline.ActionPluginController
 }
@@ -44,28 +55,53 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 	p.logger = params.Logger.Desugar()
 	p.pluginController = params.Controller
 
-	p.registry = NewRegistry()
-	p.registry.MustRegister(upcase{})
+	p.registry = core.NewRegistry()
+	p.registry.MustRegister(stdlib.Upcase{})
 
-	prog, err := Compile(p.config.Source, p.registry)
+	parser := parser.NewParser(globalLexer)
+	tokens, err := parser.Parse(p.config.Source)
+
 	if err != nil {
-		log.Fatal(err)
+		p.logger.Fatal("parsing error", zap.Error(err))
 	}
-	p.program = prog
+
+	cacheKey := fmt.Sprintf("%s_%d", params.PipelineName, params.Index)
+	c, ok := compilerCache[cacheKey]
+	if !ok {
+		p.logger.Info("create compiler")
+		c = compiler.NewCompiler(tokens)
+		compilerCache[cacheKey] = c
+	}
+
+	exprs, err := c.Compile()
+	if err != nil {
+		p.logger.Fatal("compilation error", zap.Error(err))
+	}
+
+	if err := compiler.ValidateCalls(exprs, p.registry); err != nil {
+		p.logger.Fatal("validation error", zap.Error(err))
+	}
+
+	p.expressions = exprs
 }
 
 func (p *Plugin) Stop() {}
 
 func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
-	target := NewRootTarget(event.Root, event.SourceName, nil)
+	target := runtime.NewRootTarget(event.Root, event.SourceName, nil)
+	ctx := runtime.NewContext(target, p.registry)
 
-	result, err := p.program.Run(target)
-	if err != nil {
-		p.logger.Error("transform runtime error: %v", zap.Error(err))
-	}
-
-	if result.Aborted {
-		p.logger.Info("transform program aborted")
+	for _, expr := range p.expressions {
+		fmt.Println(core.DumpAST(expr, 0))
+		_, err := expr.Eval(ctx)
+		if err != nil {
+			if errors.Is(err, core.AbortError) {
+				p.logger.Info("transform program aborted")
+				return pipeline.ActionPass
+			}
+			p.logger.Error("transform runtime error", zap.String("position", expr.Pos().String()), zap.Error(err))
+			return pipeline.ActionPass
+		}
 	}
 
 	return pipeline.ActionPass

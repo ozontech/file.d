@@ -1,4 +1,4 @@
-package transform
+package core
 
 import (
 	"fmt"

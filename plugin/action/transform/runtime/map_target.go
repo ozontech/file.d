@@ -1,21 +1,25 @@
-package transform
+package runtime
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/ozontech/file.d/plugin/action/transform/core"
+)
 
 // MapTarget is the standard in-memory Target.
 type MapTarget struct {
-	event    map[string]Value
-	metadata map[string]Value
+	event    map[string]core.Value
+	metadata map[string]core.Value
 }
 
 func NewMapTarget() *MapTarget {
 	return &MapTarget{
-		event:    make(map[string]Value),
-		metadata: make(map[string]Value),
+		event:    make(map[string]core.Value),
+		metadata: make(map[string]core.Value),
 	}
 }
 
-func NewMapTargetFrom(event map[string]Value) *MapTarget {
+func NewMapTargetFrom(event map[string]core.Value) *MapTarget {
 	t := NewMapTarget()
 	for k, v := range event {
 		t.event[k] = v
@@ -23,63 +27,63 @@ func NewMapTargetFrom(event map[string]Value) *MapTarget {
 	return t
 }
 
-func (t *MapTarget) Event() map[string]Value {
-	out := make(map[string]Value, len(t.event))
+func (t *MapTarget) Event() map[string]core.Value {
+	out := make(map[string]core.Value, len(t.event))
 	for k, v := range t.event {
 		out[k] = v
 	}
 	return out
 }
 
-func (t *MapTarget) Metadata() map[string]Value {
-	out := make(map[string]Value, len(t.metadata))
+func (t *MapTarget) Metadata() map[string]core.Value {
+	out := make(map[string]core.Value, len(t.metadata))
 	for k, v := range t.metadata {
 		out[k] = v
 	}
 	return out
 }
 
-func (t *MapTarget) rootMap(r PathRoot) map[string]Value {
-	if r == MetadataRoot {
+func (t *MapTarget) rootMap(r core.PathRoot) map[string]core.Value {
+	if r == core.MetadataRoot {
 		return t.metadata
 	}
 	return t.event
 }
 
-func (t *MapTarget) Get(path Path) (Value, error) {
+func (t *MapTarget) Get(path core.Path) (core.Value, error) {
 	root := t.rootMap(path.Root)
 
 	if len(path.Segments) == 0 {
-		snap := make(map[string]Value, len(root))
+		snap := make(map[string]core.Value, len(root))
 		for k, v := range root {
 			snap[k] = v
 		}
-		return ObjectValue{V: snap}, nil
+		return core.ObjectValue{V: snap}, nil
 	}
 
-	var current Value = ObjectValue{V: root}
+	var current core.Value = core.ObjectValue{V: root}
 
 	for i, seg := range path.Segments {
 		if seg.IsIndex() {
-			arr, ok := current.(ArrayValue)
+			arr, ok := current.(core.ArrayValue)
 			if !ok {
-				return NullValue{}, fmt.Errorf(
+				return core.NullValue{}, fmt.Errorf(
 					"segment %d: cannot index %s with integer", i, current.Kind())
 			}
 			idx := resolveIndex(seg.Idx, len(arr.V))
 			if idx < 0 || idx >= len(arr.V) {
-				return NullValue{}, nil
+				return core.NullValue{}, nil
 			}
 			current = arr.V[idx]
 		} else {
-			obj, ok := current.(ObjectValue)
+			obj, ok := current.(core.ObjectValue)
 			if !ok {
-				return NullValue{}, fmt.Errorf(
+				return core.NullValue{}, fmt.Errorf(
 					"segment %d: cannot access field %q on %s", i, seg.Field, current.Kind())
 			}
 			val, exists := obj.V[seg.Field]
 			if !exists {
-				return NullValue{}, nil
+				return core.NullValue{}, nil
 			}
 			current = val
 		}
@@ -88,11 +92,11 @@ func (t *MapTarget) Get(path Path) (Value, error) {
 	return current, nil
 }
 
-func (t *MapTarget) Set(path Path, value Value) error {
+func (t *MapTarget) Set(path core.Path, value core.Value) error {
 	root := t.rootMap(path.Root)
 
 	if len(path.Segments) == 0 {
-		obj, ok := value.(ObjectValue)
+		obj, ok := value.(core.ObjectValue)
 		if !ok {
 			return fmt.Errorf(
 				"cannot assign %s to root path: value must be an object", value.Kind())
@@ -110,7 +114,7 @@ func (t *MapTarget) Set(path Path, value Value) error {
 }
 
 // setInMap recursively writes value into obj along segs.
-func setInMap(obj map[string]Value, segs []Segment, value Value) error {
+func setInMap(obj map[string]core.Value, segs []core.Segment, value core.Value) error {
 	head, tail := segs[0], segs[1:]
 
 	if head.IsIndex() {
@@ -126,38 +130,38 @@ func setInMap(obj map[string]Value, segs []Segment, value Value) error {
 
 	if tail[0].IsIndex() {
 		// index -> node must be an array.
-		var arr []Value
-		if a, ok := existing.(ArrayValue); ok {
-			arr = make([]Value, len(a.V))
+		var arr []core.Value
+		if a, ok := existing.(core.ArrayValue); ok {
+			arr = make([]core.Value, len(a.V))
 			copy(arr, a.V)
 		}
 		newArr, err := setInArray(arr, tail, value)
 		if err != nil {
 			return fmt.Errorf(".%s: %w", head.Field, err)
 		}
-		obj[head.Field] = ArrayValue{V: newArr}
+		obj[head.Field] = core.ArrayValue{V: newArr}
 	} else {
 		// field -> node must be an object.
-		var child map[string]Value
-		if o, ok := existing.(ObjectValue); ok {
-			child = make(map[string]Value, len(o.V))
+		var child map[string]core.Value
+		if o, ok := existing.(core.ObjectValue); ok {
+			child = make(map[string]core.Value, len(o.V))
 			for k, v := range o.V {
 				child[k] = v
 			}
 		} else {
-			child = make(map[string]Value)
+			child = make(map[string]core.Value)
 		}
 		if err := setInMap(child, tail, value); err != nil {
 			return fmt.Errorf(".%s: %w", head.Field, err)
 		}
-		obj[head.Field] = ObjectValue{V: child}
+		obj[head.Field] = core.ObjectValue{V: child}
 	}
 
 	return nil
 }
 
 // setInArray recursively writes value into arr along segs.
-func setInArray(arr []Value, segs []Segment, value Value) ([]Value, error) {
+func setInArray(arr []core.Value, segs []core.Segment, value core.Value) ([]core.Value, error) {
 	head, tail := segs[0], segs[1:]
 
 	if !head.IsIndex() {
@@ -171,7 +175,7 @@ func setInArray(arr []Value, segs []Segment, value Value) ([]Value, error) {
 
 	// Grow with nulls if the index exceeds the current length.
 	for len(arr) <= idx {
-		arr = append(arr, NullValue{})
+		arr = append(arr, core.NullValue{})
 	}
 
 	if len(tail) == 0 {
@@ -182,36 +186,36 @@ func setInArray(arr []Value, segs []Segment, value Value) ([]Value, error) {
 	existing := arr[idx]
 
 	if tail[0].IsIndex() {
-		var child []Value
-		if a, ok := existing.(ArrayValue); ok {
-			child = make([]Value, len(a.V))
+		var child []core.Value
+		if a, ok := existing.(core.ArrayValue); ok {
+			child = make([]core.Value, len(a.V))
 			copy(child, a.V)
 		}
 		newChild, err := setInArray(child, tail, value)
 		if err != nil {
 			return nil, fmt.Errorf("[%d]: %w", head.Idx, err)
 		}
-		arr[idx] = ArrayValue{V: newChild}
+		arr[idx] = core.ArrayValue{V: newChild}
 	} else {
-		var child map[string]Value
-		if o, ok := existing.(ObjectValue); ok {
-			child = make(map[string]Value, len(o.V))
+		var child map[string]core.Value
+		if o, ok := existing.(core.ObjectValue); ok {
+			child = make(map[string]core.Value, len(o.V))
 			for k, v := range o.V {
 				child[k] = v
 			}
 		} else {
-			child = make(map[string]Value)
+			child = make(map[string]core.Value)
 		}
 		if err := setInMap(child, tail, value); err != nil {
 			return nil, fmt.Errorf("[%d]: %w", head.Idx, err)
 		}
-		arr[idx] = ObjectValue{V: child}
+		arr[idx] = core.ObjectValue{V: child}
 	}
 
 	return arr, nil
 }
 
-func (t *MapTarget) Delete(path Path) error {
+func (t *MapTarget) Delete(path core.Path) error {
 	root := t.rootMap(path.Root)
 
 	if len(path.Segments) == 0 {
@@ -224,7 +228,7 @@ func (t *MapTarget) Delete(path Path) error {
 	return deleteFromMap(root, path.Segments)
 }
 
-func deleteFromMap(obj map[string]Value, segs []Segment) error {
+func deleteFromMap(obj map[string]core.Value, segs []core.Segment) error {
 	head, tail := segs[0], segs[1:]
 
 	if head.IsIndex() {
@@ -242,36 +246,36 @@ func deleteFromMap(obj map[string]Value, segs []Segment) error {
 	}
 
 	if tail[0].IsIndex() {
-		a, ok := existing.(ArrayValue)
+		a, ok := existing.(core.ArrayValue)
 		if !ok {
 			return nil
 		}
-		arr := make([]Value, len(a.V))
+		arr := make([]core.Value, len(a.V))
 		copy(arr, a.V)
 		newArr, err := deleteFromArray(arr, tail)
 		if err != nil {
 			return fmt.Errorf(".%s: %w", head.Field, err)
 		}
-		obj[head.Field] = ArrayValue{V: newArr}
+		obj[head.Field] = core.ArrayValue{V: newArr}
 	} else {
-		o, ok := existing.(ObjectValue)
+		o, ok := existing.(core.ObjectValue)
 		if !ok {
 			return nil
 		}
-		child := make(map[string]Value, len(o.V))
+		child := make(map[string]core.Value, len(o.V))
 		for k, v := range o.V {
 			child[k] = v
 		}
 		if err := deleteFromMap(child, tail); err != nil {
 			return fmt.Errorf(".%s: %w", head.Field, err)
 		}
-		obj[head.Field] = ObjectValue{V: child}
+		obj[head.Field] = core.ObjectValue{V: child}
 	}
 
 	return nil
 }
 
-func deleteFromArray(arr []Value, segs []Segment) ([]Value, error) {
+func deleteFromArray(arr []core.Value, segs []core.Segment) ([]core.Value, error) {
 	head, tail := segs[0], segs[1:]
 
 	if !head.IsIndex() {
@@ -290,30 +294,30 @@ func deleteFromArray(arr []Value, segs []Segment) ([]Value, error) {
 	existing := arr[idx]
 
 	if tail[0].IsIndex() {
-		a, ok := existing.(ArrayValue)
+		a, ok := existing.(core.ArrayValue)
 		if !ok {
 			return arr, nil
 		}
-		child := make([]Value, len(a.V))
+		child := make([]core.Value, len(a.V))
 		copy(child, a.V)
 		newChild, err := deleteFromArray(child, tail)
 		if err != nil {
 			return nil, fmt.Errorf("[%d]: %w", head.Idx, err)
 		}
-		arr[idx] = ArrayValue{V: newChild}
+		arr[idx] = core.ArrayValue{V: newChild}
 	} else {
-		o, ok := existing.(ObjectValue)
+		o, ok := existing.(core.ObjectValue)
 		if !ok {
 			return arr, nil
 		}
-		child := make(map[string]Value, len(o.V))
+		child := make(map[string]core.Value, len(o.V))
 		for k, v := range o.V {
 			child[k] = v
 		}
 		if err := deleteFromMap(child, tail); err != nil {
 			return nil, fmt.Errorf("[%d]: %w", head.Idx, err)
 		}
-		arr[idx] = ObjectValue{V: child}
+		arr[idx] = core.ObjectValue{V: child}
 	}
 
 	return arr, nil

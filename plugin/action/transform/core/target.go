@@ -1,4 +1,11 @@
-package transform
+package core
+
+type PathRoot int
+
+const (
+	EventRoot PathRoot = iota
+	MetadataRoot
+)
 
 // Segment is a single resolved step in a runtime path.
 // Exactly one mode is active per segment.

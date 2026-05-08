@@ -1,14 +1,17 @@
-package transform
+package core
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"time"
 )
 
+var AbortError = errors.New("abort")
+
 // evalBlock evaluates a sequence of expressions and returns the value of the last one.
 // An empty block evaluates to null.
-func evalBlock(ctx *Context, exprs []Expr) (Value, error) {
+func evalBlock(ctx EvalContext, exprs []Expr) (Value, error) {
 	var last Value = NullValue{}
 	for _, expr := range exprs {
 		val, err := expr.Eval(ctx)
@@ -20,35 +23,35 @@ func evalBlock(ctx *Context, exprs []Expr) (Value, error) {
 	return last, nil
 }
 
-func (e *IntLit) Eval(_ *Context) (Value, error) {
+func (e *IntLit) Eval(_ EvalContext) (Value, error) {
 	return IntegerValue{V: e.Value}, nil
 }
 
-func (e *FloatLit) Eval(_ *Context) (Value, error) {
+func (e *FloatLit) Eval(_ EvalContext) (Value, error) {
 	return FloatValue{V: e.Value}, nil
 }
 
-func (e *StringLit) Eval(_ *Context) (Value, error) {
+func (e *StringLit) Eval(_ EvalContext) (Value, error) {
 	return StringValue{V: e.Value}, nil
 }
 
-func (e *BoolLit) Eval(_ *Context) (Value, error) {
+func (e *BoolLit) Eval(_ EvalContext) (Value, error) {
 	return BoolValue{V: e.Value}, nil
 }
 
-func (e *NullLit) Eval(_ *Context) (Value, error) {
+func (e *NullLit) Eval(_ EvalContext) (Value, error) {
 	return NullValue{}, nil
 }
 
-func (e *RegexLit) Eval(_ *Context) (Value, error) {
-	return RegexValue{V: e.compiled}, nil
+func (e *RegexLit) Eval(_ EvalContext) (Value, error) {
+	return RegexValue{V: e.Compiled}, nil
 }
 
-func (e *TimestampLit) Eval(_ *Context) (Value, error) {
-	return TimestampValue{V: e.parsed}, nil
+func (e *TimestampLit) Eval(_ EvalContext) (Value, error) {
+	return TimestampValue{V: e.Parsed}, nil
 }
 
-func (e *IdentExpr) Eval(ctx *Context) (Value, error) {
+func (e *IdentExpr) Eval(ctx EvalContext) (Value, error) {
 	if val, ok := ctx.GetVar(e.Name); ok {
 		return val, nil
 	}
@@ -56,12 +59,12 @@ func (e *IdentExpr) Eval(ctx *Context) (Value, error) {
 	return NullValue{}, nil
 }
 
-func (e *PathExpr) Eval(ctx *Context) (Value, error) {
+func (e *PathExpr) Eval(ctx EvalContext) (Value, error) {
 	path, err := e.toRuntimePath(ctx)
 	if err != nil {
 		return NullValue{}, err
 	}
-	val, err := ctx.Target.Get(path)
+	val, err := ctx.GetTarget().Get(path)
 	return val, err
 }
 
@@ -72,7 +75,7 @@ func (e *PathExpr) Eval(ctx *Context) (Value, error) {
 //   - [0]              -> IndexSeg(0)
 //   - ["key"]          -> FieldSeg("key")   - string key becomes a named field
 //   - [.dynamic_idx]   -> IndexSeg(n)       - expression evaluated at runtime
-func (e *PathExpr) toRuntimePath(ctx *Context) (Path, error) {
+func (e *PathExpr) toRuntimePath(ctx EvalContext) (Path, error) {
 	segs := make([]Segment, 0, len(e.Segments))
 
 	for _, s := range e.Segments {
@@ -100,7 +103,7 @@ func (e *PathExpr) toRuntimePath(ctx *Context) (Path, error) {
 	return Path{Root: e.Root, Segments: segs}, nil
 }
 
-func (e *ArrayExpr) Eval(ctx *Context) (Value, error) {
+func (e *ArrayExpr) Eval(ctx EvalContext) (Value, error) {
 	elements := make([]Value, len(e.Elements))
 	for i, el := range e.Elements {
 		val, err := el.Eval(ctx)
@@ -112,7 +115,7 @@ func (e *ArrayExpr) Eval(ctx *Context) (Value, error) {
 	return ArrayValue{V: elements}, nil
 }
 
-func (e *ObjectExpr) Eval(ctx *Context) (Value, error) {
+func (e *ObjectExpr) Eval(ctx EvalContext) (Value, error) {
 	result := make(map[string]Value, len(e.Pairs))
 	for _, kv := range e.Pairs {
 		val, err := kv.Value.Eval(ctx)
@@ -124,7 +127,7 @@ func (e *ObjectExpr) Eval(ctx *Context) (Value, error) {
 	return ObjectValue{V: result}, nil
 }
 
-func (e *UnaryExpr) Eval(ctx *Context) (Value, error) {
+func (e *UnaryExpr) Eval(ctx EvalContext) (Value, error) {
 	operand, err := e.Operand.Eval(ctx)
 	if err != nil {
 		return NullValue{}, err
@@ -152,7 +155,7 @@ func evalNegate(pos Position, operand Value) (Value, error) {
 		pos, operand.Kind())
 }
 
-func (e *BinaryExpr) Eval(ctx *Context) (Value, error) {
+func (e *BinaryExpr) Eval(ctx EvalContext) (Value, error) {
 	switch e.Op {
 	case "&&":
 		left, err := e.Left.Eval(ctx)
@@ -200,7 +203,7 @@ func (e *BinaryExpr) Eval(ctx *Context) (Value, error) {
 	return NullValue{}, fmt.Errorf("%s: unknown binary operator %q", e.Pos(), e.Op)
 }
 
-func (e *AssignExpr) Eval(ctx *Context) (Value, error) {
+func (e *AssignExpr) Eval(ctx EvalContext) (Value, error) {
 	value, err := e.Value.Eval(ctx)
 	if err != nil {
 		return NullValue{}, err
@@ -216,7 +219,7 @@ func (e *AssignExpr) Eval(ctx *Context) (Value, error) {
 		if err != nil {
 			return NullValue{}, err
 		}
-		if err := ctx.Target.Set(path, value); err != nil {
+		if err := ctx.GetTarget().Set(path, value); err != nil {
 			return NullValue{}, fmt.Errorf("%s: %w", e.Pos(), err)
 		}
 		return value, nil
@@ -232,7 +235,7 @@ func (e *AssignExpr) Eval(ctx *Context) (Value, error) {
 
 // evalIndexAssign handles arr[n] = value and obj["key"] = value
 // where the object is a local variable (IdentExpr).
-func evalIndexAssign(ctx *Context, target *IndexExpr, value Value) error {
+func evalIndexAssign(ctx EvalContext, target *IndexExpr, value Value) error {
 	ident, ok := target.Object.(*IdentExpr)
 	if !ok {
 		return fmt.Errorf("index assignment target must be a local variable, got %T",
@@ -287,7 +290,7 @@ func evalIndexAssign(ctx *Context, target *IndexExpr, value Value) error {
 }
 
 // Eval resolves arr[n] and obj["key"] on local variables and call results.
-func (e *IndexExpr) Eval(ctx *Context) (Value, error) {
+func (e *IndexExpr) Eval(ctx EvalContext) (Value, error) {
 	obj, err := e.Object.Eval(ctx)
 	if err != nil {
 		return NullValue{}, err
@@ -332,12 +335,7 @@ func evalIndex(pos Position, obj, idx Value) (Value, error) {
 	return NullValue{}, fmt.Errorf("%s: cannot index into %s", pos, obj.Kind())
 }
 
-func (e *CallExpr) Eval(ctx *Context) (Value, error) {
-	fn, ok := ctx.Registry.Get(e.Name)
-	if !ok {
-		return NullValue{}, fmt.Errorf("%s: unknown function %q", e.Pos(), e.Name)
-	}
-
+func (e *CallExpr) Eval(ctx EvalContext) (Value, error) {
 	var positional []Value
 	named := make(map[string]Value)
 
@@ -356,20 +354,9 @@ func (e *CallExpr) Eval(ctx *Context) (Value, error) {
 		}
 	}
 
-	resolved, err := ctx.Registry.ResolveArgs(fn, positional, named)
-	if err != nil {
-		// null or error ???
-		return NullValue{}, nil
-	}
-
-	result, err := fn.Call(resolved)
-	if err != nil {
-		// null or error ???
-		return NullValue{}, nil
-	}
-	return result, nil
+	return ctx.CallFunc(e.Pos(), e.Name, positional, named)
 }
-func (e *IfExpr) Eval(ctx *Context) (Value, error) {
+func (e *IfExpr) Eval(ctx EvalContext) (Value, error) {
 	condition, err := e.Condition.Eval(ctx)
 	if err != nil {
 		return NullValue{}, err
@@ -385,22 +372,22 @@ func (e *IfExpr) Eval(ctx *Context) (Value, error) {
 	return NullValue{}, nil
 }
 
-func (e *AbortExpr) Eval(_ *Context) (Value, error) {
-	return NullValue{}, AbortError{}
+func (e *AbortExpr) Eval(_ EvalContext) (Value, error) {
+	return NullValue{}, AbortError
 }
 
-func (e *DelExpr) Eval(ctx *Context) (Value, error) {
+func (e *DelExpr) Eval(ctx EvalContext) (Value, error) {
 	path, err := e.Target.toRuntimePath(ctx)
 	if err != nil {
 		return NullValue{}, err
 	}
-	if err := ctx.Target.Delete(path); err != nil {
+	if err := ctx.GetTarget().Delete(path); err != nil {
 		return NullValue{}, fmt.Errorf("%s: del: %w", e.Pos(), err)
 	}
 	return NullValue{}, nil
 }
 
-func (e *ForExpr) Eval(ctx *Context) (Value, error) {
+func (e *ForExpr) Eval(ctx EvalContext) (Value, error) {
 	iterVal, err := e.Iter.Eval(ctx)
 	if err != nil {
 		return NullValue{}, err
@@ -421,7 +408,7 @@ func (e *ForExpr) Eval(ctx *Context) (Value, error) {
 
 		_, err := evalBlock(ctx, e.Body)
 		if err != nil {
-			if IsAbort(err) {
+			if errors.Is(err, AbortError) {
 				return NullValue{}, err
 			}
 			return NullValue{}, err
@@ -602,4 +589,11 @@ func cmpTimestamps(op string, l, r time.Time) bool {
 		return !l.Before(r)
 	}
 	return false
+}
+
+func resolveIndex(idx, length int) int {
+	if idx < 0 {
+		idx = length + idx
+	}
+	return idx
 }
