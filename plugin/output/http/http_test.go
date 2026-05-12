@@ -20,15 +20,29 @@ func TestAppendEvent(t *testing.T) {
 
 	p.Start(config, test.NewEmptyOutputPluginParams())
 
-	root, _ := insaneJSON.DecodeBytes([]byte(`{"field_a":"AAAA","field_b":"BBBB"}`))
+	root, _ := insaneJSON.DecodeBytes([]byte(`{"message":{"msg":"some info"},"field_a":"AAAA","field_b":"BBBB"}`))
 	defer insaneJSON.Release(root)
 
 	data := data{}
 	event := &pipeline.Event{Root: root}
 
-	data.outBuf, _ = event.Encode(data.outBuf)
+	encoder, err := newJSONEncoder(&JSONEncoderParams{})
+	assert.NoError(t, err)
+
+	data.outBuf = encoder.Encode(event, data.outBuf)
 	data.outBuf = append(data.outBuf, '\n')
 
-	expected := fmt.Sprintf("%s\n", `{"field_a":"AAAA","field_b":"BBBB"}`)
+	expected := fmt.Sprintf("%s\n", `{"message":{"msg":"some info"},"field_a":"AAAA","field_b":"BBBB"}`)
+	assert.Equal(t, expected, string(data.outBuf), "wrong request content")
+
+	data.outBuf = data.outBuf[:0]
+	var params RawEncoderParams
+	rawEncoder, err := newRawEncoder(&params)
+	assert.NoError(t, err)
+
+	data.outBuf = rawEncoder.Encode(event, data.outBuf)
+	data.outBuf = append(data.outBuf, '\n')
+
+	expected = fmt.Sprintf("%s\n", `{"msg":"some info"}`)
 	assert.Equal(t, expected, string(data.outBuf), "wrong request content")
 }

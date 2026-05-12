@@ -31,7 +31,8 @@ const (
 type Plugin struct {
 	config *Config
 
-	client *xhttp.Client
+	client  *xhttp.Client
+	encoder Encoder
 
 	logger     *zap.Logger
 	controller pipeline.OutputPluginController
@@ -60,6 +61,12 @@ type Config struct {
 	// >
 	// > Content-Type header for HTTP requests.
 	ContentType string `json:"content_type" default:"application/json"` // *
+
+	// > @3@4@5@6
+	// >
+	// > Configure event serialization before sending.
+	// > By default `json` is used.
+	Encoding EncodingConfig `json:"encoding" child:"true"` // *
 
 	// > @3@4@5@6
 	// >
@@ -200,6 +207,12 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.registerMetrics(params.MetricCtl)
 	p.mu = &sync.Mutex{}
 
+	var err error
+	p.encoder, err = NewEncoder(p.config.Encoding)
+	if err != nil {
+		p.logger.Fatal("can't create encoder", zap.Error(err))
+	}
+
 	p.prepareClient()
 
 	p.logger.Info("starting batcher", zap.Duration("timeout", p.config.BatchFlushTimeout_))
@@ -326,7 +339,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 	batch.ForEach(func(event *pipeline.Event) {
 		eventsCount++
 		data.begin = append(data.begin, len(data.outBuf))
-		data.outBuf, _ = event.Encode(data.outBuf)
+		data.outBuf = p.encoder.Encode(event, data.outBuf)
 		data.outBuf = append(data.outBuf, '\n')
 	})
 	data.begin = append(data.begin, len(data.outBuf))
