@@ -65,7 +65,12 @@ type Config struct {
 	// > @3@4@5@6
 	// >
 	// > Configure event serialization before sending.
-	// > By default `json` is used.
+	// > Includes:
+	// > 1) Type - codec to use for serialising events:
+	// > * `json` - serialises the full event as a JSON object (default).
+	// > * `raw`  - extracts a single field and sends its value as-is.
+	//  > By default `json` is used.
+	// > 2) Params - Encoder parameters.
 	Encoding EncodingConfig `json:"encoding" child:"true"` // *
 
 	// > @3@4@5@6

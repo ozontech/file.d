@@ -54,17 +54,8 @@ func (e *RawEncoder) Encode(event *pipeline.Event, buf []byte) []byte {
 }
 
 type EncodingConfig struct {
-	// > @3@4@5@6
-	// >
-	// > Codec to use for serialising events:
-	// > * `json` — serialises the full event as a JSON object (default).
-	// > * `raw`  — extracts a single field and sends its value as-is.
-	Type string `json:"type" default:"json" options:"json|raw"` // *
-
-	// > @3@4@5@6
-	// >
-	// > Encoder parameters.
-	Params json.RawMessage `json:"params"` // *
+	Type   string          `json:"type" default:"json" options:"json|raw"`
+	Params json.RawMessage `json:"params"`
 }
 
 func NewEncoder(cfg EncodingConfig) (Encoder, error) {
