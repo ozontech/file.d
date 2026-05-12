@@ -20,8 +20,8 @@ type JSONEncoderParams struct{}
 
 type JSONEncoder struct{}
 
-func newJSONEncoder(_ *JSONEncoderParams) (*JSONEncoder, error) {
-	return &JSONEncoder{}, nil
+func newJSONEncoder(_ *JSONEncoderParams) *JSONEncoder {
+	return &JSONEncoder{}
 }
 
 func (e *JSONEncoder) Encode(event *pipeline.Event, buf []byte) []byte {
@@ -37,12 +37,12 @@ type RawEncoder struct {
 	field string
 }
 
-func newRawEncoder(params *RawEncoderParams) (*RawEncoder, error) {
+func newRawEncoder(params *RawEncoderParams) *RawEncoder {
 	field := params.Field
 	if field == "" {
 		field = "message"
 	}
-	return &RawEncoder{field: field}, nil
+	return &RawEncoder{field: field}
 }
 
 func (e *RawEncoder) Encode(event *pipeline.Event, buf []byte) []byte {
@@ -61,7 +61,7 @@ type EncodingConfig struct {
 func NewEncoder(cfg EncodingConfig) (Encoder, error) {
 	switch cfg.Type {
 	case EncoderTypeJSON, "":
-		return newJSONEncoder(&JSONEncoderParams{})
+		return newJSONEncoder(&JSONEncoderParams{}), nil
 
 	case EncoderTypeRaw:
 		var params RawEncoderParams
@@ -70,7 +70,7 @@ func NewEncoder(cfg EncodingConfig) (Encoder, error) {
 				return nil, fmt.Errorf("raw encoder params: %w", err)
 			}
 		}
-		return newRawEncoder(&params)
+		return newRawEncoder(&params), nil
 
 	default:
 		return nil, fmt.Errorf("unknown encoding type %q; supported: json, raw", cfg.Type)

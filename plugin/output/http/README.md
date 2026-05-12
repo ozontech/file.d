@@ -21,8 +21,8 @@ Content-Type header for HTTP requests.
 
 Configure event serialization before sending.
 Includes:
-1) Type - codec to use for serialising events:
-* `json` - serialises the full event as a JSON object (default).
+1) Type - codec to use for serializing events:
+* `json` - serializes the full event as a JSON object (default).
 * `raw`  - extracts a single field and sends its value as-is.
 2) Params - Encoder parameters.
 

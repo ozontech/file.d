@@ -26,9 +26,7 @@ func TestAppendEvent(t *testing.T) {
 	data := data{}
 	event := &pipeline.Event{Root: root}
 
-	encoder, err := newJSONEncoder(&JSONEncoderParams{})
-	assert.NoError(t, err)
-
+	encoder := newJSONEncoder(&JSONEncoderParams{})
 	data.outBuf = encoder.Encode(event, data.outBuf)
 	data.outBuf = append(data.outBuf, '\n')
 
@@ -37,9 +35,8 @@ func TestAppendEvent(t *testing.T) {
 
 	data.outBuf = data.outBuf[:0]
 	var params RawEncoderParams
-	rawEncoder, err := newRawEncoder(&params)
-	assert.NoError(t, err)
 
+	rawEncoder := newRawEncoder(&params)
 	data.outBuf = rawEncoder.Encode(event, data.outBuf)
 	data.outBuf = append(data.outBuf, '\n')
 
