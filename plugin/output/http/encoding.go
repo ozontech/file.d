@@ -48,7 +48,7 @@ func newRawEncoder(params *RawEncoderParams) *RawEncoder {
 func (e *RawEncoder) Encode(event *pipeline.Event, buf []byte) []byte {
 	node := event.Root.Dig(e.field)
 	if node == nil {
-		return []byte{}
+		return buf[:0]
 	}
 	return append(buf, node.EncodeToByte()...)
 }

@@ -20,7 +20,7 @@ func TestAppendEvent(t *testing.T) {
 
 	p.Start(config, test.NewEmptyOutputPluginParams())
 
-	root, _ := insaneJSON.DecodeBytes([]byte(`{"message":{"msg":"some info"},"field_a":"AAAA","field_b":"BBBB"}`))
+	root, _ := insaneJSON.DecodeBytes([]byte(`{"message":"[INFO] some event","field_a":"AAAA","field_b":"BBBB"}`))
 	defer insaneJSON.Release(root)
 
 	data := data{}
@@ -30,7 +30,7 @@ func TestAppendEvent(t *testing.T) {
 	data.outBuf = encoder.Encode(event, data.outBuf)
 	data.outBuf = append(data.outBuf, '\n')
 
-	expected := fmt.Sprintf("%s\n", `{"message":{"msg":"some info"},"field_a":"AAAA","field_b":"BBBB"}`)
+	expected := fmt.Sprintf("%s\n", `{"message":"[INFO] some event","field_a":"AAAA","field_b":"BBBB"}`)
 	assert.Equal(t, expected, string(data.outBuf), "wrong request content")
 
 	data.outBuf = data.outBuf[:0]
@@ -40,6 +40,6 @@ func TestAppendEvent(t *testing.T) {
 	data.outBuf = rawEncoder.Encode(event, data.outBuf)
 	data.outBuf = append(data.outBuf, '\n')
 
-	expected = fmt.Sprintf("%s\n", `{"msg":"some info"}`)
+	expected = fmt.Sprintf("%s\n", `"[INFO] some event"`)
 	assert.Equal(t, expected, string(data.outBuf), "wrong request content")
 }
