@@ -8,14 +8,12 @@ import (
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/plugin/action/transform/compiler"
 	"github.com/ozontech/file.d/plugin/action/transform/core"
-	"github.com/ozontech/file.d/plugin/action/transform/parser"
 	"github.com/ozontech/file.d/plugin/action/transform/runtime"
 	"github.com/ozontech/file.d/plugin/action/transform/stdlib"
 	"go.uber.org/zap"
 )
 
 var (
-	globalLexer   = parser.NewCompiledLexer()
 	compilerCache = map[string]*compiler.Compiler{}
 )
 
@@ -58,18 +56,15 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 	p.registry = core.NewRegistry()
 	p.registry.MustRegister(stdlib.Upcase{})
 
-	parser := parser.NewParser(globalLexer)
-	tokens, err := parser.Parse(p.config.Source)
-
-	if err != nil {
-		p.logger.Fatal("parsing error", zap.Error(err))
-	}
-
+	var err error
 	cacheKey := fmt.Sprintf("%s_%d", params.PipelineName, params.Index)
 	c, ok := compilerCache[cacheKey]
 	if !ok {
 		p.logger.Info("create compiler")
-		c = compiler.NewCompiler(tokens)
+		c, err = compiler.NewCompiler(p.config.Source)
+		if err != nil {
+			p.logger.Fatal("parsing error", zap.Error(err))
+		}
 		compilerCache[cacheKey] = c
 	}
 
@@ -92,11 +87,10 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	ctx := runtime.NewContext(target, p.registry)
 
 	for _, expr := range p.expressions {
-		fmt.Println(core.DumpAST(expr, 0))
 		_, err := expr.Eval(ctx)
 		if err != nil {
 			if errors.Is(err, core.AbortError) {
-				p.logger.Info("transform program aborted")
+				p.logger.Debug("transform program aborted")
 				return pipeline.ActionPass
 			}
 			p.logger.Error("transform runtime error", zap.String("position", expr.Pos().String()), zap.Error(err))

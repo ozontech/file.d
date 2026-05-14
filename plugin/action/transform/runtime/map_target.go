@@ -21,26 +21,16 @@ func NewMapTarget() *MapTarget {
 
 func NewMapTargetFrom(event map[string]core.Value) *MapTarget {
 	t := NewMapTarget()
-	for k, v := range event {
-		t.event[k] = v
-	}
+	t.event = event
 	return t
 }
 
 func (t *MapTarget) Event() map[string]core.Value {
-	out := make(map[string]core.Value, len(t.event))
-	for k, v := range t.event {
-		out[k] = v
-	}
-	return out
+	return t.event
 }
 
 func (t *MapTarget) Metadata() map[string]core.Value {
-	out := make(map[string]core.Value, len(t.metadata))
-	for k, v := range t.metadata {
-		out[k] = v
-	}
-	return out
+	return t.metadata
 }
 
 func (t *MapTarget) rootMap(r core.PathRoot) map[string]core.Value {

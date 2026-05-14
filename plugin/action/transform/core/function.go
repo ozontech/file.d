@@ -2,6 +2,7 @@ package core
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 )
 
@@ -77,11 +78,7 @@ func (r *Registry) Get(name string) (Function, bool) {
 }
 
 // Maps evaluated argument values to the function's parameter map.
-func (r *Registry) ResolveArgs(
-	fn Function,
-	positional []Value,
-	named map[string]Value,
-) (map[string]Value, error) {
+func (r *Registry) ResolveArgs(fn Function, positional []Value, named map[string]Value) (map[string]Value, error) {
 	params := fn.Params()
 
 	if len(positional) > len(params) {
@@ -107,9 +104,8 @@ func (r *Registry) ResolveArgs(
 	}
 
 	for argName, val := range named {
-		if !r.isKnownParam(params, argName) {
-			return nil, fmt.Errorf(
-				"function %q: unknown argument %q", fn.Name(), argName)
+		if !slices.ContainsFunc(params, func(p Parameter) bool { return p.Name == argName }) {
+			return nil, fmt.Errorf("function %q: unknown argument %q", fn.Name(), argName)
 		}
 		if explicit[argName] {
 			return nil, fmt.Errorf(
@@ -136,7 +132,7 @@ func (r *Registry) ResolveArgs(
 		if !ok {
 			continue
 		}
-		if !kindAccepted(val.Kind(), p.AcceptedKinds) {
+		if !slices.Contains(p.AcceptedKinds, val.Kind()) {
 			return nil, fmt.Errorf(
 				"function %q: argument %q: expected %s, got %s",
 				fn.Name(), p.Name,
@@ -147,24 +143,6 @@ func (r *Registry) ResolveArgs(
 	}
 
 	return resolved, nil
-}
-
-func (r *Registry) isKnownParam(params []Parameter, name string) bool {
-	for _, p := range params {
-		if p.Name == name {
-			return true
-		}
-	}
-	return false
-}
-
-func kindAccepted(k ValueKind, accepted []ValueKind) bool {
-	for _, a := range accepted {
-		if k == a {
-			return true
-		}
-	}
-	return false
 }
 
 func joinKinds(kinds []ValueKind) string {

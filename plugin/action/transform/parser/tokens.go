@@ -61,7 +61,7 @@ const (
 	DOT       // .
 )
 
-var TokenNames = map[TokenType]string{
+var tokenNames = map[TokenType]string{
 	EOF:            "EOF",
 	WHITESPACE:     "WHITESPACE",
 	COMMENT:        "COMMENT",
@@ -123,6 +123,10 @@ const (
 	BpCall           // 9 — fn()  expr[]
 )
 
+func (t TokenType) String() string {
+	return tokenNames[t]
+}
+
 func (t TokenType) BindingPower() int {
 	switch t {
 	case OP_ASSIGN:
@@ -161,10 +165,6 @@ type Token struct {
 	StartColumn int
 	EndLine     int
 	EndColumn   int
-}
-
-func (t Token) Name() string {
-	return TokenNames[t.Type]
 }
 
 func (t Token) StartPos() Position {

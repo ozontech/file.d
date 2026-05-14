@@ -22,26 +22,27 @@ func TestLanguage(t *testing.T) {
 		name   string
 		source string
 		events []eventCase
-	}{{
-		name:   "assign",
-		source: `.res = "hello"`,
-		events: []eventCase{
-			{
-				in:     `{"x":1}`,
-				fields: map[string]string{"res": "hello"},
+	}{
+		{
+			name:   "assign",
+			source: `.res = "hello"`,
+			events: []eventCase{
+				{
+					in:     `{"x":1}`,
+					fields: map[string]string{"res": "hello"},
+				},
 			},
 		},
-	},
 		{
 			name: "literals",
 			source: `
-		.str   = "hello"
-		.raw   = s'no\escape'
-		.num   = 42
-		.flt   = 3.14
-		.bool  = true
-		.nl    = null
-	`,
+			.str   = "hello"
+			.raw   = s'no\escape'
+			.num   = 42
+			.flt   = 3.14
+			.bool  = true
+			.nl    = null
+		`,
 			events: []eventCase{
 				{
 					in: `{"x":1}`,
@@ -58,13 +59,13 @@ func TestLanguage(t *testing.T) {
 		}, {
 			name: "arithmetic",
 			source: `
-		.add  = .a + .b
-		.sub  = .a - .b
-		.mul  = .a * .b
-		.div  = .a / .b
-		.mod  = .a % .b
-		.conc = .s + "_suffix"
-	`,
+			.add  = .a + .b
+			.sub  = .a - .b
+			.mul  = .a * .b
+			.div  = .a / .b
+			.mod  = .a % .b
+			.conc = .s + "_suffix"
+		`,
 			events: []eventCase{
 				{
 					in: `{"a":10,"b":3,"s":"hello"}`,
@@ -82,14 +83,14 @@ func TestLanguage(t *testing.T) {
 		{
 			name: "comparison",
 			source: `
-		.gt  = .a > .b
-		.lt  = .a < .b
-		.gte = .a >= .b
-		.lte = .a <= .b
-		.eq  = .a == .b
-		.neq = .a != .b
-		.seq = .s == "hello"
-	`,
+			.gt  = .a > .b
+			.lt  = .a < .b
+			.gte = .a >= .b
+			.lte = .a <= .b
+			.eq  = .a == .b
+			.neq = .a != .b
+			.seq = .s == "hello"
+		`,
 			events: []eventCase{
 				{
 					in: `{"a":10,"b":3,"s":"hello"}`,
@@ -108,10 +109,10 @@ func TestLanguage(t *testing.T) {
 		{
 			name: "logical",
 			source: `
-		.and  = .a && .b
-		.or   = .b || .c
-		.not  = !.c
-	`,
+			.and  = .a && .b
+			.or   = .b || .c
+			.not  = !.c
+		`,
 			events: []eventCase{
 				{
 					in: `{"a":true,"b":false,"c":false}`,
@@ -127,14 +128,14 @@ func TestLanguage(t *testing.T) {
 		{
 			name: "if_else",
 			source: `
-		if .status >= 500 {
-			.severity = "critical"
-		} else if .status >= 400 {
-			.severity = "warning"
-		} else {
-			.severity = "ok"
-		}
-	`,
+			if .status >= 500 {
+				.severity = "critical"
+			} else if .status >= 400 {
+				.severity = "warning"
+			} else {
+				.severity = "ok"
+			}
+		`,
 			events: []eventCase{
 				{
 					in:     `{"status":503}`,
@@ -154,11 +155,11 @@ func TestLanguage(t *testing.T) {
 		{
 			name: "abort",
 			source: `
-		if .drop == true {
-			abort
-		}
-		.processed = true
-	`,
+			if .drop == true {
+				abort
+			}
+			.processed = true
+		`,
 			events: []eventCase{
 				{
 					in:     `{"drop":true}`,
@@ -173,11 +174,11 @@ func TestLanguage(t *testing.T) {
 		{
 			name: "path",
 			source: `
-		.user.role  = "admin"
-		.tags[0]    = "first"
-		idx         = 1
-		.tags[idx]  = "second"
-	`,
+			.user.role  = "admin"
+			.tags[0]    = "first"
+			idx         = 1
+			.tags[idx]  = "second"
+		`,
 			events: []eventCase{
 				{
 					in: `{"user":{},"tags":["",""]}`,
@@ -193,12 +194,12 @@ func TestLanguage(t *testing.T) {
 		{
 			name: "array",
 			source: `
-		arr       = [1, 2, 3]
-		.first    = arr[0]
-		.last     = arr[-1]
-		arr[0]    = 99
-		.modified = arr[0]
-	`,
+			arr       = [1, 2, 3]
+			.first    = arr[0]
+			.last     = arr[-1]
+			arr[0]    = 99
+			.modified = arr[0]
+		`,
 			events: []eventCase{
 				{
 					in: `{"x":1}`,
@@ -214,10 +215,10 @@ func TestLanguage(t *testing.T) {
 		{
 			name: "object",
 			source: `
-		obj    = {"a": 1, "b": 2}
-		.va    = obj["a"]
-		.vb    = obj["b"]
-	`,
+			obj    = {"a": 1, "b": 2}
+			.va    = obj["a"]
+			.vb    = obj["b"]
+		`,
 			events: []eventCase{
 				{
 					in: `{"x":1}`,
@@ -232,12 +233,12 @@ func TestLanguage(t *testing.T) {
 		{
 			name: "for_index",
 			source: `
-		for i in .items {
-			if .items[i]["role"] == "admin" {
-				.items[i]["privileged"] = true
+			for i in .items {
+				if .items[i]["role"] == "admin" {
+					.items[i]["privileged"] = true
+				}
 			}
-		}
-	`,
+		`,
 			events: []eventCase{
 				{
 					in: `{"items":[{"role":"admin"},{"role":"user"}]}`,
@@ -251,12 +252,12 @@ func TestLanguage(t *testing.T) {
 		{
 			name: "for_index_and_item",
 			source: `
-		for i, item in .items {
-			if item["role"] == "admin" {
-				.items[i]["privileged"] = true
+			for i, item in .items {
+				if item["role"] == "admin" {
+					.items[i]["privileged"] = true
+				}
 			}
-		}
-	`,
+		`,
 			events: []eventCase{
 				{
 					in: `{"items":[{"role":"admin"},{"role":"user"}]}`,
@@ -271,10 +272,10 @@ func TestLanguage(t *testing.T) {
 		{
 			name: "for_blank_index",
 			source: `
-		for _, item in .tags {
-			.count = .count + 1
-		}
-	`,
+			for _, item in .tags {
+				.count = .count + 1
+			}
+		`,
 			events: []eventCase{
 				{
 					in:     `{"tags":["a","b","c"],"count":0}`,
@@ -286,9 +287,9 @@ func TestLanguage(t *testing.T) {
 		{
 			name: "delete",
 			source: `
-		del .secret
-		del .user.password
-	`,
+			del .secret
+			del .user.password
+		`,
 			events: []eventCase{
 				{
 					in: `{"secret":"s3cr3t","user":{"name":"user321","password":"123"}}`,
@@ -311,21 +312,21 @@ func TestLanguage(t *testing.T) {
 		{
 			name: "nested",
 			source: `
-		if .level == "error" || .level == "fatal" {
-			.severity = "high"
-		} else {
-			.severity = "low"
-		}
-
-		for i, item in .errors {
-			if item["code"] >= 500 {
-				.errors[i]["critical"] = true
+			if .level == "error" || .level == "fatal" {
+				.severity = "high"
+			} else {
+				.severity = "low"
 			}
-		}
 
-		del .internal
-		.processed = true
-	`,
+			for i, item in .errors {
+				if item["code"] >= 500 {
+					.errors[i]["critical"] = true
+				}
+			}
+
+			del .internal
+			.processed = true
+		`,
 			events: []eventCase{
 				{
 					in: `{"level":"error","errors":[{"code":503},{"code":404}],"internal":"secret"}`,
@@ -351,10 +352,10 @@ func TestLanguage(t *testing.T) {
 		{
 			name: "func_upcase",
 			source: `
-		.level = upcase(.level)
-		name = upcase(.user.name)
-		.user.name = name
-	`,
+			.level = upcase(.level)
+			name = upcase(.user.name)
+			.user.name = name
+		`,
 			events: []eventCase{
 				{
 					in: `{"level":"info","user":{"name":"user321","password":"123"}}`,

@@ -1,44 +1,15 @@
 package parser
 
 import (
-	"fmt"
-
 	"github.com/timtadh/lexmachine"
 	"github.com/timtadh/lexmachine/machines"
 )
 
-type Parser struct {
-	lexer *lexmachine.Lexer
-}
+var (
+	globalLexer = NewLexer()
+)
 
-func NewParser(lexer *lexmachine.Lexer) *Parser {
-	return &Parser{lexer: lexer}
-}
-
-func (v *Parser) Parse(input string) ([]Token, error) {
-	scanner, _ := v.lexer.Scanner([]byte(input))
-
-	var tokens []Token
-	for raw, err, eos := scanner.Next(); !eos; raw, err, eos = scanner.Next() {
-		if err != nil {
-			if ui, ok := err.(*machines.UnconsumedInput); ok {
-				return nil, fmt.Errorf(
-					"unexpected character at (%d:%d): %q",
-					ui.StartLine, ui.StartColumn, string(ui.Text),
-				)
-			}
-			return nil, fmt.Errorf("unexpected parse error: %w", err)
-		}
-		if raw == nil {
-			continue
-		}
-		tokens = append(tokens, raw.(Token))
-	}
-
-	return tokens, nil
-}
-
-func NewCompiledLexer() *lexmachine.Lexer {
+func NewLexer() *lexmachine.Lexer {
 	l := lexmachine.NewLexer()
 
 	token := func(typ TokenType) lexmachine.Action {
@@ -115,7 +86,7 @@ func NewCompiledLexer() *lexmachine.Lexer {
 	l.Add([]byte(`;`), token(SEMICOLON))
 	l.Add([]byte(`\.`), token(DOT))
 
-	l.Compile()
+	_ = l.Compile()
 
 	return l
 }
