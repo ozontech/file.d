@@ -50,7 +50,7 @@ func (e *RawEncoder) Encode(event *pipeline.Event, buf []byte) []byte {
 	if node == nil {
 		return buf[:0]
 	}
-	return append(buf, node.EncodeToByte()...)
+	return node.Encode(buf)
 }
 
 type EncodingConfig struct {
