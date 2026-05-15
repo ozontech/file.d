@@ -19,6 +19,7 @@ const (
 	fieldUnknownOp fieldOpType = iota
 	fieldEqualOp
 	fieldContainsOp
+	fieldContainsAnyOp
 	fieldPrefixOp
 	fieldSuffixOp
 	fieldRegexOp
@@ -27,15 +28,17 @@ const (
 func (t fieldOpType) String() string {
 	switch t {
 	case fieldEqualOp:
-		return "equal"
+		return fieldEqualOpTag
 	case fieldContainsOp:
-		return "contains"
+		return fieldContainsOpTag
+	case fieldContainsAnyOp:
+		return fieldContainsAnyOpTag
 	case fieldPrefixOp:
-		return "prefix"
+		return fieldPrefixOpTag
 	case fieldSuffixOp:
-		return "suffix"
+		return fieldSuffixOpTag
 	case fieldRegexOp:
-		return "regex"
+		return fieldRegexOpTag
 	default:
 		return "unknown"
 	}
@@ -87,6 +90,29 @@ const (
 	// > {"pod":"test-pod","service":"test-service-1"}        # not discarded
 	// > ```
 	fieldContainsOpTag = "contains" // *
+
+	// > checks whether the field value contains any of the value characters.
+	// >
+	// > Example:
+	// > ```yaml
+	// > pipelines:
+	// >   test:
+	// >     actions:
+	// >       - type: discard
+	// >         do_if:
+	// >           op: contains_any
+	// >           field: service
+	// >           values: ['!$#']
+	// > ```
+	// >
+	// > result:
+	// > ```
+	// > {"pod":"test-pod","service":"test-service!"}     # discarded
+	// > {"pod":"test-pod","service":"#my_service#"}      # discarded
+	// > {"pod":"test-pod","service":"$$$"}               # discarded
+	// > {"pod":"test-pod","service":"test-service-1"}    # not discarded
+	// > ```
+	fieldContainsAnyOpTag = "contains_any" // *
 
 	// > checks whether the field value has prefix equal to one of the elements in the values list.
 	// >
@@ -184,7 +210,6 @@ pipelines:
           values: [pod-1, pod-2]
           case_sensitive: true
 ```
-
 }*/
 
 type fieldOpNode struct {
@@ -217,6 +242,11 @@ func NewFieldOpNode(op string, field string, caseSensitive bool, values [][]byte
 		fop = fieldEqualOp
 	case fieldContainsOpTag:
 		fop = fieldContainsOp
+	case fieldContainsAnyOpTag:
+		fop = fieldContainsAnyOp
+		if len(values) != 1 || len(values[0]) == 0 {
+			return nil, errors.New("contains_any op must have only 1 non-empty value")
+		}
 	case fieldPrefixOpTag:
 		fop = fieldPrefixOp
 	case fieldSuffixOpTag:
@@ -286,7 +316,8 @@ func (n *fieldOpNode) Type() NodeType {
 func (n *fieldOpNode) Check(data Data) bool {
 	eventData := data.Get(n.fieldPath...)
 	// fast check for data
-	if n.op != fieldRegexOp && len(eventData) < n.minValLen {
+	if n.op != fieldRegexOp && n.op != fieldContainsAnyOp &&
+		len(eventData) < n.minValLen {
 		return false
 	}
 	switch n.op {
@@ -317,6 +348,11 @@ func (n *fieldOpNode) Check(data Data) bool {
 				return true
 			}
 		}
+	case fieldContainsAnyOp:
+		if !n.caseSensitive {
+			eventData = bytes.ToLower(eventData)
+		}
+		return bytes.ContainsAny(eventData, string(n.values[0]))
 	case fieldPrefixOp:
 		// check only necessary amount of bytes
 		if len(eventData) > n.maxValLen {
