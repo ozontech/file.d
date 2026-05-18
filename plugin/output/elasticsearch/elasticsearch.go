@@ -588,7 +588,11 @@ func (p *Plugin) reportESErrors(data []byte) error {
 	for _, node := range items {
 		indexNode := node.Dig("index")
 		if indexNode == nil {
-			p.logger.Error("unknown elasticsearch response, 'index' field in the response is empty",
+			// When batch_op_type is "create", ES returns "create": {...} instead of "index": {...}
+			indexNode = node.Dig("create")
+		}
+		if indexNode == nil {
+			p.logger.Error("unknown elasticsearch response, neither 'index' nor 'create' field found in the response",
 				zap.String("response", node.EncodeToString()),
 			)
 			continue
