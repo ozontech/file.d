@@ -51,23 +51,15 @@ func extractDoIfNode(node map[string]any) (Node, error) {
 	}
 
 	switch opName {
-	case "and", "or", "not":
+	case logicalAndTag, logicalOrTag, logicalNotTag:
 		return extractLogicalOpNode(opName, node)
-	case
-		"equal",
-		"contains",
-		"prefix",
-		"suffix",
-		"regex":
+	case fieldEqualOpTag, fieldContainsOpTag, fieldContainsAnyOpTag, fieldPrefixOpTag, fieldSuffixOpTag, fieldRegexOpTag:
 		return extractFieldOpNode(opName, node)
-	case
-		"byte_len_cmp",
-		"array_len_cmp",
-		"int_val_cmp":
+	case byteLenCmpOpTag, arrayLenCmpOpTag, intValCmpOpTag:
 		return extractLengthCmpOpNode(opName, node)
-	case "ts_cmp":
+	case tsCmpOpTag:
 		return extractTsCmpOpNode(opName, node)
-	case "check_type":
+	case checkTypeOpTag:
 		return extractCheckTypeOpNode(opName, node)
 	default:
 		return nil, fmt.Errorf("unknown op: %s", opName)

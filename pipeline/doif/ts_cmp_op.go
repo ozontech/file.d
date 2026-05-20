@@ -9,7 +9,6 @@ import (
 
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/xtime"
-	insaneJSON "github.com/ozontech/insane-json"
 )
 
 /*{ do-if-ts-cmp-op-node
@@ -58,6 +57,8 @@ Result:
 {"timestamp":"2011-01-01T00:00:00Z"}  # not discarded (condition is not met)
 ```
 }*/
+
+const tsCmpOpTag = "ts_cmp"
 
 type cmpValueChangingMode int
 
@@ -137,8 +138,13 @@ func (n *tsCmpOpNode) Type() NodeType {
 	return NodeTimestampCmpOp
 }
 
-func (n *tsCmpOpNode) Check(eventRoot *insaneJSON.Root) bool {
-	node := eventRoot.Dig(n.fieldPath...)
+func (n *tsCmpOpNode) Check(data Data) bool {
+	eventData, ok := data.(eventData)
+	if !ok {
+		return false
+	}
+
+	node := eventData.root.Dig(n.fieldPath...)
 	if node == nil {
 		return false
 	}

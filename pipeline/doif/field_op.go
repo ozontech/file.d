@@ -8,7 +8,6 @@ import (
 	"slices"
 
 	"github.com/ozontech/file.d/cfg"
-	insaneJSON "github.com/ozontech/insane-json"
 )
 
 // ! do-if-field-op
@@ -20,6 +19,7 @@ const (
 	fieldUnknownOp fieldOpType = iota
 	fieldEqualOp
 	fieldContainsOp
+	fieldContainsAnyOp
 	fieldPrefixOp
 	fieldSuffixOp
 	fieldRegexOp
@@ -28,15 +28,17 @@ const (
 func (t fieldOpType) String() string {
 	switch t {
 	case fieldEqualOp:
-		return "equal"
+		return fieldEqualOpTag
 	case fieldContainsOp:
-		return "contains"
+		return fieldContainsOpTag
+	case fieldContainsAnyOp:
+		return fieldContainsAnyOpTag
 	case fieldPrefixOp:
-		return "prefix"
+		return fieldPrefixOpTag
 	case fieldSuffixOp:
-		return "suffix"
+		return fieldSuffixOpTag
 	case fieldRegexOp:
-		return "regex"
+		return fieldRegexOpTag
 	default:
 		return "unknown"
 	}
@@ -88,6 +90,29 @@ const (
 	// > {"pod":"test-pod","service":"test-service-1"}        # not discarded
 	// > ```
 	fieldContainsOpTag = "contains" // *
+
+	// > checks whether the field value contains any of the value characters.
+	// >
+	// > Example:
+	// > ```yaml
+	// > pipelines:
+	// >   test:
+	// >     actions:
+	// >       - type: discard
+	// >         do_if:
+	// >           op: contains_any
+	// >           field: service
+	// >           values: ['!$#']
+	// > ```
+	// >
+	// > result:
+	// > ```
+	// > {"pod":"test-pod","service":"test-service!"}     # discarded
+	// > {"pod":"test-pod","service":"#my_service#"}      # discarded
+	// > {"pod":"test-pod","service":"$$$"}               # discarded
+	// > {"pod":"test-pod","service":"test-service-1"}    # not discarded
+	// > ```
+	fieldContainsAnyOpTag = "contains_any" // *
 
 	// > checks whether the field value has prefix equal to one of the elements in the values list.
 	// >
@@ -185,7 +210,6 @@ pipelines:
           values: [pod-1, pod-2]
           case_sensitive: true
 ```
-
 }*/
 
 type fieldOpNode struct {
@@ -218,6 +242,11 @@ func NewFieldOpNode(op string, field string, caseSensitive bool, values [][]byte
 		fop = fieldEqualOp
 	case fieldContainsOpTag:
 		fop = fieldContainsOp
+	case fieldContainsAnyOpTag:
+		fop = fieldContainsAnyOp
+		if len(values) != 1 || len(values[0]) == 0 {
+			return nil, errors.New("contains_any op must have only 1 non-empty value")
+		}
 	case fieldPrefixOpTag:
 		fop = fieldPrefixOp
 	case fieldSuffixOpTag:
@@ -284,76 +313,75 @@ func (n *fieldOpNode) Type() NodeType {
 	return NodeFieldOp
 }
 
-func (n *fieldOpNode) Check(eventRoot *insaneJSON.Root) bool {
-	var data []byte
-	node := eventRoot.Dig(n.fieldPath...)
-	if node.IsArray() || node.IsObject() {
-		return false
-	}
-	if !node.IsNull() {
-		data = node.AsBytes()
-	}
+func (n *fieldOpNode) Check(data Data) bool {
+	eventData := data.Get(n.fieldPath...)
 	// fast check for data
-	if n.op != fieldRegexOp && len(data) < n.minValLen {
+	if n.op != fieldRegexOp && n.op != fieldContainsAnyOp &&
+		len(eventData) < n.minValLen {
 		return false
 	}
 	switch n.op {
 	case fieldEqualOp:
-		vals, ok := n.valuesBySize[len(data)]
+		vals, ok := n.valuesBySize[len(eventData)]
 		if !ok {
 			return false
 		}
-		if !n.caseSensitive && data != nil {
-			data = bytes.ToLower(data)
+		if !n.caseSensitive && eventData != nil {
+			eventData = bytes.ToLower(eventData)
 		}
 		for _, val := range vals {
 			// null and empty strings are considered as different values
 			// null can also come if field value is absent
-			if (data == nil && val != nil) || (data != nil && val == nil) {
+			if (eventData == nil && val != nil) || (eventData != nil && val == nil) {
 				continue
 			}
-			if bytes.Equal(data, val) {
+			if bytes.Equal(eventData, val) {
 				return true
 			}
 		}
 	case fieldContainsOp:
 		if !n.caseSensitive {
-			data = bytes.ToLower(data)
+			eventData = bytes.ToLower(eventData)
 		}
 		for _, val := range n.values {
-			if bytes.Contains(data, val) {
+			if bytes.Contains(eventData, val) {
 				return true
 			}
 		}
+	case fieldContainsAnyOp:
+		if !n.caseSensitive {
+			eventData = bytes.ToLower(eventData)
+		}
+		return bytes.ContainsAny(eventData, string(n.values[0]))
 	case fieldPrefixOp:
 		// check only necessary amount of bytes
-		if len(data) > n.maxValLen {
-			data = data[:n.maxValLen]
+		if len(eventData) > n.maxValLen {
+			eventData = eventData[:n.maxValLen]
 		}
 		if !n.caseSensitive {
-			data = bytes.ToLower(data)
+			eventData = bytes.ToLower(eventData)
 		}
 		for _, val := range n.values {
-			if bytes.HasPrefix(data, val) {
+			if bytes.HasPrefix(eventData, val) {
 				return true
 			}
 		}
 	case fieldSuffixOp:
 		// check only necessary amount of bytes
-		if len(data) > n.maxValLen {
-			data = data[len(data)-n.maxValLen:]
+		if len(eventData) > n.maxValLen {
+			eventData = eventData[len(eventData)-n.maxValLen:]
 		}
 		if !n.caseSensitive {
-			data = bytes.ToLower(data)
+			eventData = bytes.ToLower(eventData)
 		}
 		for _, val := range n.values {
-			if bytes.HasSuffix(data, val) {
+			if bytes.HasSuffix(eventData, val) {
 				return true
 			}
 		}
 	case fieldRegexOp:
 		for _, re := range n.reValues {
-			if re.Match(data) {
+			if re.Match(eventData) {
 				return true
 			}
 		}
@@ -372,7 +400,7 @@ func (n *fieldOpNode) isEqualTo(n2 Node, _ int) error {
 	if n.caseSensitive != n2f.caseSensitive {
 		return fmt.Errorf("nodes have different caseSensitive expected: %v", n.caseSensitive)
 	}
-	if n.fieldPathStr != n2f.fieldPathStr || slices.Compare[[]string](n.fieldPath, n2f.fieldPath) != 0 {
+	if n.fieldPathStr != n2f.fieldPathStr || slices.Compare(n.fieldPath, n2f.fieldPath) != 0 {
 		return fmt.Errorf("nodes have different fieldPathStr expected: fieldPathStr=%q fieldPath=%v",
 			n.fieldPathStr, n.fieldPath,
 		)

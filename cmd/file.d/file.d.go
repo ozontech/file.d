@@ -62,6 +62,7 @@ import (
 	_ "github.com/ozontech/file.d/plugin/output/loki"
 	_ "github.com/ozontech/file.d/plugin/output/postgres"
 	_ "github.com/ozontech/file.d/plugin/output/s3"
+	_ "github.com/ozontech/file.d/plugin/output/socket"
 	_ "github.com/ozontech/file.d/plugin/output/splunk"
 	_ "github.com/ozontech/file.d/plugin/output/stdout"
 	insaneJSON "github.com/ozontech/insane-json"
