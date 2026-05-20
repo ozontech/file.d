@@ -3,7 +3,9 @@ package normalize
 import (
 	"errors"
 	"fmt"
+	"net"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/timtadh/lexmachine"
@@ -208,7 +210,12 @@ func initTokens(lexer *lexmachine.Lexer,
 	addTokens := func(patterns []TokenPattern) {
 		for _, p := range patterns {
 			if p.mask == 0 || builtinPatterns&p.mask != 0 {
-				lexer.Add([]byte(p.RE), newToken(p.Placeholder))
+				switch p.mask {
+				case pIp:
+					lexer.Add([]byte(p.RE), newIpToken(p.Placeholder))
+				default:
+					lexer.Add([]byte(p.RE), newToken(p.Placeholder))
+				}
 			}
 		}
 	}
@@ -261,6 +268,65 @@ func newToken(placeholder string) lexmachine.Action {
 			begin:       m.TC,
 			end:         m.TC + len(m.Bytes),
 		}, nil
+	}
+}
+
+func newIpToken(placeholder string) lexmachine.Action {
+	return func(s *lexmachine.Scanner, m *machines.Match) (any, error) {
+		// skip `\w<match>\w`
+		if m.TC > 0 && isWord(s.Text[m.TC-1]) ||
+			m.TC+len(m.Bytes) < len(s.Text) && isWord(s.Text[m.TC+len(m.Bytes)]) {
+			return nil, nil
+		}
+
+		// Scans for IP-like patterns until end, then validates with net.ParseIP.
+		// Necessary because lexer's own pattern matching can be incomplete.
+		begin, end := m.TC, m.TC
+		for end < len(s.Text) && isIPChar(s.Text[end]) {
+			end++
+		}
+
+		candidate := string(s.Text[begin:end])
+		trimmedCandidate := strings.TrimSuffix(candidate, ":")
+
+		// IPv4 / IPv6
+		if net.ParseIP(candidate) != nil {
+			return token{
+				placeholder: placeholder,
+				begin:       begin,
+				end:         end,
+			}, nil
+		}
+
+		// IPv4: / IPv6:
+		if net.ParseIP(trimmedCandidate) != nil {
+			return token{
+				placeholder: placeholder,
+				begin:       begin,
+				end:         end - 1,
+			}, nil
+		}
+
+		if strings.Count(trimmedCandidate, ":") < 2 {
+			// IPv4:port
+			if parseHostPort(candidate) {
+				return token{
+					placeholder: placeholder,
+					begin:       begin,
+					end:         end,
+				}, nil
+			}
+
+			// IPv4:port:
+			if parseHostPort(trimmedCandidate) {
+				return token{
+					placeholder: placeholder,
+					begin:       begin,
+					end:         end - 1,
+				}, nil
+			}
+		}
+		return nil, nil
 	}
 }
 
@@ -451,10 +517,31 @@ func (t *tokenizer) processQuotes(c byte, pattern int, pos int) (token, int, boo
 	return token{}, 0, false
 }
 
+func parseHostPort(candidate string) bool {
+	host, port, err := net.SplitHostPort(candidate)
+	if err != nil {
+		return false
+	}
+
+	// SplitHostPort doesn't validate port, ensure it's a number in [0;65535]
+	if _, err := strconv.ParseUint(port, 10, 16); err != nil {
+		return false
+	}
+
+	return net.ParseIP(host) != nil
+}
+
 func isWord(c byte) bool {
 	return '0' <= c && c <= '9' ||
 		'A' <= c && c <= 'Z' || 'a' <= c && c <= 'z' ||
 		c == '_'
+}
+
+func isIPChar(c byte) bool {
+	return (c >= '0' && c <= '9') ||
+		(c >= 'a' && c <= 'f') ||
+		(c >= 'A' && c <= 'F') ||
+		c == ':' || c == '.'
 }
 
 // [lexmachine] pkg doesn't support 'exactly' re syntax (a{3}, a{3,6}),
@@ -523,9 +610,11 @@ var builtinTokenPatterns = []TokenPattern{
 		mask: pDatetime,
 	},
 	{
-		// IPv4 only
 		Placeholder: placeholderByPattern[pIp],
-		RE:          strings.TrimSuffix(strings.Repeat(`(25[0-5]|(2[0-4]|1?[0-9])?[0-9])\.`, 4), `\.`),
+		RE: fmt.Sprintf(`%s|%s`,
+			strings.TrimSuffix(strings.Repeat(`(25[0-5]|(2[0-4]|1?[0-9])?[0-9])\.`, 4), `\.`),
+			`[0-9a-fA-F:]*:[0-9a-fA-F:]*`,
+		),
 
 		mask: pIp,
 	},
