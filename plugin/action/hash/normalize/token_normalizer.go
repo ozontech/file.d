@@ -208,7 +208,12 @@ func initTokens(lexer *lexmachine.Lexer,
 	addTokens := func(patterns []TokenPattern) {
 		for _, p := range patterns {
 			if p.mask == 0 || builtinPatterns&p.mask != 0 {
-				lexer.Add([]byte(p.RE), newToken(p.Placeholder))
+				switch p.mask {
+				case pFilepath:
+					lexer.Add([]byte(p.RE), newFilepathToken(p.Placeholder))
+				default:
+					lexer.Add([]byte(p.RE), newToken(p.Placeholder))
+				}
 			}
 		}
 	}
@@ -253,6 +258,23 @@ func newToken(placeholder string) lexmachine.Action {
 		// skip `\w<match>\w`
 		if m.TC > 0 && isWord(s.Text[m.TC-1]) ||
 			m.TC+len(m.Bytes) < len(s.Text) && isWord(s.Text[m.TC+len(m.Bytes)]) {
+			return nil, nil
+		}
+
+		return token{
+			placeholder: placeholder,
+			begin:       m.TC,
+			end:         m.TC + len(m.Bytes),
+		}, nil
+	}
+}
+
+func newFilepathToken(placeholder string) lexmachine.Action {
+	return func(s *lexmachine.Scanner, m *machines.Match) (any, error) {
+		// skip `\w<match>\w`
+		if m.TC > 0 && isWord(s.Text[m.TC-1]) ||
+			m.TC+len(m.Bytes) < len(s.Text) && isWord(s.Text[m.TC+len(m.Bytes)]) {
+			s.TC = m.TC + 1
 			return nil, nil
 		}
 
@@ -511,10 +533,10 @@ var builtinTokenPatterns = []TokenPattern{
 		mask: pHash,
 	},
 	{
-		// RFC3339, RFC3339Nano, DateTime, DateOnly, TimeOnly, Go time with monotonic clock
+		// RFC3339, RFC3339Nano, DateTime, DateOnly, TimeOnly, Go time with optional monotonic clock
 		Placeholder: placeholderByPattern[pDatetime],
 		RE: fmt.Sprintf(`(%s)|(%s)|(%s)|(%s)`,
-			`\d\d\d\d-\d\d-\d\d \d\d:\d\d:\d\d\.\d+ [+\-]\d\d\d\d [A-Z]+ m=[+\-]\d+\.\d+`,
+			`\d\d\d\d-\d\d-\d\d \d\d:\d\d:\d\d\.\d+ [+\-]\d\d\d\d [A-Z]+( m=[+\-]\d+\.\d+)?`,
 			`\d\d\d\d-\d\d-\d\dT\d\d:\d\d:\d\d(\.\d+)?(Z|[\+\-]\d\d:\d\d)`,
 			`\d\d:\d\d:\d\d`,
 			`\d\d\d\d-\d\d-\d\d( \d\d:\d\d:\d\d)?`,
