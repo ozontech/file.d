@@ -3,6 +3,7 @@ package cardinality
 import (
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/ozontech/file.d/cfg"
@@ -72,6 +73,8 @@ The resulting events:
 {"service": "registration"}
 ```
 }*/
+
+var sharedCaches sync.Map
 
 type Plugin struct {
 	cache  *Cache
@@ -179,11 +182,17 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 	return &Plugin{}, &Config{}
 }
 
+func getSharedCache(ttl time.Duration, pipelineName string, index int) *Cache {
+	key := pipelineName + "/" + fmt.Sprint(index)
+	actual, _ := sharedCaches.LoadOrStore(key, NewCache(ttl))
+	return actual.(*Cache)
+}
+
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginParams) {
 	p.config = config.(*Config)
 	p.logger = params.Logger.Desugar()
 
-	p.cache = NewCache(p.config.TTL_)
+	p.cache = getSharedCache(p.config.TTL_, params.PipelineName, params.Index)
 
 	if len(p.config.Fields) == 0 {
 		p.logger.Fatal("you have to set fields")

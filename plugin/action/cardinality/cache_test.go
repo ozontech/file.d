@@ -1,6 +1,8 @@
 package cardinality
 
 import (
+	"fmt"
+	"math/rand"
 	"sync"
 	"testing"
 	"time"
@@ -177,6 +179,28 @@ func TestConcurrentOperations(t *testing.T) {
 		}
 	}()
 	wg.Wait()
+}
+
+func TestCountPrefixWith10kElements(t *testing.T) {
+	cache := NewCache(time.Minute)
+	n := 10000
+	prefix := randString(64)
+	for i := 0; i < n; i++ {
+		key := fmt.Sprintf("%s%s", prefix, randString(48))
+		cache.Set(key)
+		cache.Set(key)
+		assert.Equal(t, i+1, cache.CountPrefix(prefix))
+	}
+
+}
+
+func randString(n int) string {
+	const letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	b := make([]byte, n)
+	for i := range b {
+		b[i] = letters[rand.Intn(len(letters))]
+	}
+	return string(b)
 }
 
 func TestTTL(t *testing.T) {
