@@ -176,6 +176,19 @@ type Config struct {
 	// >
 	// > After a non-retryable write error, fall with a non-zero exit code or not
 	Strict bool `json:"strict" default:"false"` // *
+
+	// > @3@4@5@6
+	// >
+	// > Period for which addresses will be banned in case of unavailability.
+	// > If set to 0, circuit breaker is disabled.
+	BanPeriod  cfg.Duration `json:"ban_period" default:"10s" parse:"duration"` // *
+	BanPeriod_ time.Duration
+
+	// > @3@4@5@6
+	// >
+	// > Interval for reconnecting to addresses that are unavailable during initialization.
+	ReconnectInterval  cfg.Duration `json:"reconnect_interval" default:"5s" parse:"duration"` // *
+	ReconnectInterval_ time.Duration
 }
 
 type KeepAliveConfig struct {
@@ -212,13 +225,23 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.registerMetrics(params.MetricCtl)
 	p.mu = &sync.Mutex{}
 
+	if p.config.ReconnectInterval_ < 1 {
+		p.logger.Fatal("'reconnect_interval' can't be <1")
+	}
+	if p.config.BanPeriod_ < 0 {
+		p.logger.Fatal("'ban_period' cant't be <0")
+	}
+
 	var err error
 	p.encoder, err = NewEncoder(p.config.Encoding)
 	if err != nil {
 		p.logger.Fatal("can't create encoder", zap.Error(err))
 	}
 
-	p.prepareClient()
+	ctx, cancel := context.WithCancel(context.Background())
+	p.cancel = cancel
+
+	p.prepareClient(ctx)
 
 	p.logger.Info("starting batcher", zap.Duration("timeout", p.config.BatchFlushTimeout_))
 
@@ -267,9 +290,6 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		onError,
 	)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	p.cancel = cancel
-
 	p.batcher.Start(ctx)
 }
 
@@ -286,11 +306,13 @@ func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 	p.sendErrorMetric = ctl.RegisterCounterVec("output_http_send_error_total", "Total HTTP send errors", "status_code")
 }
 
-func (p *Plugin) prepareClient() {
+func (p *Plugin) prepareClient(ctx context.Context) {
 	config := &xhttp.ClientConfig{
 		Endpoints:         p.prepareEndpoints(),
 		ConnectionTimeout: p.config.ConnectionTimeout_ * 2,
 		AuthHeader:        p.getAuthHeader(),
+		BanPeriod:         p.config.BanPeriod_,
+		ReconnectInterval: p.config.ReconnectInterval_,
 		KeepAlive: &xhttp.ClientKeepAliveConfig{
 			MaxConnDuration:     p.config.KeepAlive.MaxConnDuration_,
 			MaxIdleConnDuration: p.config.KeepAlive.MaxIdleConnDuration_,
@@ -306,7 +328,7 @@ func (p *Plugin) prepareClient() {
 	}
 
 	var err error
-	p.client, err = xhttp.NewClient(config)
+	p.client, err = xhttp.NewClient(ctx, config)
 	if err != nil {
 		p.logger.Fatal("can't create http client", zap.Error(err))
 	}

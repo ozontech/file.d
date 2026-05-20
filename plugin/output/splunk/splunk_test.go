@@ -1,6 +1,7 @@
 package splunk
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -54,7 +55,7 @@ func TestSplunk(t *testing.T) {
 				},
 				logger: zap.NewExample().Sugar(),
 			}
-			plugin.prepareClient()
+			plugin.prepareClient(context.Background())
 
 			batch := pipeline.NewPreparedBatch([]*pipeline.Event{
 				{Root: input},
@@ -185,7 +186,7 @@ func TestCopyFields(t *testing.T) {
 				copyFieldsPaths: tt.copyFields,
 				logger:          zap.NewExample().Sugar(),
 			}
-			plugin.prepareClient()
+			plugin.prepareClient(context.Background())
 
 			batch := pipeline.NewPreparedBatch([]*pipeline.Event{
 				{Root: input},
