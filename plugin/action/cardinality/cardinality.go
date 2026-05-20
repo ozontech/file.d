@@ -3,6 +3,7 @@ package cardinality
 import (
 	"fmt"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/ozontech/file.d/cfg"
@@ -72,6 +73,8 @@ The resulting events:
 {"service": "registration"}
 ```
 }*/
+
+var sharedCache atomic.Pointer[Cache]
 
 type Plugin struct {
 	cache  *Cache
@@ -179,11 +182,23 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 	return &Plugin{}, &Config{}
 }
 
+func getSharedCache(ttl time.Duration) *Cache {
+	cache := sharedCache.Load()
+	if cache != nil {
+		return cache
+	}
+	newCache := NewCache(ttl)
+	if sharedCache.CompareAndSwap(nil, newCache) {
+		return newCache
+	}
+	return sharedCache.Load()
+}
+
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginParams) {
 	p.config = config.(*Config)
 	p.logger = params.Logger.Desugar()
 
-	p.cache = NewCache(p.config.TTL_)
+	p.cache = getSharedCache(p.config.TTL_)
 
 	if len(p.config.Fields) == 0 {
 		p.logger.Fatal("you have to set fields")
