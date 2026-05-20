@@ -31,7 +31,8 @@ const (
 type Plugin struct {
 	config *Config
 
-	client *xhttp.Client
+	client  *xhttp.Client
+	encoder Encoder
 
 	logger     *zap.Logger
 	controller pipeline.OutputPluginController
@@ -60,6 +61,17 @@ type Config struct {
 	// >
 	// > Content-Type header for HTTP requests.
 	ContentType string `json:"content_type" default:"application/json"` // *
+
+	// > @3@4@5@6
+	// >
+	// > Configure event serialization before sending.
+	// > Includes:
+	// > 1) Type - codec to use for serializing events:
+	// > * `json` - serializes the full event as a JSON object (default).
+	// > * `raw`  - extracts a single field and sends its value as-is.
+	//  > By default `json` is used.
+	// > 2) Params - Encoder parameters.
+	Encoding EncodingConfig `json:"encoding" child:"true"` // *
 
 	// > @3@4@5@6
 	// >
@@ -220,6 +232,12 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		p.logger.Fatal("'ban_period' cant't be <0")
 	}
 
+	var err error
+	p.encoder, err = NewEncoder(p.config.Encoding)
+	if err != nil {
+		p.logger.Fatal("can't create encoder", zap.Error(err))
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 	p.cancel = cancel
 
@@ -348,7 +366,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 	batch.ForEach(func(event *pipeline.Event) {
 		eventsCount++
 		data.begin = append(data.begin, len(data.outBuf))
-		data.outBuf, _ = event.Encode(data.outBuf)
+		data.outBuf = p.encoder.Encode(event, data.outBuf)
 		data.outBuf = append(data.outBuf, '\n')
 	})
 	data.begin = append(data.begin, len(data.outBuf))
