@@ -35,6 +35,7 @@ import (
 	_ "github.com/ozontech/file.d/plugin/action/remove_fields"
 	_ "github.com/ozontech/file.d/plugin/action/rename"
 	_ "github.com/ozontech/file.d/plugin/action/set_time"
+	_ "github.com/ozontech/file.d/plugin/action/transform"
 	_ "github.com/ozontech/file.d/plugin/input/fake"
 	"github.com/ozontech/file.d/plugin/output/devnull"
 	"github.com/prometheus/client_golang/prometheus"
