@@ -181,14 +181,10 @@ func (c *Client) getEndpoint() *fasthttp.URI {
 		return c.cb.getEndpoint()
 	}
 
-	switch len(c.endpoints) {
-	case 0:
+	if len(c.endpoints) == 0 {
 		return nil
-	case 1:
-		return c.endpoints[0]
-	default:
-		return c.endpoints[rand.Int()%len(c.endpoints)]
 	}
+	return c.endpoints[rand.Intn(len(c.endpoints))]
 }
 
 func (c *Client) banEndpoint(endpoint *fasthttp.URI) {

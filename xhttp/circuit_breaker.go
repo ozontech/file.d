@@ -55,14 +55,11 @@ func (cb *circuitBreaker) getEndpoint() *fasthttp.URI {
 			activeEndpoints = append(activeEndpoints, e.uri)
 		}
 	}
-	switch len(activeEndpoints) {
-	case 0:
+
+	if len(activeEndpoints) == 0 {
 		return nil
-	case 1:
-		return activeEndpoints[0]
-	default:
-		return activeEndpoints[rand.Int()%len(activeEndpoints)]
 	}
+	return activeEndpoints[rand.Intn(len(activeEndpoints))]
 }
 
 func (cb *circuitBreaker) banEndpoint(uri *fasthttp.URI) {
