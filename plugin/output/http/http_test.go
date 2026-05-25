@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestAppendEvent(t *testing.T) {
+func TestEncoding(t *testing.T) {
 	p := &Plugin{}
 	config := &Config{
 		Endpoints: []string{"test"},
@@ -33,13 +33,24 @@ func TestAppendEvent(t *testing.T) {
 	expected := fmt.Sprintf("%s\n", `{"message":"[INFO] some event","field_a":"AAAA","field_b":"BBBB"}`)
 	assert.Equal(t, expected, string(data.outBuf), "wrong request content")
 
-	data.outBuf = data.outBuf[:0]
 	var params RawEncoderParams
-
 	rawEncoder := newRawEncoder(&params)
+
+	data.outBuf = data.outBuf[:0]
 	data.outBuf = rawEncoder.Encode(event, data.outBuf)
 	data.outBuf = append(data.outBuf, '\n')
 
-	expected = fmt.Sprintf("%s\n", `"[INFO] some event"`)
+	expected = fmt.Sprintf("%s\n", `[INFO] some event`)
+	assert.Equal(t, expected, string(data.outBuf), "wrong request content")
+
+	root2, _ := insaneJSON.DecodeBytes([]byte(`{"message":"{\"log\":\"[INFO] some event\"}","field_a":"AAAA","field_b":"BBBB"}`))
+	defer insaneJSON.Release(root2)
+	event.Root = root2
+
+	data.outBuf = data.outBuf[:0]
+	data.outBuf = rawEncoder.Encode(event, data.outBuf)
+	data.outBuf = append(data.outBuf, '\n')
+
+	expected = fmt.Sprintf("%s\n", `{"log":"[INFO] some event"}`)
 	assert.Equal(t, expected, string(data.outBuf), "wrong request content")
 }
