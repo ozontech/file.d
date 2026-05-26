@@ -191,7 +191,6 @@ func TestCountPrefixWith10kElements(t *testing.T) {
 		cache.Set(key)
 		assert.Equal(t, i+1, cache.CountPrefix(prefix))
 	}
-
 }
 
 func randString(n int) string {

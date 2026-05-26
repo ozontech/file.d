@@ -86,6 +86,7 @@ type Plugin struct {
 
 	cardinalityUniqueValuesLimit *metric.Gauge
 	cardinalityUniqueValuesGauge *metric.GaugeVec
+	cardinalityUniqueValuesTotal *metric.CounterVec
 }
 
 type parsedField struct {
@@ -231,7 +232,19 @@ func (p *Plugin) registerMetrics(ctl *metric.Ctl, prefix string) {
 	}
 	p.cardinalityUniqueValuesGauge = ctl.RegisterGaugeVec(
 		metricName,
-		"Count of unique values",
+		"Current count of unique values observed per key group",
+		keyMetricLabels(p.keys)...,
+	)
+
+	var metricTotalName string
+	if prefix == "" {
+		metricTotalName = "cardinality_unique_values_count_total"
+	} else {
+		metricTotalName = fmt.Sprintf(`cardinality_%s_unique_values_count_total`, prefix)
+	}
+	p.cardinalityUniqueValuesTotal = ctl.RegisterCounterVec(
+		metricTotalName,
+		"Cumulative number of newly seen unique values per key group since process start",
 		keyMetricLabels(p.keys)...,
 	)
 
@@ -300,6 +313,7 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 		// is new value
 		keysCount++
 		p.cardinalityUniqueValuesGauge.WithLabelValues(p.keys.valsBuf...).Set(float64(keysCount))
+		p.cardinalityUniqueValuesTotal.WithLabelValues(p.keys.valsBuf...).Inc()
 	}
 
 	return pipeline.ActionPass
