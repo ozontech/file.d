@@ -6,12 +6,12 @@ import (
 	"github.com/ozontech/file.d/plugin/action/transform/core"
 )
 
-type Upcase struct{}
+type upcase struct{}
 
-func (Upcase) Name() string { return "upcase" }
+func (upcase) Name() string { return "upcase" }
 
-func (Upcase) Params() []core.Parameter {
-	return []core.Parameter{
+func (upcase) Params() []Parameter {
+	return []Parameter{
 		{
 			Name:          "value",
 			Required:      true,
@@ -20,7 +20,7 @@ func (Upcase) Params() []core.Parameter {
 	}
 }
 
-func (Upcase) Call(args map[string]core.Value) (core.Value, error) {
+func (upcase) Call(args map[string]core.Value) (core.Value, error) {
 	val := args["value"].(core.StringValue)
 	return core.StringValue{V: strings.ToUpper(val.V)}, nil
 }

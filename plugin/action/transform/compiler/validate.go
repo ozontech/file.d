@@ -6,12 +6,13 @@ import (
 	"time"
 
 	"github.com/ozontech/file.d/plugin/action/transform/core"
+	"github.com/ozontech/file.d/plugin/action/transform/stdlib"
 )
 
 // ValidateCalls walks the AST and checks that every function call refers to
 // a function that exists in the registry.
 // This is a lightweight static check - argument types are validated at runtime
-func ValidateCalls(exprs []core.Expr, registry *core.Registry) error {
+func ValidateCalls(exprs []core.Expr, registry *stdlib.Registry) error {
 	for _, expr := range exprs {
 		if err := validateExpr(expr, registry); err != nil {
 			return err
@@ -20,7 +21,7 @@ func ValidateCalls(exprs []core.Expr, registry *core.Registry) error {
 	return nil
 }
 
-func validateExpr(expr core.Expr, registry *core.Registry) error {
+func validateExpr(expr core.Expr, registry *stdlib.Registry) error {
 	switch e := expr.(type) {
 
 	case *core.CallExpr:
@@ -124,7 +125,7 @@ func validateExpr(expr core.Expr, registry *core.Registry) error {
 // validateArgs statically checks argument structure against the function's
 // parameter list. Only structural issues are checked here — value types
 // are validated at runtime since arguments are arbitrary expressions.
-func validateArgs(e *core.CallExpr, fn core.Function) error {
+func validateArgs(e *core.CallExpr, fn stdlib.Function) error {
 	params := fn.Params()
 
 	var positionalCount int

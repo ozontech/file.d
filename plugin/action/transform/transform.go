@@ -14,16 +14,19 @@ import (
 )
 
 var (
-	compilerCache = map[string]*compiler.Compiler{}
+	programCache = make(map[string]Program)
 )
+
+type Program struct {
+	expressions []core.Expr
+}
 
 /*{ introduction
 }*/
 
 type Plugin struct {
 	config           *Config
-	registry         *core.Registry
-	expressions      []core.Expr
+	program          Program
 	logger           *zap.Logger
 	pluginController pipeline.ActionPluginController
 }
@@ -53,40 +56,37 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 	p.logger = params.Logger.Desugar()
 	p.pluginController = params.Controller
 
-	p.registry = core.NewRegistry()
-	p.registry.MustRegister(stdlib.Upcase{})
-
-	var err error
 	cacheKey := fmt.Sprintf("%s_%d", params.PipelineName, params.Index)
-	c, ok := compilerCache[cacheKey]
+	_, ok := programCache[cacheKey]
 	if !ok {
-		p.logger.Info("create compiler")
-		c, err = compiler.NewCompiler(p.config.Source)
+		p.logger.Info("create transform compiler")
+		cmp, err := compiler.NewCompiler(p.config.Source)
 		if err != nil {
-			p.logger.Fatal("parsing error", zap.Error(err))
+			p.logger.Fatal("failed to create compiler", zap.Error(err))
 		}
-		compilerCache[cacheKey] = c
+
+		exprs, err := cmp.Compile()
+		if err != nil {
+			p.logger.Fatal("compilation error", zap.Error(err))
+		}
+
+		if err := compiler.ValidateCalls(exprs, stdlib.GetRegistry()); err != nil {
+			p.logger.Fatal("validation error", zap.Error(err))
+		}
+
+		programCache[cacheKey] = Program{exprs}
 	}
 
-	exprs, err := c.Compile()
-	if err != nil {
-		p.logger.Fatal("compilation error", zap.Error(err))
-	}
-
-	if err := compiler.ValidateCalls(exprs, p.registry); err != nil {
-		p.logger.Fatal("validation error", zap.Error(err))
-	}
-
-	p.expressions = exprs
+	p.program = programCache[cacheKey]
 }
 
 func (p *Plugin) Stop() {}
 
 func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	target := runtime.NewRootTarget(event.Root, event.SourceName, nil)
-	ctx := runtime.NewContext(target, p.registry)
+	ctx := runtime.NewContext(target, stdlib.GetRegistry())
 
-	for _, expr := range p.expressions {
+	for _, expr := range p.program.expressions {
 		_, err := expr.Eval(ctx)
 		if err != nil {
 			if errors.Is(err, core.AbortError) {

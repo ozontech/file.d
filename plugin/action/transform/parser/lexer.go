@@ -6,10 +6,10 @@ import (
 )
 
 var (
-	globalLexer = NewLexer()
+	globalLexer = newLexer()
 )
 
-func NewLexer() *lexmachine.Lexer {
+func newLexer() *lexmachine.Lexer {
 	l := lexmachine.NewLexer()
 
 	token := func(typ TokenType) lexmachine.Action {

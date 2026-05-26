@@ -55,7 +55,6 @@ func (e *IdentExpr) Eval(ctx EvalContext) (Value, error) {
 	if val, ok := ctx.GetVar(e.Name); ok {
 		return val, nil
 	}
-	// nil or error ???
 	return NullValue{}, nil
 }
 
@@ -314,7 +313,6 @@ func evalIndex(pos Position, obj, idx Value) (Value, error) {
 		}
 		resolved := resolveIndex(int(i.V), len(o.V))
 		if resolved < 0 || resolved >= len(o.V) {
-			// nil or error ???
 			return NullValue{}, nil
 		}
 		return o.V[resolved], nil
@@ -326,7 +324,6 @@ func evalIndex(pos Position, obj, idx Value) (Value, error) {
 		}
 		val, exists := o.V[s.V]
 		if !exists {
-			// nil or error ???
 			return NullValue{}, nil
 		}
 		return val, nil
