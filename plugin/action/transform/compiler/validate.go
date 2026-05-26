@@ -23,7 +23,6 @@ func ValidateCalls(exprs []core.Expr, registry *stdlib.Registry) error {
 
 func validateExpr(expr core.Expr, registry *stdlib.Registry) error {
 	switch e := expr.(type) {
-
 	case *core.CallExpr:
 		fn, ok := registry.Get(e.Name)
 		if !ok {

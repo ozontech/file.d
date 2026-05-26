@@ -1,3 +1,4 @@
+//nolint:goconst
 package core
 
 import (
@@ -209,7 +210,6 @@ func (e *AssignExpr) Eval(ctx EvalContext) (Value, error) {
 	}
 
 	switch target := e.Target.(type) {
-
 	case *IdentExpr:
 		ctx.SetVar(target.Name, value)
 		return value, nil
@@ -249,9 +249,8 @@ func evalIndexAssign(ctx EvalContext, target *IndexExpr, value Value) error {
 	}
 
 	switch idx := idxVal.(type) {
-
 	case IntegerValue:
-		// arr[n] = value
+		// arr[n]
 		arr, ok := current.(ArrayValue)
 		if !ok {
 			return fmt.Errorf("cannot use integer index on %s", current.Kind())
@@ -271,7 +270,7 @@ func evalIndexAssign(ctx EvalContext, target *IndexExpr, value Value) error {
 		return nil
 
 	case StringValue:
-		// obj["key"] = value
+		// obj["key"]
 		obj, ok := current.(ObjectValue)
 		if !ok {
 			return fmt.Errorf("cannot use string index on %s", current.Kind())

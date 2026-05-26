@@ -168,7 +168,7 @@ func toInsaneJSONPath(segments []core.Segment, pathBuffer []string) []string {
 	return pathBuffer
 }
 
-// valueToJSON serialises a core.Value to a JSON string.
+// valueToJSON serializes a core.Value to a JSON string.
 func valueToJSON(v core.Value) (string, error) {
 	switch val := v.(type) {
 	case core.NullValue:
@@ -212,7 +212,7 @@ func valueToJSON(v core.Value) (string, error) {
 
 		return node.EncodeToString(), nil
 	}
-	return "", fmt.Errorf("cannot serialise %s to JSON", v.Kind())
+	return "", fmt.Errorf("cannot serialize %s to JSON", v.Kind())
 }
 
 func formatSegments(segs []core.Segment) string {

@@ -147,7 +147,6 @@ func (c *Compiler) parsePrefix() (core.Expr, error) {
 	tok := c.peek()
 
 	switch tok.Type {
-
 	// Literals
 	case parser.LIT_INTEGER:
 		return c.parseIntLit()
@@ -165,10 +164,10 @@ func (c *Compiler) parsePrefix() (core.Expr, error) {
 		return c.parseDel()
 	case parser.LIT_REGEX:
 		t := c.advance()
-		return &core.RegexLit{Node: nodeAt(t), Pattern: unwrap(t.Lexeme, 2)}, nil
+		return &core.RegexLit{Node: nodeAt(t), Pattern: unwrap(t.Lexeme)}, nil
 	case parser.LIT_TIMESTAMP:
 		t := c.advance()
-		return &core.TimestampLit{Node: nodeAt(t), Value: unwrap(t.Lexeme, 2)}, nil
+		return &core.TimestampLit{Node: nodeAt(t), Value: unwrap(t.Lexeme)}, nil
 
 	// Identifier - variable or function call
 	case parser.IDENT:
@@ -210,7 +209,6 @@ func (c *Compiler) parsePrefix() (core.Expr, error) {
 // Called when a token appears between two expressions.
 func (c *Compiler) parseInfix(left core.Expr, op parser.Token) (core.Expr, error) {
 	switch op.Type {
-
 	case parser.OP_ASSIGN:
 		if !isLValue(left) {
 			return nil, c.errorf(op, "left side of assignment must be a variable, path, or index expression")
@@ -306,7 +304,7 @@ func (c *Compiler) parseStringLit() (core.Expr, error) {
 		return &core.StringLit{Node: nodeAt(tok), Value: v}, nil
 
 	case parser.LIT_STRING_RAW:
-		return &core.StringLit{Node: nodeAt(tok), Value: unwrap(tok.Lexeme, 2)}, nil
+		return &core.StringLit{Node: nodeAt(tok), Value: unwrap(tok.Lexeme)}, nil
 	}
 	return nil, c.errorf(tok, "expected string, got %s", tok.Type)
 }
@@ -392,7 +390,7 @@ func (c *Compiler) parseKVPair() (core.KVPair, error) {
 		key = v
 	case parser.LIT_STRING_RAW:
 		t := c.advance()
-		key = unwrap(t.Lexeme, 2)
+		key = unwrap(t.Lexeme)
 	case parser.IDENT:
 		key = c.advance().Lexeme
 	default:
@@ -464,7 +462,7 @@ func (c *Compiler) tryFieldSegment() (core.PathSegment, bool, error) {
 		return core.PathSegment{Field: v}, true, nil
 	case parser.LIT_STRING_RAW:
 		t := c.advance()
-		return core.PathSegment{Field: unwrap(t.Lexeme, 2)}, true, nil
+		return core.PathSegment{Field: unwrap(t.Lexeme)}, true, nil
 	}
 	return core.PathSegment{}, false, nil
 }
@@ -706,9 +704,9 @@ func nodeAt(tok parser.Token) core.Node {
 }
 
 // Strips prefixLen bytes from the front and 1 byte from the end.
-func unwrap(s string, prefixLen int) string {
-	if len(s) <= prefixLen+1 {
+func unwrap(s string) string {
+	if len(s) <= 3 {
 		return ""
 	}
-	return s[prefixLen : len(s)-1]
+	return s[2 : len(s)-1]
 }

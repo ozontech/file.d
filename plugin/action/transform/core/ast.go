@@ -215,8 +215,7 @@ func DumpAST(expr Expr, depth int) string {
 	case *ObjectExpr:
 		lines := []string{fmt.Sprintf("%sObject", pad)}
 		for _, kv := range e.Pairs {
-			lines = append(lines, fmt.Sprintf("%s  key(%q):", pad, kv.Key))
-			lines = append(lines, DumpAST(kv.Value, p+1))
+			lines = append(lines, fmt.Sprintf("%s  key(%q):", pad, kv.Key), DumpAST(kv.Value, p+1))
 		}
 		return strings.Join(lines, "\n")
 
@@ -248,8 +247,7 @@ func DumpAST(expr Expr, depth int) string {
 		lines := []string{fmt.Sprintf("%sCall(%s)", pad, e.Name)}
 		for _, arg := range e.Args {
 			if arg.Name != "" {
-				lines = append(lines, fmt.Sprintf("%s  named(%s:)", pad, arg.Name))
-				lines = append(lines, DumpAST(arg.Value, p+1))
+				lines = append(lines, fmt.Sprintf("%s  named(%s:)", pad, arg.Name), DumpAST(arg.Value, p+1))
 			} else {
 				lines = append(lines, DumpAST(arg.Value, p))
 			}
