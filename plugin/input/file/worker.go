@@ -202,6 +202,14 @@ func (w *worker) work(controller inputer, jobProvider *jobProvider, readBufferSi
 		job.tail = append(job.tail[:0], accumBuf...)
 		job.curOffset += readTotal
 
+		// Flush remaining data when EOF is reached and there's no trailing newline.
+		// Without this, the last line of a file that doesn't end with '\n' is silently dropped.
+		if isEOFReached && len(accumBuf) > 0 {
+			job.lastEventSeq = controller.In(sourceID, sourceName, pipeline.NewOffsets(lastOffset+scanned, offsets), accumBuf, isVirgin, metadataInfo)
+			accumBuf = accumBuf[:0]
+			job.tail = job.tail[:0]
+		}
+
 		// check if file was truncated.
 		if isEOFReached {
 			err := w.processEOF(file, job, jobProvider, lastOffset+readTotal)
