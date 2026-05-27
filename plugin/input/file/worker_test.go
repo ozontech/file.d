@@ -81,11 +81,18 @@ func TestWorkerWork(t *testing.T) {
 			expData:            "abc\n",
 		},
 		{
-			name:           "should_ok_when_read_1_line_without_newline",
+			name:           "should_emit_last_line_without_trailing_newline",
 			maxEventSize:   1024,
 			inFile:         "abc",
 			readBufferSize: 1024,
-			expData:        "",
+			expData:        "abc",
+		},
+		{
+			name:           "should_emit_last_line_among_multiple_without_trailing_newline",
+			maxEventSize:   1024,
+			inFile:         "line1\nline2\nline3",
+			readBufferSize: 1024,
+			expData:        "line3",
 		},
 	}
 	for _, tt := range tests {
