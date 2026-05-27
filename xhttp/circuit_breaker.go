@@ -16,10 +16,11 @@ type endpoint struct {
 }
 
 type circuitBreaker struct {
-	endpoints []endpoint
-	idxByURI  map[string]int
-	banPeriod time.Duration
-	mu        sync.RWMutex
+	endpoints       []endpoint
+	activeEndpoints []int
+	idxByURI        map[string]int
+	banPeriod       time.Duration
+	mu              sync.Mutex
 }
 
 func newCircuitBreaker(ctx context.Context, uris []*fasthttp.URI, banPeriod, reconnectInterval time.Duration) *circuitBreaker {
@@ -28,9 +29,10 @@ func newCircuitBreaker(ctx context.Context, uris []*fasthttp.URI, banPeriod, rec
 	}
 
 	cb := &circuitBreaker{
-		endpoints: make([]endpoint, 0, len(uris)),
-		idxByURI:  make(map[string]int, len(uris)),
-		banPeriod: banPeriod,
+		endpoints:       make([]endpoint, 0, len(uris)),
+		activeEndpoints: make([]int, 0, len(uris)),
+		idxByURI:        make(map[string]int, len(uris)),
+		banPeriod:       banPeriod,
 	}
 
 	for i, uri := range uris {
@@ -44,22 +46,23 @@ func newCircuitBreaker(ctx context.Context, uris []*fasthttp.URI, banPeriod, rec
 }
 
 func (cb *circuitBreaker) getEndpoint() *fasthttp.URI {
-	cb.mu.RLock()
-	defer cb.mu.RUnlock()
+	cb.mu.Lock()
+	defer cb.mu.Unlock()
 
 	now := xtime.GetInaccurateTime()
-	activeEndpoints := make([]*fasthttp.URI, 0, len(cb.endpoints))
-	for i := range cb.endpoints {
-		e := cb.endpoints[i]
+	cb.activeEndpoints = cb.activeEndpoints[:0]
+	for i, e := range cb.endpoints {
 		if e.banUntil.IsZero() || now.After(e.banUntil) {
-			activeEndpoints = append(activeEndpoints, e.uri)
+			cb.activeEndpoints = append(cb.activeEndpoints, i)
 		}
 	}
 
-	if len(activeEndpoints) == 0 {
+	if len(cb.activeEndpoints) == 0 {
 		return nil
 	}
-	return activeEndpoints[rand.Intn(len(activeEndpoints))]
+
+	idx := rand.Intn(len(cb.activeEndpoints))
+	return cb.endpoints[cb.activeEndpoints[idx]].uri
 }
 
 func (cb *circuitBreaker) banEndpoint(uri *fasthttp.URI) {
