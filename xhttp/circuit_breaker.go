@@ -75,6 +75,13 @@ func (cb *circuitBreaker) banEndpoint(uri *fasthttp.URI) {
 }
 
 func (cb *circuitBreaker) restoreBannedEndpoints() {
+	cb.mu.RLock()
+	if len(cb.endpoints) == len(cb.activeEndpoints) {
+		cb.mu.RUnlock()
+		return
+	}
+	cb.mu.RUnlock()
+
 	cb.mu.Lock()
 	defer cb.mu.Unlock()
 
