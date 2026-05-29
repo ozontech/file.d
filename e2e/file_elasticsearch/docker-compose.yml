@@ -1,6 +1,6 @@
 services:
   elasticsearch:
-    image: elasticsearch:9.4.0
+    image: elasticsearch:8.17.0
     container_name: es-local-test
     ports:
       - "9200:9200"
@@ -20,7 +20,7 @@ services:
       timeout: 10s
       retries: 10
   elasticsearch2:
-    image: elasticsearch:9.4.0
+    image: elasticsearch:8.17.0
     container_name: es-local-test-2
     ports:
       - "9201:9200"

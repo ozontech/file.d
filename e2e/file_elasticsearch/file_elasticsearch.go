@@ -68,7 +68,7 @@ func (c *Config) Validate(t *testing.T) {
 	err := waitUntilIndexReady(c.Endpoints, c.index, c.Username, c.Password, c.Count, 10, 250*time.Millisecond)
 	require.NoError(t, err)
 
-	var allDocs []map[string]any
+	allDocs := make([]map[string]any, 0, c.Count)
 	for _, endpoint := range c.Endpoints {
 		docs, err := getDocumentsFromIndex(endpoint, c.index, c.Username, c.Password)
 		require.NoError(t, err)
