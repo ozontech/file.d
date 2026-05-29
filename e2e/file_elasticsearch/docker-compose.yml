@@ -3,7 +3,7 @@ services:
     image: elasticsearch:8.17.0
     container_name: es-local-test
     ports:
-      - "9200:9200"
+      - "19200:9200"
     environment:
       - discovery.type=single-node
       - ELASTIC_PASSWORD=elastic
@@ -14,7 +14,7 @@ services:
       test:
         [
           "CMD-SHELL",
-          "curl --output /dev/null --silent --head --fail -u elastic:elastic http://elasticsearch:9200",
+          "curl --output /dev/null --silent --head --fail -u elastic:elastic http://localhost:9200",
         ]
       interval: 10s
       timeout: 10s
@@ -23,7 +23,7 @@ services:
     image: elasticsearch:8.17.0
     container_name: es-local-test-2
     ports:
-      - "9201:9200"
+      - "19201:9200"
     environment:
       - discovery.type=single-node
       - ELASTIC_PASSWORD=elastic
@@ -34,7 +34,7 @@ services:
       test:
         [
           "CMD-SHELL",
-          "curl --output /dev/null --silent --head --fail -u elastic:elastic http://elasticsearch:9200",
+          "curl --output /dev/null --silent --head --fail -u elastic:elastic http://localhost:9200",
         ]
       interval: 10s
       timeout: 10s
