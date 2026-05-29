@@ -166,13 +166,24 @@ func TestE2EStabilityWorkCase(t *testing.T) {
 		{
 			name: "file_elasticsearch",
 			e2eTest: &file_elasticsearch.Config{
-				Count:    10,
-				Pipeline: "test-ingest-pipeline",
-				Endpoint: "http://localhost:19200",
-				Username: "elastic",
-				Password: "elastic",
+				Count:     10,
+				Pipeline:  "test-ingest-pipeline",
+				Endpoints: []string{"http://localhost:9200"},
+				Username:  "elastic",
+				Password:  "elastic",
 			},
 			cfgPath: "./file_elasticsearch/config.yml",
+		},
+		{
+			name: "file_elasticsearch_cb",
+			e2eTest: &file_elasticsearch.Config{
+				Count:     10,
+				Pipeline:  "test-ingest-pipeline",
+				Endpoints: []string{"http://localhost:9200", "http://localhost:9201"},
+				Username:  "elastic",
+				Password:  "elastic",
+			},
+			cfgPath: "./file_elasticsearch/config_cb.yml",
 		},
 		{
 			name:    "file_es_split",

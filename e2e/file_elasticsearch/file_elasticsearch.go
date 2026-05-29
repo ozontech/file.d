@@ -18,13 +18,13 @@ import (
 
 // Config for file-elasticsearch plugin e2e test
 type Config struct {
-	Count    int
-	Endpoint string
-	Pipeline string
-	Username string
-	Password string
-	dir      string
-	index    string
+	Count     int
+	Endpoints []string
+	Pipeline  string
+	Username  string
+	Password  string
+	dir       string
+	index     string
 }
 
 // Configure sets additional fields for input and output plugins
@@ -43,10 +43,12 @@ func (c *Config) Configure(t *testing.T, conf *cfg.Config, pipelineName string) 
 	output.Set("ingest_pipeline", c.Pipeline)
 	output.Set("username", c.Username)
 	output.Set("password", c.Password)
-	output.Set("endpoints", []string{c.Endpoint})
+	output.Set("endpoints", c.Endpoints)
 
-	err := createIngestPipeline(c.Endpoint, c.Pipeline, c.Username, c.Password)
-	require.NoError(t, err)
+	for _, endpoint := range c.Endpoints {
+		err := createIngestPipeline(endpoint, c.Pipeline, c.Username, c.Password)
+		require.NoError(t, err)
+	}
 }
 
 // Send creates file and writes messages
@@ -63,12 +65,19 @@ func (c *Config) Send(t *testing.T) {
 
 // Validate waits for the message processing to complete
 func (c *Config) Validate(t *testing.T) {
-	err := waitUntilIndexReady(c.Endpoint, c.index, c.Username, c.Password, c.Count, 10, 250*time.Millisecond)
+	err := waitUntilIndexReady(c.Endpoints, c.index, c.Username, c.Password, c.Count, 10, 250*time.Millisecond)
 	require.NoError(t, err)
-	docs, err := getDocumentsFromIndex(c.Endpoint, c.index, c.Username, c.Password)
-	require.NoError(t, err)
-	require.Len(t, docs, c.Count)
-	for _, doc := range docs {
+
+	var allDocs []map[string]any
+	for _, endpoint := range c.Endpoints {
+		docs, err := getDocumentsFromIndex(endpoint, c.index, c.Username, c.Password)
+		require.NoError(t, err)
+		t.Logf("endpoint %s: %d docs", endpoint, len(docs))
+		allDocs = append(allDocs, docs...)
+	}
+
+	require.Len(t, allDocs, c.Count)
+	for _, doc := range allDocs {
 		if _, ok := doc["processed_at"]; !ok {
 			t.Errorf("doc %v doesn't have processed_at field", doc)
 		}

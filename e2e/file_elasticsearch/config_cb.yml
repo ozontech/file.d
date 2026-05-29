@@ -1,0 +1,19 @@
+pipelines:
+  file_elasticsearch_cb:
+    input:
+      type: file
+      persistence_mode: async
+      watching_dir: SOME_DIR
+      offsets_file: SOME_FILE
+      offsets_op: reset
+    output:
+      type: elasticsearch
+      endpoints:
+        - http://localhost:9200
+        - http://localhost:9201
+      username: SOME_USERNAME
+      password: SOME_PASSWORD
+      index_format: SOME_INDEX
+      batch_size: 2
+      ban_period: 6s
+      reconnect_interval: 3s

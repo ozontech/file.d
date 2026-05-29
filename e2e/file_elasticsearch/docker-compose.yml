@@ -1,10 +1,9 @@
-# https://github.com/elastic/start-local/tree/main
 services:
   elasticsearch:
-    image: elasticsearch:8.17.0
+    image: elasticsearch:9.4.0
     container_name: es-local-test
     ports:
-      - "19200:9200"
+      - "9200:9200"
     environment:
       - discovery.type=single-node
       - ELASTIC_PASSWORD=elastic
@@ -15,7 +14,27 @@ services:
       test:
         [
           "CMD-SHELL",
-          "curl --output /dev/null --silent --head --fail -u elastic:elastic http://elasticsearch:19200",
+          "curl --output /dev/null --silent --head --fail -u elastic:elastic http://elasticsearch:9200",
+        ]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+  elasticsearch2:
+    image: elasticsearch:9.4.0
+    container_name: es-local-test-2
+    ports:
+      - "9201:9200"
+    environment:
+      - discovery.type=single-node
+      - ELASTIC_PASSWORD=elastic
+      - xpack.security.enabled=true
+      - xpack.security.http.ssl.enabled=false
+    mem_limit: 1073741824
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl --output /dev/null --silent --head --fail -u elastic:elastic http://elasticsearch:9200",
         ]
       interval: 10s
       timeout: 10s
