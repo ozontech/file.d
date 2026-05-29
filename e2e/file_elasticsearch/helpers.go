@@ -50,7 +50,7 @@ func createIngestPipeline(elasticURL, pipelineID, username, password string, ret
 		}
 
 		if i < retries-1 {
-			time.Sleep(200 * time.Millisecond)
+			time.Sleep(time.Second)
 		}
 	}
 
