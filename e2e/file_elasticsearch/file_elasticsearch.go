@@ -46,7 +46,7 @@ func (c *Config) Configure(t *testing.T, conf *cfg.Config, pipelineName string) 
 	output.Set("endpoints", c.Endpoints)
 
 	for _, endpoint := range c.Endpoints {
-		err := createIngestPipeline(endpoint, c.Pipeline, c.Username, c.Password)
+		err := createIngestPipeline(endpoint, c.Pipeline, c.Username, c.Password, c.Count)
 		require.NoError(t, err)
 	}
 }
