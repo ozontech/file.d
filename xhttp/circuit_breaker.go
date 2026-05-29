@@ -24,7 +24,7 @@ type circuitBreaker struct {
 }
 
 func newCircuitBreaker(ctx context.Context, uris []*fasthttp.URI, banPeriod, reconnectInterval time.Duration) *circuitBreaker {
-	if banPeriod <= 0 {
+	if banPeriod <= 0 || len(uris) == 1 {
 		return nil
 	}
 
