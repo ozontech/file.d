@@ -1,6 +1,6 @@
 services:
   elasticsearch:
-    image: elasticsearch:8.17.0
+    image: elasticsearch:9.4.0
     container_name: es-local-test
     ports:
       - "19200:9200"
@@ -14,14 +14,14 @@ services:
       test:
         [
           "CMD-SHELL",
-          "curl --output /dev/null --silent --head --fail -u elastic:elastic http://elasticsearch:19200",
+          "curl --output /dev/null --silent --head --fail -u elastic:elastic http://localhost:9200",
         ]
       interval: 10s
       timeout: 10s
       retries: 10
   elasticsearch2:
-    image: elasticsearch:8.17.0
-    container_name: es-local-test-2
+    image: elasticsearch:9.4.0
+    container_name: es-local-test-cb
     ports:
       - "19201:9200"
     environment:
@@ -34,27 +34,7 @@ services:
       test:
         [
           "CMD-SHELL",
-          "curl --output /dev/null --silent --head --fail -u elastic:elastic http://elasticsearch2:19201",
-        ]
-      interval: 10s
-      timeout: 10s
-      retries: 10
-  elasticsearch3:
-    image: elasticsearch:8.17.0
-    container_name: es-local-test-3
-    ports:
-      - "19202:9200"
-    environment:
-      - discovery.type=single-node
-      - ELASTIC_PASSWORD=elastic
-      - xpack.security.enabled=true
-      - xpack.security.http.ssl.enabled=false
-    mem_limit: 1073741824
-    healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "curl --output /dev/null --silent --head --fail -u elastic:elastic http://elasticsearch3:19202",
+          "curl --output /dev/null --silent --head --fail -u elastic:elastic http://localhost:9200",
         ]
       interval: 10s
       timeout: 10s

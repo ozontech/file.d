@@ -9,6 +9,7 @@ pipelines:
     output:
       type: elasticsearch
       endpoints:
+        - http://localhost:19200
         - http://localhost:19201
         - http://localhost:19202
       username: SOME_USERNAME

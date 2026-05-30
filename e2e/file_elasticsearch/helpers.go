@@ -9,52 +9,37 @@ import (
 	"time"
 )
 
-func createIngestPipeline(elasticURL, pipelineID, username, password string, retries int) error {
+func createIngestPipeline(elasticURL, pipelineID, username, password string) error {
 	url := fmt.Sprintf("%s/_ingest/pipeline/%s", elasticURL, pipelineID)
 	pipelineBody := `{"description":"test ingest pipeline","processors":[{"set":{"field":"processed_at","value":"{{_ingest.timestamp}}"}}]}`
 
-	var err error
-	for i := range retries {
-		err = func() error {
-			req, err := http.NewRequest(http.MethodPut, url, strings.NewReader(pipelineBody))
-			if err != nil {
-				return fmt.Errorf("failed to create request: %w", err)
-			}
-
-			req.Header.Set("Content-Type", "application/json")
-			if username != "" && password != "" {
-				req.SetBasicAuth(username, password)
-			}
-
-			client := &http.Client{Timeout: time.Second}
-			resp, err := client.Do(req)
-			if err != nil {
-				return fmt.Errorf("failed to make HTTP request: %w", err)
-			}
-			defer func() { _ = resp.Body.Close() }()
-
-			respBody, err := io.ReadAll(resp.Body)
-			if err != nil {
-				return fmt.Errorf("failed to read body response: %w", err)
-			}
-
-			if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-				return fmt.Errorf("unexpected status: %d, body: %s", resp.StatusCode, string(respBody))
-			}
-
-			return nil
-		}()
-
-		if err == nil {
-			return nil
-		}
-
-		if i < retries-1 {
-			time.Sleep(time.Second)
-		}
+	req, err := http.NewRequest(http.MethodPut, url, strings.NewReader(pipelineBody))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
 	}
 
-	return fmt.Errorf("can't create pipeline after %d retries: %w", retries, err)
+	req.Header.Set("Content-Type", "application/json")
+	if username != "" && password != "" {
+		req.SetBasicAuth(username, password)
+	}
+
+	client := &http.Client{Timeout: time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to make HTTP request: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read body response: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		return fmt.Errorf("unexpected status: %d, body: %s", resp.StatusCode, string(respBody))
+	}
+
+	return nil
 }
 
 func getDocumentsFromIndex(elasticURL, indexName, username, password string) ([]map[string]any, error) {
