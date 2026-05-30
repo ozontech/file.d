@@ -41,7 +41,7 @@ services:
       retries: 10
   elasticsearch3:
     image: elasticsearch:8.17.0
-    container_name: es-local-test-2
+    container_name: es-local-test-3
     ports:
       - "19202:9200"
     environment:
@@ -54,7 +54,7 @@ services:
       test:
         [
           "CMD-SHELL",
-          "curl --output /dev/null --silent --head --fail -u elastic:elastic http://elasticsearch2:19201",
+          "curl --output /dev/null --silent --head --fail -u elastic:elastic http://elasticsearch3:19202",
         ]
       interval: 10s
       timeout: 10s
