@@ -17,6 +17,17 @@ Content-Type header for HTTP requests.
 
 <br>
 
+**`encoding`** *`EncodingConfig`* 
+
+Configure event serialization before sending.
+Includes:
+1) Type - codec to use for serializing events:
+* `json` - serializes the full event as a JSON object (default).
+* `raw`  - extracts a single field and sends its value as-is.
+2) Params - Encoder parameters.
+
+<br>
+
 **`use_gzip`** *`bool`* *`default=false`* 
 
 If set, the plugin will use gzip encoding.
@@ -132,6 +143,5 @@ Multiplier for exponential increase of retention between retries
 After a non-retryable write error, fall with a non-zero exit code or not
 
 <br>
-
 
 <br>*Generated using [__insane-doc__](https://github.com/vitkovskii/insane-doc)*

@@ -40,6 +40,8 @@ result:
 ```
 }*/
 
+const checkTypeOpTag = "check_type"
+
 type checkTypeVal int
 
 const (

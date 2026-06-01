@@ -393,6 +393,24 @@ func TestBuildNodes(t *testing.T) {
 			wantErr: true,
 		},
 		{
+			name: "err_field_op_node_containsany_invalid_values_len",
+			tree: treeNode{
+				fieldOp:   "contains_any",
+				fieldName: "pod",
+				values:    [][]byte{[]byte(`1`), []byte(`2`)},
+			},
+			wantErr: true,
+		},
+		{
+			name: "err_field_op_node_containsany_empty_value",
+			tree: treeNode{
+				fieldOp:   "contains_any",
+				fieldName: "pod",
+				values:    [][]byte{[]byte("")},
+			},
+			wantErr: true,
+		},
+		{
 			name: "err_field_op_node_invalid_op_type",
 			tree: treeNode{
 				fieldOp:   "noop",
@@ -579,6 +597,20 @@ func TestCheck(t *testing.T) {
 				{`{"pod":"my-test-2-pod"}`, true},
 				{`{"pod":"my-test-3-pod"}`, false},
 				{`{"pod":"my-TEST-2-pod"}`, false},
+			},
+		},
+		{
+			name: "contains_any",
+			tree: treeNode{
+				fieldOp:   "contains_any",
+				fieldName: "pod",
+				values:    [][]byte{[]byte("!#$")},
+			},
+			data: []argsResp{
+				{`{"pod":"my-test-pod!"}`, true},
+				{`{"pod":"#my-test-pod#"}`, true},
+				{`{"pod":"$$$"}`, true},
+				{`{"pod":"my-test-pod"}`, false},
 			},
 		},
 		{

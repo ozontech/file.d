@@ -52,7 +52,6 @@ pipelines:
           case_sensitive: true
 ```
 
-
 ## Field operations
 **`Equal`** checks whether the field value is equal to one of the elements in the values list.
 
@@ -98,6 +97,30 @@ result:
 {"pod":"test-not-my-pod","service":"test-service-2"} # discarded
 {"pod":"my-test-pod","service":"test-service"}       # discarded
 {"pod":"test-pod","service":"test-service-1"}        # not discarded
+```
+
+<br>
+
+**`ContainsAny`** checks whether the field value contains any of the value characters.
+
+Example:
+```yaml
+pipelines:
+  test:
+    actions:
+      - type: discard
+        do_if:
+          op: contains_any
+          field: service
+          values: ['!$#']
+```
+
+result:
+```
+{"pod":"test-pod","service":"test-service!"}     # discarded
+{"pod":"test-pod","service":"#my_service#"}      # discarded
+{"pod":"test-pod","service":"$$$"}               # discarded
+{"pod":"test-pod","service":"test-service-1"}    # not discarded
 ```
 
 <br>

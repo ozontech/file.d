@@ -58,6 +58,8 @@ Result:
 ```
 }*/
 
+const tsCmpOpTag = "ts_cmp"
+
 type cmpValueChangingMode int
 
 const (
