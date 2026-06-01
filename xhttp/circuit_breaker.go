@@ -21,6 +21,7 @@ type circuitBreaker struct {
 	idxByURI        map[string]int
 	banPeriod       time.Duration
 	mu              sync.RWMutex
+	nowFn           func() time.Time
 }
 
 func newCircuitBreaker(ctx context.Context, uris []*fasthttp.URI, banPeriod, reconnectInterval time.Duration) *circuitBreaker {
@@ -33,6 +34,7 @@ func newCircuitBreaker(ctx context.Context, uris []*fasthttp.URI, banPeriod, rec
 		activeEndpoints: make([]int, 0, len(uris)),
 		idxByURI:        make(map[string]int, len(uris)),
 		banPeriod:       banPeriod,
+		nowFn:           xtime.GetInaccurateTime,
 	}
 
 	for i, uri := range uris {
@@ -63,7 +65,7 @@ func (cb *circuitBreaker) banEndpoint(uri *fasthttp.URI) {
 	defer cb.mu.Unlock()
 
 	idx := cb.idxByURI[uri.String()]
-	cb.endpoints[idx].banUntil = xtime.GetInaccurateTime().Add(cb.banPeriod)
+	cb.endpoints[idx].banUntil = cb.nowFn().Add(cb.banPeriod)
 
 	for i, activeIdx := range cb.activeEndpoints {
 		if activeIdx == idx {
@@ -85,7 +87,7 @@ func (cb *circuitBreaker) restoreBannedEndpoints() {
 	cb.mu.Lock()
 	defer cb.mu.Unlock()
 
-	now := xtime.GetInaccurateTime()
+	now := cb.nowFn()
 	for i := range cb.endpoints {
 		e := &cb.endpoints[i]
 		if !e.banUntil.IsZero() && now.After(e.banUntil) {
@@ -107,4 +109,10 @@ func (cb *circuitBreaker) checkBannedEndpoints(ctx context.Context, reconnectInt
 			cb.restoreBannedEndpoints()
 		}
 	}
+}
+
+func (cb *circuitBreaker) setNowFn(nowFn func() time.Time) {
+	cb.mu.Lock()
+	defer cb.mu.Unlock()
+	cb.nowFn = nowFn
 }
