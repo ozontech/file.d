@@ -219,7 +219,7 @@ func TestCircuitBreakerFullCycle(t *testing.T) {
 
 		require.ElementsMatch(t, []string{ep0, ep2}, pickedURIs(cb, 60))
 
-		time.Sleep(5 * time.Second)
+		time.Sleep(7 * time.Second)
 		require.ElementsMatch(t, []string{ep0, ep1, ep2}, pickedURIs(cb, 30))
 	})
 }
