@@ -226,3 +226,10 @@ func formatSegments(segs []core.Segment) string {
 	}
 	return b.String()
 }
+
+func resolveIndex(idx, length int) int {
+	if idx < 0 {
+		idx = length + idx
+	}
+	return idx
+}

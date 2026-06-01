@@ -312,12 +312,3 @@ func deleteFromArray(arr []core.Value, segs []core.Segment) ([]core.Value, error
 
 	return arr, nil
 }
-
-// resolveIndex maps a possibly-negative index to an absolute position.
-// -1 -> last element, -2 -> second to last, etc.
-func resolveIndex(idx, length int) int {
-	if idx < 0 {
-		idx = length + idx
-	}
-	return idx
-}
