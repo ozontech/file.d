@@ -205,7 +205,6 @@ func TestRootTargetSet(t *testing.T) {
 	})
 
 	t.Run("set_parent_missing_is_silent_noop", func(t *testing.T) {
-
 		target, root := newTestTarget(t, `{}`, nil)
 		defer insaneJSON.Release(root)
 
