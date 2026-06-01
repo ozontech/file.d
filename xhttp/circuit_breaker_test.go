@@ -1,6 +1,7 @@
 package xhttp
 
 import (
+	"sync"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -175,13 +176,21 @@ func TestCircuitBreakerScenarios(t *testing.T) {
 					}
 				}
 
-				require.ElementsMatch(t, tt.wantActive, cb.activeEndpoints)
+				cb.mu.RLock()
+				activeEp := append([]int{}, cb.activeEndpoints...)
+				banUntil := make([]time.Time, len(cb.endpoints))
+				for i := range cb.endpoints {
+					banUntil[i] = cb.endpoints[i].banUntil
+				}
+				cb.mu.RUnlock()
+
+				require.ElementsMatch(t, tt.wantActive, activeEp)
 
 				for idx, dur := range tt.wantBanUntil {
 					if dur == 0 {
-						require.Zero(t, cb.endpoints[idx].banUntil, "endpoint[%d]: banUntil should be zero", idx)
+						require.Zero(t, banUntil[idx], "endpoint[%d]: banUntil should be zero", idx)
 					}
-					require.Equal(t, start.Add(dur), cb.endpoints[idx].banUntil)
+					require.Equal(t, start.Add(dur), banUntil[idx])
 				}
 			})
 		})
@@ -200,10 +209,7 @@ func TestCircuitBreakerFullCycle(t *testing.T) {
 		require.NotNil(t, cb)
 		cb.setNowFn(time.Now)
 
-		ep0 := cb.endpoints[0].uri.String()
-		ep1 := cb.endpoints[1].uri.String()
-		ep2 := cb.endpoints[2].uri.String()
-
+		ep0, ep1, ep2 := cb.endpoints[0].uri.String(), cb.endpoints[1].uri.String(), cb.endpoints[2].uri.String()
 		require.ElementsMatch(t, []string{ep0, ep1, ep2}, pickedURIs(cb, 30))
 
 		cb.banEndpoint(cb.endpoints[0].uri)
@@ -220,15 +226,27 @@ func TestCircuitBreakerFullCycle(t *testing.T) {
 		require.ElementsMatch(t, []string{ep0, ep1, ep2}, pickedURIs(cb, 30))
 	})
 }
-func pickedURIs(cb *circuitBreaker, n int) []string {
-	seen := make(map[string]struct{})
-	for range n {
-		uri := cb.getEndpoint()
-		if uri == nil {
-			continue
-		}
-		seen[uri.String()] = struct{}{}
+
+func pickedURIs(cb *circuitBreaker, workers int) []string {
+	var (
+		wg   sync.WaitGroup
+		mu   sync.Mutex
+		seen = make(map[string]struct{})
+	)
+
+	for range workers {
+		wg.Go(func() {
+			uri := cb.getEndpoint()
+			if uri == nil {
+				return
+			}
+
+			mu.Lock()
+			seen[uri.String()] = struct{}{}
+			mu.Unlock()
+		})
 	}
+	wg.Wait()
 
 	out := make([]string, 0, len(seen))
 	for k := range seen {
