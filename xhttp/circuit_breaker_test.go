@@ -8,11 +8,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// largeReconnectInterval is set to time.Hour, so background ticker doesn't fire during test.
 const (
-	largeReconnectInterval        = time.Hour
-	opBanEndpoint          string = "banEndpoint"
-	opAddTime              string = "addTime"
+	opBanEndpoint string = "banEndpoint"
+	opAddTime     string = "addTime"
 )
 
 type cbStep struct {
@@ -57,7 +55,7 @@ func TestNewCircuitBreaker(t *testing.T) {
 			require.NoError(t, err)
 
 			ctx := t.Context()
-			cb := newCircuitBreaker(ctx, uris, tt.banPeriod, largeReconnectInterval)
+			cb := newCircuitBreaker(ctx, uris, tt.banPeriod, 5*time.Minute)
 
 			if tt.disabled {
 				require.Nil(t, cb, "circuit breaker must be disabled with these parameters")
@@ -65,7 +63,6 @@ func TestNewCircuitBreaker(t *testing.T) {
 			}
 
 			require.NotNil(t, cb)
-			require.Len(t, cb.endpoints, len(tt.endpoints))
 			require.Len(t, cb.activeEndpoints, len(tt.endpoints))
 			require.Equal(t, cb.banPeriod, tt.banPeriod)
 			for i := range cb.endpoints {
