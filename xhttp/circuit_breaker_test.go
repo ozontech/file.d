@@ -210,14 +210,14 @@ func TestCircuitBreakerFullCycle(t *testing.T) {
 		require.ElementsMatch(t, []string{ep0, ep1, ep2}, pickedURIs(cb, 30))
 
 		cb.banEndpoint(cb.endpoints[0].uri)
-		require.ElementsMatch(t, []string{ep1, ep2}, pickedURIs(cb, 30))
+		require.ElementsMatch(t, []string{ep1, ep2}, pickedURIs(cb, 40))
 		time.Sleep(5 * time.Second)
 
 		cb.banEndpoint(cb.endpoints[1].uri)
-		require.ElementsMatch(t, []string{ep2}, pickedURIs(cb, 30))
+		require.ElementsMatch(t, []string{ep2}, pickedURIs(cb, 50))
 		time.Sleep(8 * time.Second)
 
-		require.ElementsMatch(t, []string{ep0, ep2}, pickedURIs(cb, 30))
+		require.ElementsMatch(t, []string{ep0, ep2}, pickedURIs(cb, 60))
 
 		time.Sleep(5 * time.Second)
 		require.ElementsMatch(t, []string{ep0, ep1, ep2}, pickedURIs(cb, 30))

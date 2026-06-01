@@ -15,7 +15,7 @@ services:
       test:
         [
           "CMD-SHELL",
-          "curl --output /dev/null --silent --head --fail -u elastic:elastic http://localhost:9200",
+          "curl --output /dev/null --silent --head --fail -u elastic:elastic http://elasticsearch:19200",
         ]
       interval: 10s
       timeout: 10s
