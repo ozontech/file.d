@@ -63,6 +63,9 @@ func newCircuitBreaker(
 }
 
 func (cb *circuitBreaker) updateBannedEndpointsMetric() {
+	if cb.bannedEndpointsMetric == nil {
+		return
+	}
 	cb.bannedEndpointsMetric.Set(float64(len(cb.endpoints) - len(cb.activeEndpoints)))
 }
 
