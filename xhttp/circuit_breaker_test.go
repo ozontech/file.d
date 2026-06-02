@@ -14,10 +14,12 @@ const (
 	opAddTime     string = "addTime"
 )
 
+var defaultEndpoints = []string{"http://localhost:19200", "http://localhost:19201", "http://localhost:19202"}
+
 type cbStep struct {
-	operation   string
-	idxEndpoint int
-	duration    time.Duration
+	operation string
+	idxEp     int
+	duration  time.Duration
 }
 
 func TestNewCircuitBreaker(t *testing.T) {
@@ -42,13 +44,12 @@ func TestNewCircuitBreaker(t *testing.T) {
 		{
 			name:      "two_and_more_endpoints",
 			banPeriod: 3 * time.Second,
-			endpoints: []string{"http://localhost:19200", "http://localhost:19201"},
+			endpoints: defaultEndpoints,
 			disabled:  false,
 		},
 	}
 
 	for _, tt := range cases {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -83,34 +84,34 @@ func TestCircuitBreakerScenarios(t *testing.T) {
 		wantBanUntil map[int]time.Duration
 	}{
 		{
-			name:       "ban_and_removes_from_active",
-			endpoints:  []string{"http://localhost:19200", "http://localhost:19201", "http://localhost:19202"},
+			name:       "ban_removes_endpoint_from_active",
+			endpoints:  defaultEndpoints,
 			banPeriod:  10 * time.Second,
-			steps:      []cbStep{{operation: opBanEndpoint, idxEndpoint: 1}},
+			steps:      []cbStep{{operation: opBanEndpoint, idxEp: 1}},
 			wantActive: []int{0, 2},
 			wantBanUntil: map[int]time.Duration{
 				1: 10 * time.Second,
 			},
 		},
 		{
-			name:      "all_endpoints_banned",
-			endpoints: []string{"http://localhost:19200", "http://localhost:19201", "http://localhost:19202"},
+			name:      "ban_all_endpoint",
+			endpoints: defaultEndpoints,
 			banPeriod: 10 * time.Second,
 			steps: []cbStep{
-				{operation: opBanEndpoint, idxEndpoint: 0},
-				{operation: opBanEndpoint, idxEndpoint: 1},
-				{operation: opBanEndpoint, idxEndpoint: 2},
+				{operation: opBanEndpoint, idxEp: 0},
+				{operation: opBanEndpoint, idxEp: 1},
+				{operation: opBanEndpoint, idxEp: 2},
 			},
 			wantActive: nil,
 		},
 		{
-			name:      "ban_refreshes_banUntil",
-			endpoints: []string{"http://localhost:19200", "http://localhost:19201", "http://localhost:19202"},
+			name:      "ban_refreshes_ban_until",
+			endpoints: defaultEndpoints,
 			banPeriod: 10 * time.Second,
 			steps: []cbStep{
-				{operation: opBanEndpoint, idxEndpoint: 0},
+				{operation: opBanEndpoint, idxEp: 0},
 				{operation: opAddTime, duration: 5 * time.Second},
-				{operation: opBanEndpoint, idxEndpoint: 0},
+				{operation: opBanEndpoint, idxEp: 0},
 			},
 			wantActive: []int{1, 2},
 			wantBanUntil: map[int]time.Duration{
@@ -118,33 +119,33 @@ func TestCircuitBreakerScenarios(t *testing.T) {
 			},
 		},
 		{
-			name:      "restore_before_endpoint_ban",
-			endpoints: []string{"http://localhost:19200", "http://localhost:19201", "http://localhost:19202"},
+			name:      "does_not_restore_before_ban_period",
+			endpoints: defaultEndpoints,
 			banPeriod: 40 * time.Second,
 			steps: []cbStep{
-				{operation: opBanEndpoint, idxEndpoint: 0},
+				{operation: opBanEndpoint, idxEp: 0},
 				{operation: opAddTime, duration: 31 * time.Second},
 			},
 			wantActive: []int{1, 2},
 		},
 		{
-			name:      "restore_after_endpoint_ban",
-			endpoints: []string{"http://localhost:19200", "http://localhost:19201", "http://localhost:19202"},
+			name:      "restores_after_ban_period",
+			endpoints: defaultEndpoints,
 			banPeriod: 25 * time.Second,
 			steps: []cbStep{
-				{operation: opBanEndpoint, idxEndpoint: 0},
+				{operation: opBanEndpoint, idxEp: 0},
 				{operation: opAddTime, duration: 31 * time.Second},
 			},
 			wantActive: []int{0, 1, 2},
 		},
 		{
-			name:      "partional_after_endpoint_ban",
-			endpoints: []string{"http://localhost:19200", "http://localhost:19201", "http://localhost:19202"},
+			name:      "partially_restores_expired_endpoints",
+			endpoints: defaultEndpoints,
 			banPeriod: 10 * time.Second,
 			steps: []cbStep{
-				{operation: opBanEndpoint, idxEndpoint: 0},
+				{operation: opBanEndpoint, idxEp: 0},
 				{operation: opAddTime, duration: 25 * time.Second},
-				{operation: opBanEndpoint, idxEndpoint: 1},
+				{operation: opBanEndpoint, idxEp: 1},
 				{operation: opAddTime, duration: 10 * time.Second},
 			},
 			wantActive: []int{0, 2},
@@ -152,7 +153,6 @@ func TestCircuitBreakerScenarios(t *testing.T) {
 	}
 
 	for _, tt := range cases {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -170,7 +170,7 @@ func TestCircuitBreakerScenarios(t *testing.T) {
 				for _, s := range tt.steps {
 					switch s.operation {
 					case opBanEndpoint:
-						cb.banEndpoint(cb.endpoints[s.idxEndpoint].uri)
+						cb.banEndpoint(cb.endpoints[s.idxEp].uri)
 					case opAddTime:
 						time.Sleep(s.duration)
 					}
@@ -201,7 +201,7 @@ func TestCircuitBreakerFullCycle(t *testing.T) {
 	t.Parallel()
 
 	synctest.Test(t, func(t *testing.T) {
-		uris, err := parseEndpoints([]string{"http://localhost:19200", "http://localhost:19201", "http://localhost:19202"})
+		uris, err := parseEndpoints(defaultEndpoints)
 		require.NoError(t, err)
 
 		ctx := t.Context()
