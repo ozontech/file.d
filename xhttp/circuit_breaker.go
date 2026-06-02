@@ -38,6 +38,12 @@ func newCircuitBreaker(
 	bannedEndpointsMetric *metric.Gauge,
 ) *circuitBreaker {
 	if banPeriod <= 0 || len(uris) == 1 {
+		logger.Info(
+			"circuit breaker disabled",
+			zap.Duration("ban_period", banPeriod),
+			zap.Int("endpoints_count", len(uris)),
+		)
+
 		return nil
 	}
 
@@ -56,6 +62,13 @@ func newCircuitBreaker(
 		cb.idxByURI[uri.String()] = i
 		cb.activeEndpoints = append(cb.activeEndpoints, i)
 	}
+
+	logger.Info(
+		"circuit breaker enabled",
+		zap.Duration("ban_period", banPeriod),
+		zap.Duration("reconnect_interval", reconnectInterval),
+		zap.Int("endpoints_count", len(uris)),
+	)
 
 	go cb.checkBannedEndpoints(ctx, reconnectInterval)
 
