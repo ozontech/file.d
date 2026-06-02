@@ -340,7 +340,7 @@ func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 		"status_code",
 	)
 	p.bannedEndpointsMetric = ctl.RegisterGauge(
-		"output_http_banned_endpoints_count",
+		"output_splunk_banned_endpoints_count",
 		"Current number of endpoints banned by circuit breaker",
 	)
 	p.bannedEndpointsMetric.Set(0)
