@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 )
 
 const (
@@ -60,7 +61,7 @@ func TestNewCircuitBreaker(t *testing.T) {
 			require.NoError(t, err)
 
 			ctx := t.Context()
-			cb := newCircuitBreaker(ctx, uris, tt.banPeriod, 5*time.Minute)
+			cb := newCircuitBreaker(ctx, zap.NewNop(), uris, tt.banPeriod, 5*time.Minute, nil)
 
 			if tt.disabled {
 				require.Nil(t, cb, "circuit breaker must be disabled with these parameters")
@@ -165,7 +166,7 @@ func TestCircuitBreakerScenarios(t *testing.T) {
 				uris, err := parseEndpoints(tt.endpoints)
 				require.NoError(t, err)
 
-				cb := newCircuitBreaker(ctx, uris, tt.banPeriod, 30*time.Second)
+				cb := newCircuitBreaker(ctx, zap.NewNop(), uris, tt.banPeriod, 30*time.Second, nil)
 				require.NotNil(t, cb)
 				cb.setNowFn(time.Now)
 
@@ -208,7 +209,7 @@ func TestCircuitBreakerFullCycle(t *testing.T) {
 		require.NoError(t, err)
 
 		ctx := t.Context()
-		cb := newCircuitBreaker(ctx, uris, 10*time.Second, 3*time.Second)
+		cb := newCircuitBreaker(ctx, zap.NewNop(), uris, 10*time.Second, 3*time.Second, nil)
 		require.NotNil(t, cb)
 		cb.setNowFn(time.Now)
 

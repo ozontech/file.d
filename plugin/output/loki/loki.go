@@ -245,7 +245,8 @@ type Plugin struct {
 	batcher *pipeline.RetriableBatcher
 
 	// plugin metrics
-	sendErrorMetric *metric.CounterVec
+	sendErrorMetric       *metric.CounterVec
+	bannedEndpointsMetric *metric.Gauge
 
 	labels map[string]string
 
@@ -448,6 +449,11 @@ func (p *Plugin) send(root *insaneJSON.Root) (int, error) {
 
 func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 	p.sendErrorMetric = ctl.RegisterCounterVec("output_loki_send_error_total", "Total Loki send errors", "status_code")
+	p.bannedEndpointsMetric = ctl.RegisterGauge(
+		"output_http_banned_endpoints_count",
+		"Current number of endpoints banned by circuit breaker",
+	)
+	p.bannedEndpointsMetric.Set(0)
 }
 
 func (p *Plugin) prepareClient(ctx context.Context) {
@@ -462,6 +468,8 @@ func (p *Plugin) prepareClient(ctx context.Context) {
 			MaxConnDuration:     p.config.KeepAlive.MaxConnDuration_,
 			MaxIdleConnDuration: p.config.KeepAlive.MaxIdleConnDuration_,
 		},
+		Logger:                p.logger,
+		BannedEndpointsMetric: p.bannedEndpointsMetric,
 	}
 
 	var err error

@@ -7,8 +7,10 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/xtls"
 	"github.com/valyala/fasthttp"
+	"go.uber.org/zap"
 )
 
 const gzipContentEncoding = "gzip"
@@ -24,15 +26,17 @@ type ClientKeepAliveConfig struct {
 }
 
 type ClientConfig struct {
-	Endpoints            []string
-	ConnectionTimeout    time.Duration
-	AuthHeader           string
-	CustomHeaders        map[string]string
-	GzipCompressionLevel string
-	TLS                  *ClientTLSConfig
-	KeepAlive            *ClientKeepAliveConfig
-	BanPeriod            time.Duration
-	ReconnectInterval    time.Duration
+	Endpoints             []string
+	ConnectionTimeout     time.Duration
+	AuthHeader            string
+	CustomHeaders         map[string]string
+	GzipCompressionLevel  string
+	TLS                   *ClientTLSConfig
+	KeepAlive             *ClientKeepAliveConfig
+	BanPeriod             time.Duration
+	ReconnectInterval     time.Duration
+	Logger                *zap.Logger
+	BannedEndpointsMetric *metric.Gauge
 }
 
 type Client struct {
@@ -74,9 +78,16 @@ func NewClient(ctx context.Context, cfg *ClientConfig) (*Client, error) {
 	}
 
 	return &Client{
-		client:               client,
-		endpoints:            endpoints,
-		cb:                   newCircuitBreaker(ctx, endpoints, cfg.BanPeriod, cfg.ReconnectInterval),
+		client:    client,
+		endpoints: endpoints,
+		cb: newCircuitBreaker(
+			ctx,
+			cfg.Logger,
+			endpoints,
+			cfg.BanPeriod,
+			cfg.ReconnectInterval,
+			cfg.BannedEndpointsMetric,
+		),
 		authHeader:           cfg.AuthHeader,
 		customHeaders:        cfg.CustomHeaders,
 		gzipCompressionLevel: parseGzipCompressionLevel(cfg.GzipCompressionLevel),

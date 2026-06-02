@@ -49,8 +49,9 @@ type Plugin struct {
 	mu           *sync.Mutex
 
 	// plugin metrics
-	sendErrorMetric      *metric.CounterVec
-	indexingErrorsMetric *metric.Counter
+	sendErrorMetric       *metric.CounterVec
+	indexingErrorsMetric  *metric.Counter
+	bannedEndpointsMetric *metric.Gauge
 
 	router *pipeline.Router
 }
@@ -332,6 +333,11 @@ func (p *Plugin) Out(event *pipeline.Event) {
 func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 	p.sendErrorMetric = ctl.RegisterCounterVec("output_elasticsearch_send_error_total", "Total elasticsearch send errors", "status_code")
 	p.indexingErrorsMetric = ctl.RegisterCounter("output_elasticsearch_index_error_total", "Number of elasticsearch indexing errors")
+	p.bannedEndpointsMetric = ctl.RegisterGauge(
+		"output_http_banned_endpoints_count",
+		"Current number of endpoints banned by circuit breaker",
+	)
+	p.bannedEndpointsMetric.Set(0)
 }
 
 func (p *Plugin) prepareClient(ctx context.Context) {
@@ -345,6 +351,8 @@ func (p *Plugin) prepareClient(ctx context.Context) {
 			MaxConnDuration:     p.config.KeepAlive.MaxConnDuration_,
 			MaxIdleConnDuration: p.config.KeepAlive.MaxIdleConnDuration_,
 		},
+		Logger:                p.logger,
+		BannedEndpointsMetric: p.bannedEndpointsMetric,
 	}
 	if p.config.CACert != "" {
 		config.TLS = &xhttp.ClientTLSConfig{

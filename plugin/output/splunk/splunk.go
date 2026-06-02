@@ -96,7 +96,8 @@ type Plugin struct {
 	cancel context.CancelFunc
 
 	// plugin metrics
-	sendErrorMetric *metric.CounterVec
+	sendErrorMetric       *metric.CounterVec
+	bannedEndpointsMetric *metric.Gauge
 
 	router *pipeline.Router
 }
@@ -338,6 +339,11 @@ func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 		"Total splunk send errors",
 		"status_code",
 	)
+	p.bannedEndpointsMetric = ctl.RegisterGauge(
+		"output_http_banned_endpoints_count",
+		"Current number of endpoints banned by circuit breaker",
+	)
+	p.bannedEndpointsMetric.Set(0)
 }
 
 func (p *Plugin) prepareClient(ctx context.Context) {
@@ -355,6 +361,8 @@ func (p *Plugin) prepareClient(ctx context.Context) {
 			// TODO: make this configuration option and false by default
 			InsecureSkipVerify: true,
 		},
+		Logger:                p.logger.Desugar(),
+		BannedEndpointsMetric: p.bannedEndpointsMetric,
 	}
 	if p.config.UseGzip {
 		config.GzipCompressionLevel = p.config.GzipCompressionLevel

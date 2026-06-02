@@ -6,8 +6,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/xtime"
 	"github.com/valyala/fasthttp"
+	"go.uber.org/zap"
 )
 
 type endpoint struct {
@@ -20,21 +22,33 @@ type circuitBreaker struct {
 	activeEndpoints []int
 	idxByURI        map[string]int
 	banPeriod       time.Duration
-	mu              sync.RWMutex
-	nowFn           func() time.Time
+
+	logger                *zap.Logger
+	bannedEndpointsMetric *metric.Gauge
+
+	mu    sync.RWMutex
+	nowFn func() time.Time
 }
 
-func newCircuitBreaker(ctx context.Context, uris []*fasthttp.URI, banPeriod, reconnectInterval time.Duration) *circuitBreaker {
+func newCircuitBreaker(
+	ctx context.Context,
+	logger *zap.Logger,
+	uris []*fasthttp.URI,
+	banPeriod, reconnectInterval time.Duration,
+	bannedEndpointsMetric *metric.Gauge,
+) *circuitBreaker {
 	if banPeriod <= 0 || len(uris) == 1 {
 		return nil
 	}
 
 	cb := &circuitBreaker{
-		endpoints:       make([]endpoint, 0, len(uris)),
-		activeEndpoints: make([]int, 0, len(uris)),
-		idxByURI:        make(map[string]int, len(uris)),
-		banPeriod:       banPeriod,
-		nowFn:           xtime.GetInaccurateTime,
+		endpoints:             make([]endpoint, 0, len(uris)),
+		activeEndpoints:       make([]int, 0, len(uris)),
+		idxByURI:              make(map[string]int, len(uris)),
+		banPeriod:             banPeriod,
+		logger:                logger,
+		bannedEndpointsMetric: bannedEndpointsMetric,
+		nowFn:                 xtime.GetInaccurateTime,
 	}
 
 	for i, uri := range uris {
@@ -46,6 +60,10 @@ func newCircuitBreaker(ctx context.Context, uris []*fasthttp.URI, banPeriod, rec
 	go cb.checkBannedEndpoints(ctx, reconnectInterval)
 
 	return cb
+}
+
+func (cb *circuitBreaker) updateBannedEndpointsMetric() {
+	cb.bannedEndpointsMetric.Set(float64(len(cb.endpoints) - len(cb.activeEndpoints)))
 }
 
 func (cb *circuitBreaker) getEndpoint() *fasthttp.URI {
@@ -74,6 +92,16 @@ func (cb *circuitBreaker) banEndpoint(uri *fasthttp.URI) {
 			break
 		}
 	}
+
+	cb.logger.Info(
+		"endpoint banned",
+		zap.String("endpoint", uri.String()),
+		zap.Duration("ban_period", cb.banPeriod),
+		zap.Int("active_endpoints_count", len(cb.activeEndpoints)),
+		zap.Int("banned_endpoints_count", len(cb.endpoints)-len(cb.activeEndpoints)),
+	)
+
+	cb.updateBannedEndpointsMetric()
 }
 
 func (cb *circuitBreaker) restoreBannedEndpoints() {
@@ -87,13 +115,26 @@ func (cb *circuitBreaker) restoreBannedEndpoints() {
 	cb.mu.Lock()
 	defer cb.mu.Unlock()
 
+	hasRestoredEndpoints := false
 	now := cb.nowFn()
 	for i := range cb.endpoints {
 		e := &cb.endpoints[i]
 		if !e.banUntil.IsZero() && now.After(e.banUntil) {
 			e.banUntil = time.Time{}
 			cb.activeEndpoints = append(cb.activeEndpoints, i)
+			hasRestoredEndpoints = true
+
+			cb.logger.Info(
+				"endpoint restored",
+				zap.String("endpoint", e.uri.String()),
+				zap.Int("active_endpoints_count", len(cb.activeEndpoints)),
+				zap.Int("banned_endpoints_count", len(cb.endpoints)-len(cb.activeEndpoints)),
+			)
 		}
+	}
+
+	if hasRestoredEndpoints {
+		cb.updateBannedEndpointsMetric()
 	}
 }
 
