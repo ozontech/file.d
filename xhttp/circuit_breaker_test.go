@@ -10,14 +10,17 @@ import (
 )
 
 const (
-	opBanEndpoint string = "banEndpoint"
-	opAddTime     string = "addTime"
+	opBanEndpoint = iota + 1
+	opSleep
 )
 
-var defaultEndpoints = []string{"http://localhost:19200", "http://localhost:19201", "http://localhost:19202"}
+var (
+	defaultEndpoints   = []string{"http://localhost:19200", "http://localhost:19201", "http://localhost:19202"}
+	defaultWorkerCount = 50
+)
 
 type cbStep struct {
-	operation string
+	operation int
 	idxEp     int
 	duration  time.Duration
 }
@@ -32,13 +35,13 @@ func TestNewCircuitBreaker(t *testing.T) {
 		{
 			name:      "ban_period_zero",
 			banPeriod: 0,
-			endpoints: []string{"http://localhost:19200", "http://localhost:19201"},
+			endpoints: defaultEndpoints,
 			disabled:  true,
 		},
 		{
 			name:      "single_endpoint",
 			banPeriod: 2 * time.Second,
-			endpoints: []string{"http://localhost:19200"},
+			endpoints: defaultEndpoints[0:1],
 			disabled:  true,
 		},
 		{
@@ -110,7 +113,7 @@ func TestCircuitBreakerScenarios(t *testing.T) {
 			banPeriod: 10 * time.Second,
 			steps: []cbStep{
 				{operation: opBanEndpoint, idxEp: 0},
-				{operation: opAddTime, duration: 5 * time.Second},
+				{operation: opSleep, duration: 5 * time.Second},
 				{operation: opBanEndpoint, idxEp: 0},
 			},
 			wantActive: []int{1, 2},
@@ -124,7 +127,7 @@ func TestCircuitBreakerScenarios(t *testing.T) {
 			banPeriod: 40 * time.Second,
 			steps: []cbStep{
 				{operation: opBanEndpoint, idxEp: 0},
-				{operation: opAddTime, duration: 31 * time.Second},
+				{operation: opSleep, duration: 31 * time.Second},
 			},
 			wantActive: []int{1, 2},
 		},
@@ -134,7 +137,7 @@ func TestCircuitBreakerScenarios(t *testing.T) {
 			banPeriod: 25 * time.Second,
 			steps: []cbStep{
 				{operation: opBanEndpoint, idxEp: 0},
-				{operation: opAddTime, duration: 31 * time.Second},
+				{operation: opSleep, duration: 31 * time.Second},
 			},
 			wantActive: []int{0, 1, 2},
 		},
@@ -144,9 +147,9 @@ func TestCircuitBreakerScenarios(t *testing.T) {
 			banPeriod: 10 * time.Second,
 			steps: []cbStep{
 				{operation: opBanEndpoint, idxEp: 0},
-				{operation: opAddTime, duration: 25 * time.Second},
+				{operation: opSleep, duration: 25 * time.Second},
 				{operation: opBanEndpoint, idxEp: 1},
-				{operation: opAddTime, duration: 10 * time.Second},
+				{operation: opSleep, duration: 10 * time.Second},
 			},
 			wantActive: []int{0, 2},
 		},
@@ -171,7 +174,7 @@ func TestCircuitBreakerScenarios(t *testing.T) {
 					switch s.operation {
 					case opBanEndpoint:
 						cb.banEndpoint(cb.endpoints[s.idxEp].uri)
-					case opAddTime:
+					case opSleep:
 						time.Sleep(s.duration)
 					}
 				}
@@ -210,20 +213,20 @@ func TestCircuitBreakerFullCycle(t *testing.T) {
 		cb.setNowFn(time.Now)
 
 		ep0, ep1, ep2 := cb.endpoints[0].uri.String(), cb.endpoints[1].uri.String(), cb.endpoints[2].uri.String()
-		require.ElementsMatch(t, []string{ep0, ep1, ep2}, pickedURIs(cb, 30))
+		require.ElementsMatch(t, []string{ep0, ep1, ep2}, pickedURIs(cb, defaultWorkerCount))
 
 		cb.banEndpoint(cb.endpoints[0].uri)
-		require.ElementsMatch(t, []string{ep1, ep2}, pickedURIs(cb, 40))
+		require.ElementsMatch(t, []string{ep1, ep2}, pickedURIs(cb, defaultWorkerCount))
 		time.Sleep(5 * time.Second)
 
 		cb.banEndpoint(cb.endpoints[1].uri)
-		require.ElementsMatch(t, []string{ep2}, pickedURIs(cb, 50))
+		require.ElementsMatch(t, []string{ep2}, pickedURIs(cb, defaultWorkerCount))
 		time.Sleep(8 * time.Second)
 
-		require.ElementsMatch(t, []string{ep0, ep2}, pickedURIs(cb, 60))
+		require.ElementsMatch(t, []string{ep0, ep2}, pickedURIs(cb, defaultWorkerCount))
 
 		time.Sleep(7 * time.Second)
-		require.ElementsMatch(t, []string{ep0, ep1, ep2}, pickedURIs(cb, 30))
+		require.ElementsMatch(t, []string{ep0, ep1, ep2}, pickedURIs(cb, defaultWorkerCount))
 	})
 }
 
