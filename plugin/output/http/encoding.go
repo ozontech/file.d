@@ -50,6 +50,11 @@ func (e *RawEncoder) Encode(event *pipeline.Event, buf []byte) []byte {
 	if node == nil {
 		return buf[:0]
 	}
+
+	if node.IsString() {
+		return append(buf, node.AsBytes()...)
+	}
+
 	return node.Encode(buf)
 }
 
