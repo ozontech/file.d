@@ -308,7 +308,7 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 		p.fields.valsBuf[i] = value
 	}
 
-	isOldValue := p.cache.Set(string(p.fields.appendTo(prefixKey)))
+	isOldValue := p.cache.Set(string(prefixKey), string(p.fields.appendTo(prefixKey)))
 	if !isOldValue {
 		// is new value
 		keysCount++

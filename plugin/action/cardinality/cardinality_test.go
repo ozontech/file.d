@@ -198,7 +198,7 @@ func TestSetAndCountPrefix(t *testing.T) {
 	var buf []byte
 	prefixKey := key.appendTo(buf)
 
-	cache.Set(string(value.appendTo(prefixKey)))
+	cache.Set(string(prefixKey), string(value.appendTo(prefixKey)))
 
 	keysCount := cache.CountPrefix(string(prefixKey))
 	assert.Equal(t, 1, keysCount, "wrong in events count")
