@@ -191,8 +191,7 @@ func parseBuiltinPatterns(s string) (int, error) {
 	}
 
 	res := 0
-	patterns := strings.Split(s, "|")
-	for _, pId := range patterns {
+	for pId := range strings.SplitSeq(s, "|") {
 		p, ok := patternById[pId]
 		if !ok {
 			return 0, fmt.Errorf("invalid pattern %q", pId)
@@ -511,10 +510,10 @@ var builtinTokenPatterns = []TokenPattern{
 		mask: pHash,
 	},
 	{
-		// RFC3339, RFC3339Nano, DateTime, DateOnly, TimeOnly, Go time with monotonic clock
+		// RFC3339, RFC3339Nano, DateTime, DateOnly, TimeOnly, Go time with optional monotonic clock
 		Placeholder: placeholderByPattern[pDatetime],
 		RE: fmt.Sprintf(`(%s)|(%s)|(%s)|(%s)`,
-			`\d\d\d\d-\d\d-\d\d \d\d:\d\d:\d\d\.\d+ [+\-]\d\d\d\d [A-Z]+ m=[+\-]\d+\.\d+`,
+			`\d\d\d\d-\d\d-\d\d \d\d:\d\d:\d\d\.\d+ [+\-]\d\d\d\d [A-Z]+( m=[+\-]\d+\.\d+)?`,
 			`\d\d\d\d-\d\d-\d\dT\d\d:\d\d:\d\d(\.\d+)?(Z|[\+\-]\d\d:\d\d)`,
 			`\d\d:\d\d:\d\d`,
 			`\d\d\d\d-\d\d-\d\d( \d\d:\d\d:\d\d)?`,
