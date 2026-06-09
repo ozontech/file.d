@@ -179,6 +179,7 @@ func TestCircuitBreakerScenarios(t *testing.T) {
 				for idx, dur := range tt.wantBanUntil {
 					if dur == 0 {
 						require.Zero(t, banUntil[idx], "endpoint[%d]: banUntil should be zero", idx)
+						continue
 					}
 					require.Equal(t, start.Add(dur), banUntil[idx])
 				}
