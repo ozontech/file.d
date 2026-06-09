@@ -55,8 +55,6 @@ func TestSimpleJoin(t *testing.T) {
 
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
 			format := `{"log":"%s\n"}`
 			content := strings.ReplaceAll(tt.content, "# ===next===\n", "")
 			lines := make([]string, 0)
