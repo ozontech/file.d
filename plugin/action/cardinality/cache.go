@@ -48,21 +48,17 @@ func (c *Cache) Set(prefix, key string) bool {
 	return false
 }
 
-func (c *Cache) isExpire(now, value int64) bool {
-	return now-value > c.ttl
-}
-
 // CountPrefix returns the number of non-expired keys under the prefix.
 // Expired keys are scheduled for async deletion.
 func (c *Cache) CountPrefix(prefix string) (count int) {
 	var keysToDelete []string
-	now := xtime.GetInaccurateUnixNano()
+	threshold := xtime.GetInaccurateUnixNano() - c.ttl
 
 	c.mu.RLock()
 	bucket := c.tree[prefix]
 	if bucket != nil {
 		for key, e := range *bucket {
-			if c.isExpire(now, e.ts) {
+			if e.ts < threshold {
 				keysToDelete = append(keysToDelete, key)
 			} else {
 				count++
