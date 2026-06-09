@@ -45,7 +45,6 @@ func TestParseBuiltinPatterns(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -101,7 +100,6 @@ func TestHasPattern(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -184,7 +182,6 @@ func TestNormalizeByBytesOnly(t *testing.T) {
 	require.NoError(t, err)
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -416,7 +413,6 @@ func TestTokenNormalizerBuiltin(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -499,7 +495,6 @@ func TestTokenNormalizerCustom(t *testing.T) {
 	out := make([]byte, 0)
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			n, err := NewTokenNormalizer(tt.params)
 			require.Equal(t, tt.wantErr, err != nil || n == nil)
@@ -536,9 +531,9 @@ func genBenchInput(count int) []byte {
 	}
 
 	var sb strings.Builder
-	for i := 0; i < count; i++ {
+	for range count {
 		for _, e := range examples {
-			sb.WriteString(fmt.Sprintf(" %s ", e))
+			fmt.Fprintf(&sb, " %s ", e)
 		}
 	}
 	return []byte(sb.String())

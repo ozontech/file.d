@@ -191,8 +191,7 @@ func parseBuiltinPatterns(s string) (int, error) {
 	}
 
 	res := 0
-	patterns := strings.Split(s, "|")
-	for _, pId := range patterns {
+	for pId := range strings.SplitSeq(s, "|") {
 		p, ok := patternById[pId]
 		if !ok {
 			return 0, fmt.Errorf("invalid pattern %q", pId)
