@@ -85,22 +85,23 @@ func (t *MapTarget) Get(path core.Path) (core.Value, error) {
 func (t *MapTarget) Set(path core.Path, value core.Value) error {
 	root := t.rootMap(path.Root)
 
-	if len(path.Segments) == 0 {
-		obj, ok := value.(core.ObjectValue)
-		if !ok {
-			return fmt.Errorf(
-				"cannot assign %s to root path: value must be an object", value.Kind())
-		}
-		for k := range root {
-			delete(root, k)
-		}
-		for k, v := range obj.V {
-			root[k] = v
-		}
-		return nil
+	if len(path.Segments) > 0 {
+		return setInMap(root, path.Segments, value)
 	}
 
-	return setInMap(root, path.Segments, value)
+	obj, ok := value.(core.ObjectValue)
+	if !ok {
+		return fmt.Errorf(
+			"cannot assign %s to root path: value must be an object", value.Kind())
+	}
+	for k := range root {
+		delete(root, k)
+	}
+	for k, v := range obj.V {
+		root[k] = v
+	}
+
+	return nil
 }
 
 // setInMap recursively writes value into obj along segs.
@@ -208,14 +209,15 @@ func setInArray(arr []core.Value, segs []core.Segment, value core.Value) ([]core
 func (t *MapTarget) Delete(path core.Path) error {
 	root := t.rootMap(path.Root)
 
-	if len(path.Segments) == 0 {
-		for k := range root {
-			delete(root, k)
-		}
-		return nil
+	if len(path.Segments) > 0 {
+		return deleteFromMap(root, path.Segments)
 	}
 
-	return deleteFromMap(root, path.Segments)
+	for k := range root {
+		delete(root, k)
+	}
+
+	return nil
 }
 
 func deleteFromMap(obj map[string]core.Value, segs []core.Segment) error {

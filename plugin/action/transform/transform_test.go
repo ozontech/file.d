@@ -369,7 +369,6 @@ func TestLanguage(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			config := test.NewConfig(&Config{Source: tc.source}, nil)
 			p, input, output := test.NewPipelineMock(

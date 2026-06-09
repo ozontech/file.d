@@ -30,14 +30,20 @@ func mkFn(name string, params ...stdlib.Parameter) stdlib.Function {
 }
 
 func TestContextVarOps(t *testing.T) {
-	ctx := NewContext(nil, nil)
+	t.Parallel()
 
 	t.Run("get_missing_returns_false", func(t *testing.T) {
+		t.Parallel()
+
+		ctx := NewContext(nil, nil)
 		_, ok := ctx.GetVar("undefined")
 		assert.False(t, ok)
 	})
 
 	t.Run("set_and_get", func(t *testing.T) {
+		t.Parallel()
+
+		ctx := NewContext(nil, nil)
 		ctx.SetVar("x", core.IntegerValue{V: 42})
 		v, ok := ctx.GetVar("x")
 		require.True(t, ok)
@@ -45,6 +51,9 @@ func TestContextVarOps(t *testing.T) {
 	})
 
 	t.Run("overwrite_keeps_last_value", func(t *testing.T) {
+		t.Parallel()
+
+		ctx := NewContext(nil, nil)
 		ctx.SetVar("y", core.StringValue{V: "first"})
 		ctx.SetVar("y", core.StringValue{V: "second"})
 		v, ok := ctx.GetVar("y")
@@ -53,6 +62,9 @@ func TestContextVarOps(t *testing.T) {
 	})
 
 	t.Run("delete_removes_var", func(t *testing.T) {
+		t.Parallel()
+
+		ctx := NewContext(nil, nil)
 		ctx.SetVar("z", core.BoolValue{V: true})
 		ctx.DeleteVar("z")
 		_, ok := ctx.GetVar("z")
@@ -60,6 +72,9 @@ func TestContextVarOps(t *testing.T) {
 	})
 
 	t.Run("delete_missing_is_noop", func(t *testing.T) {
+		t.Parallel()
+
+		ctx := NewContext(nil, nil)
 		assert.NotPanics(t, func() {
 			ctx.DeleteVar("never_existed")
 		})
@@ -67,6 +82,8 @@ func TestContextVarOps(t *testing.T) {
 }
 
 func TestContextGetTarget(t *testing.T) {
+	t.Parallel()
+
 	root := insaneJSON.Spawn()
 	defer insaneJSON.Release(root)
 	require.NoError(t, root.DecodeString(`{}`))
@@ -78,6 +95,8 @@ func TestContextGetTarget(t *testing.T) {
 }
 
 func TestJoinKinds(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		kinds []core.ValueKind
 		want  string
@@ -88,15 +107,19 @@ func TestJoinKinds(t *testing.T) {
 		{[]core.ValueKind{core.KindNull, core.KindBool, core.KindFloat}, "null or bool or float"},
 	}
 	for _, tc := range tests {
-		tc := tc
 		t.Run(tc.want, func(t *testing.T) {
+			t.Parallel()
 			assert.Equal(t, tc.want, joinKinds(tc.kinds))
 		})
 	}
 }
 
 func TestResolveFunctionArgs(t *testing.T) {
+	t.Parallel()
+
 	t.Run("positional_args_mapped_in_order", func(t *testing.T) {
+		t.Parallel()
+
 		fn := mkFn("add",
 			stdlib.Parameter{Name: "a", Required: true},
 			stdlib.Parameter{Name: "b", Required: true},
@@ -111,6 +134,8 @@ func TestResolveFunctionArgs(t *testing.T) {
 	})
 
 	t.Run("named_args_mapped_by_name", func(t *testing.T) {
+		t.Parallel()
+
 		fn := mkFn("fn",
 			stdlib.Parameter{Name: "x"},
 			stdlib.Parameter{Name: "y"},
@@ -128,6 +153,8 @@ func TestResolveFunctionArgs(t *testing.T) {
 	})
 
 	t.Run("default_used_when_param_not_provided", func(t *testing.T) {
+		t.Parallel()
+
 		fn := mkFn("fn",
 			stdlib.Parameter{Name: "sep", Default: core.StringValue{V: ","}},
 		)
@@ -137,6 +164,8 @@ func TestResolveFunctionArgs(t *testing.T) {
 	})
 
 	t.Run("positional_arg_overrides_default", func(t *testing.T) {
+		t.Parallel()
+
 		fn := mkFn("fn",
 			stdlib.Parameter{Name: "sep", Default: core.StringValue{V: ","}},
 		)
@@ -149,6 +178,8 @@ func TestResolveFunctionArgs(t *testing.T) {
 	})
 
 	t.Run("named_arg_overrides_default", func(t *testing.T) {
+		t.Parallel()
+
 		fn := mkFn("fn",
 			stdlib.Parameter{Name: "sep", Default: core.StringValue{V: ","}},
 		)
@@ -161,6 +192,8 @@ func TestResolveFunctionArgs(t *testing.T) {
 	})
 
 	t.Run("optional_param_absent_not_in_resolved", func(t *testing.T) {
+		t.Parallel()
+
 		fn := mkFn("fn",
 			stdlib.Parameter{Name: "required", Required: true},
 			stdlib.Parameter{Name: "optional", Required: false},
@@ -175,6 +208,8 @@ func TestResolveFunctionArgs(t *testing.T) {
 	})
 
 	t.Run("no_args_no_params_ok", func(t *testing.T) {
+		t.Parallel()
+
 		fn := mkFn("noop")
 		resolved, err := ResolveFunctionArgs(fn, nil, nil)
 		require.NoError(t, err)
@@ -182,6 +217,8 @@ func TestResolveFunctionArgs(t *testing.T) {
 	})
 
 	t.Run("too_many_positional_error", func(t *testing.T) {
+		t.Parallel()
+
 		fn := mkFn("fn", stdlib.Parameter{Name: "x"})
 		_, err := ResolveFunctionArgs(fn,
 			[]core.Value{core.IntegerValue{V: 1}, core.IntegerValue{V: 2}},
@@ -192,6 +229,8 @@ func TestResolveFunctionArgs(t *testing.T) {
 	})
 
 	t.Run("unknown_named_arg_error", func(t *testing.T) {
+		t.Parallel()
+
 		fn := mkFn("fn", stdlib.Parameter{Name: "x"})
 		_, err := ResolveFunctionArgs(fn,
 			nil,
@@ -203,6 +242,8 @@ func TestResolveFunctionArgs(t *testing.T) {
 	})
 
 	t.Run("arg_provided_both_positionally_and_by_name_error", func(t *testing.T) {
+		t.Parallel()
+
 		fn := mkFn("fn", stdlib.Parameter{Name: "x"})
 		_, err := ResolveFunctionArgs(fn,
 			[]core.Value{core.IntegerValue{V: 1}},
@@ -213,6 +254,8 @@ func TestResolveFunctionArgs(t *testing.T) {
 	})
 
 	t.Run("missing_required_arg_error", func(t *testing.T) {
+		t.Parallel()
+
 		fn := mkFn("fn", stdlib.Parameter{Name: "x", Required: true})
 		_, err := ResolveFunctionArgs(fn, nil, nil)
 		require.Error(t, err)
@@ -221,6 +264,8 @@ func TestResolveFunctionArgs(t *testing.T) {
 	})
 
 	t.Run("required_param_covered_by_positional_ok", func(t *testing.T) {
+		t.Parallel()
+
 		fn := mkFn("fn", stdlib.Parameter{Name: "x", Required: true})
 		resolved, err := ResolveFunctionArgs(fn,
 			[]core.Value{core.StringValue{V: "v"}},
@@ -231,6 +276,8 @@ func TestResolveFunctionArgs(t *testing.T) {
 	})
 
 	t.Run("wrong_kind_single_accepted_error", func(t *testing.T) {
+		t.Parallel()
+
 		fn := mkFn("fn",
 			stdlib.Parameter{Name: "s", AcceptedKinds: []core.ValueKind{core.KindString}},
 		)
@@ -244,6 +291,8 @@ func TestResolveFunctionArgs(t *testing.T) {
 	})
 
 	t.Run("wrong_kind_multiple_accepted_error", func(t *testing.T) {
+		t.Parallel()
+
 		fn := mkFn("fn",
 			stdlib.Parameter{Name: "v", AcceptedKinds: []core.ValueKind{core.KindString, core.KindInteger}},
 		)
@@ -257,6 +306,8 @@ func TestResolveFunctionArgs(t *testing.T) {
 	})
 
 	t.Run("correct_kind_passes", func(t *testing.T) {
+		t.Parallel()
+
 		fn := mkFn("fn",
 			stdlib.Parameter{Name: "s", AcceptedKinds: []core.ValueKind{core.KindString}},
 		)
@@ -269,6 +320,8 @@ func TestResolveFunctionArgs(t *testing.T) {
 	})
 
 	t.Run("one_of_multiple_accepted_kinds_passes", func(t *testing.T) {
+		t.Parallel()
+
 		fn := mkFn("fn",
 			stdlib.Parameter{Name: "v", AcceptedKinds: []core.ValueKind{core.KindInteger, core.KindFloat}},
 		)
@@ -281,7 +334,9 @@ func TestResolveFunctionArgs(t *testing.T) {
 	})
 
 	t.Run("empty_accepted_kinds_allows_any_type", func(t *testing.T) {
-		fn := mkFn("fn", stdlib.Parameter{Name: "v"}) // AcceptedKinds == nil
+		t.Parallel()
+
+		fn := mkFn("fn", stdlib.Parameter{Name: "v"})
 		for _, val := range []core.Value{
 			core.IntegerValue{V: 1},
 			core.StringValue{V: "x"},
@@ -294,6 +349,8 @@ func TestResolveFunctionArgs(t *testing.T) {
 	})
 
 	t.Run("kind_check_skipped_when_optional_param_absent", func(t *testing.T) {
+		t.Parallel()
+
 		fn := mkFn("fn",
 			stdlib.Parameter{
 				Name:          "opt",
@@ -306,6 +363,8 @@ func TestResolveFunctionArgs(t *testing.T) {
 	})
 
 	t.Run("error_message_includes_function_name", func(t *testing.T) {
+		t.Parallel()
+
 		fn := mkFn("my_func", stdlib.Parameter{Name: "x", Required: true})
 		_, err := ResolveFunctionArgs(fn, nil, nil)
 		require.Error(t, err)
@@ -315,6 +374,8 @@ func TestResolveFunctionArgs(t *testing.T) {
 }
 
 func TestContextCallFuncUnknown(t *testing.T) {
+	t.Parallel()
+
 	root := insaneJSON.Spawn()
 	defer insaneJSON.Release(root)
 	_ = root.DecodeString(`{}`)

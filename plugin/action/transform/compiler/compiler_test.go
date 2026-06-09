@@ -41,7 +41,6 @@ func mustFail(t *testing.T, src string) error {
 
 func TestCompileEmpty(t *testing.T) {
 	for _, src := range []string{"", "   ", ";;;", "# comment\n# another"} {
-		src := src
 		t.Run(fmt.Sprintf("%q", src), func(t *testing.T) {
 			c, err := NewCompiler(src)
 			require.NoError(t, err)
@@ -52,140 +51,87 @@ func TestCompileEmpty(t *testing.T) {
 	}
 }
 
-func TestCompileIntLiteral(t *testing.T) {
-	tests := []struct {
-		src  string
-		want int64
-	}{
-		{"0", 0},
-		{"42", 42},
-		{"1000000", 1000000},
-	}
-	for _, tc := range tests {
-		tc := tc
-		t.Run(tc.src, func(t *testing.T) {
+type litCase[V any] struct {
+	name string
+	src  string
+	want V
+}
+
+func testLit[L core.Expr, V any](t *testing.T, cases []litCase[V], getValue func(L) V) {
+	t.Helper()
+	for _, tc := range cases {
+		name := tc.name
+		if name == "" {
+			name = tc.src
+		}
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
 			expr := compile(t, tc.src)
-			lit, ok := expr.(*core.IntLit)
-			require.True(t, ok, "expected *core.IntLit, got %T", expr)
-			assert.Equal(t, tc.want, lit.Value)
+			lit, ok := expr.(L)
+			require.True(t, ok, "expected %T, got %T", (*L)(nil), expr)
+			assert.Equal(t, tc.want, getValue(lit))
 		})
 	}
 }
 
-func TestCompileFloatLiteral(t *testing.T) {
-	tests := []struct {
-		src  string
-		want float64
-	}{
-		{"3.14", 3.14},
-		{"0.5", 0.5},
-		{"1e10", 1e10},
-		{"1.5e-3", 1.5e-3},
-	}
-	for _, tc := range tests {
-		tc := tc
-		t.Run(tc.src, func(t *testing.T) {
-			expr := compile(t, tc.src)
-			lit, ok := expr.(*core.FloatLit)
-			require.True(t, ok, "expected *core.FloatLit, got %T", expr)
-			assert.Equal(t, tc.want, lit.Value)
-		})
-	}
-}
+func TestLiterals(t *testing.T) {
+	t.Parallel()
 
-func TestCompileStringLiteral(t *testing.T) {
-	tests := []struct {
-		name string
-		src  string
-		want string
-	}{
-		{"simple", `"hello"`, "hello"},
-		{"escaped_quote", `"say \"hi\""`, `say "hi"`},
-		{"escape_newline", `"line\nbreak"`, "line\nbreak"},
-		{"escape_tab", `"tab\there"`, "tab\there"},
-		{"empty_string", `""`, ""},
-	}
-	for _, tc := range tests {
-		tc := tc
-		t.Run(tc.name, func(t *testing.T) {
-			expr := compile(t, tc.src)
-			lit, ok := expr.(*core.StringLit)
-			require.True(t, ok, "expected *core.StringLit, got %T", expr)
-			assert.Equal(t, tc.want, lit.Value)
-		})
-	}
-}
+	testLit(t, []litCase[int64]{
+		{src: "0", want: 0},
+		{src: "42", want: 42},
+		{src: "1000000", want: 1000000},
+	}, func(l *core.IntLit) int64 { return l.Value })
 
-func TestCompileRawStringLiteral(t *testing.T) {
-	tests := []struct {
-		name string
-		src  string
-		want string
-	}{
-		{"simple", `s'hello'`, "hello"},
-		{"backslash_preserved", `s'C:\new\path'`, `C:\new\path`},
-		{"no_escape_processing", `s'no\nescape'`, `no\nescape`},
-	}
-	for _, tc := range tests {
-		tc := tc
-		t.Run(tc.name, func(t *testing.T) {
-			expr := compile(t, tc.src)
-			lit, ok := expr.(*core.StringLit)
-			require.True(t, ok, "expected *core.StringLit (raw), got %T", expr)
-			assert.Equal(t, tc.want, lit.Value)
-		})
-	}
-}
+	testLit(t, []litCase[float64]{
+		{src: "3.14", want: 3.14},
+		{src: "0.5", want: 0.5},
+		{src: "1e10", want: 1e10},
+		{src: "1.5e-3", want: 1.5e-3},
+	}, func(l *core.FloatLit) float64 { return l.Value })
 
-func TestCompileBoolLiterals(t *testing.T) {
-	expr := compile(t, "true")
-	lit, ok := expr.(*core.BoolLit)
-	require.True(t, ok)
-	assert.True(t, lit.Value)
+	testLit(t, []litCase[string]{
+		{name: "simple", src: `"hello"`, want: "hello"},
+		{name: "escaped_quote", src: `"say \"hi\""`, want: `say "hi"`},
+		{name: "escape_newline", src: `"line\nbreak"`, want: "line\nbreak"},
+		{name: "escape_tab", src: `"tab\there"`, want: "tab\there"},
+		{name: "empty", src: `""`, want: ""},
+	}, func(l *core.StringLit) string { return l.Value })
 
-	expr = compile(t, "false")
-	lit, ok = expr.(*core.BoolLit)
-	require.True(t, ok)
-	assert.False(t, lit.Value)
-}
+	testLit(t, []litCase[string]{
+		{name: "simple", src: `s'hello'`, want: "hello"},
+		{name: "backslash_preserved", src: `s'C:\new\path'`, want: `C:\new\path`},
+		{name: "no_escape", src: `s'no\nescape'`, want: `no\nescape`},
+	}, func(l *core.StringLit) string { return l.Value })
 
-func TestCompileNullLiteral(t *testing.T) {
-	expr := compile(t, "null")
-	_, ok := expr.(*core.NullLit)
+	testLit(t, []litCase[bool]{
+		{src: "true", want: true},
+		{src: "false", want: false},
+	}, func(l *core.BoolLit) bool { return l.Value })
+
+	testLit(t, []litCase[string]{
+		{name: "simple", src: `r'\d+'`, want: `\d+`},
+		{name: "complex", src: `r'\w+@\w+\.\w+'`, want: `\w+@\w+\.\w+`},
+	}, func(l *core.RegexLit) string { return l.Pattern })
+
+	testLit(t, []litCase[string]{
+		{src: `t'2024-01-15T10:30:00Z'`, want: "2024-01-15T10:30:00Z"},
+	}, func(l *core.TimestampLit) string { return l.Value })
+
+	_, ok := compile(t, "null").(*core.NullLit)
 	assert.True(t, ok)
 }
 
-func TestCompileRegexLiteral(t *testing.T) {
-	tests := []struct {
-		src     string
-		pattern string
-	}{
-		{`r'\d+'`, `\d+`},
-		{`r'\w+@\w+\.\w+'`, `\w+@\w+\.\w+`},
-	}
-	for _, tc := range tests {
-		tc := tc
-		t.Run(tc.pattern, func(t *testing.T) {
-			expr := compile(t, tc.src)
-			lit, ok := expr.(*core.RegexLit)
-			require.True(t, ok, "expected *core.RegexLit, got %T", expr)
-			assert.Equal(t, tc.pattern, lit.Pattern)
-		})
-	}
-}
-
-func TestCompileTimestampLiteral(t *testing.T) {
-	expr := compile(t, `t'2024-01-15T10:30:00Z'`)
-	lit, ok := expr.(*core.TimestampLit)
-	require.True(t, ok, "expected *core.TimestampLit, got %T", expr)
-	assert.Equal(t, "2024-01-15T10:30:00Z", lit.Value)
-}
-
 func TestCompileIdent(t *testing.T) {
+	t.Parallel()
+
 	tests := []string{"foo", "_bar", "baz123", "x"}
 	for _, name := range tests {
 		name := name
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
 			expr := compile(t, name)
 			ident, ok := expr.(*core.IdentExpr)
 			require.True(t, ok, "expected *core.IdentExpr, got %T", expr)
@@ -195,7 +141,11 @@ func TestCompileIdent(t *testing.T) {
 }
 
 func TestCompileEventPath(t *testing.T) {
+	t.Parallel()
+
 	t.Run("root_only", func(t *testing.T) {
+		t.Parallel()
+
 		expr := compile(t, ".")
 		p, ok := expr.(*core.PathExpr)
 		require.True(t, ok)
@@ -204,6 +154,8 @@ func TestCompileEventPath(t *testing.T) {
 	})
 
 	t.Run("single_field", func(t *testing.T) {
+		t.Parallel()
+
 		expr := compile(t, ".status")
 		p, ok := expr.(*core.PathExpr)
 		require.True(t, ok)
@@ -213,6 +165,8 @@ func TestCompileEventPath(t *testing.T) {
 	})
 
 	t.Run("nested_fields", func(t *testing.T) {
+		t.Parallel()
+
 		expr := compile(t, ".user.name")
 		p, ok := expr.(*core.PathExpr)
 		require.True(t, ok)
@@ -222,6 +176,8 @@ func TestCompileEventPath(t *testing.T) {
 	})
 
 	t.Run("field_with_integer_index", func(t *testing.T) {
+		t.Parallel()
+
 		expr := compile(t, ".items[0]")
 		p, ok := expr.(*core.PathExpr)
 		require.True(t, ok)
@@ -234,6 +190,8 @@ func TestCompileEventPath(t *testing.T) {
 	})
 
 	t.Run("field_with_dynamic_index", func(t *testing.T) {
+		t.Parallel()
+
 		expr := compile(t, ".items[idx]")
 		p, ok := expr.(*core.PathExpr)
 		require.True(t, ok)
@@ -244,6 +202,8 @@ func TestCompileEventPath(t *testing.T) {
 	})
 
 	t.Run("field_with_negative_index", func(t *testing.T) {
+		t.Parallel()
+
 		expr := compile(t, ".items[-1]")
 		p, ok := expr.(*core.PathExpr)
 		require.True(t, ok)
@@ -254,7 +214,11 @@ func TestCompileEventPath(t *testing.T) {
 }
 
 func TestCompileMetadataPath(t *testing.T) {
+	t.Parallel()
+
 	t.Run("simple_field", func(t *testing.T) {
+		t.Parallel()
+
 		expr := compile(t, "%ts")
 		p, ok := expr.(*core.PathExpr)
 		require.True(t, ok)
@@ -264,6 +228,8 @@ func TestCompileMetadataPath(t *testing.T) {
 	})
 
 	t.Run("nested", func(t *testing.T) {
+		t.Parallel()
+
 		expr := compile(t, "%meta.key")
 		p, ok := expr.(*core.PathExpr)
 		require.True(t, ok)
@@ -275,6 +241,8 @@ func TestCompileMetadataPath(t *testing.T) {
 }
 
 func TestCompileUnaryExpr(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		src string
 		op  string
@@ -284,8 +252,9 @@ func TestCompileUnaryExpr(t *testing.T) {
 		{"!.flag", "!"},
 	}
 	for _, tc := range tests {
-		tc := tc
 		t.Run(tc.src, func(t *testing.T) {
+			t.Parallel()
+
 			expr := compile(t, tc.src)
 			u, ok := expr.(*core.UnaryExpr)
 			require.True(t, ok, "expected *core.UnaryExpr, got %T", expr)
@@ -295,6 +264,8 @@ func TestCompileUnaryExpr(t *testing.T) {
 }
 
 func TestCompileBinaryExpr(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		src string
 		op  string
@@ -314,8 +285,9 @@ func TestCompileBinaryExpr(t *testing.T) {
 		{"a || b", "||"},
 	}
 	for _, tc := range tests {
-		tc := tc
 		t.Run(tc.op, func(t *testing.T) {
+			t.Parallel()
+
 			expr := compile(t, tc.src)
 			bin, ok := expr.(*core.BinaryExpr)
 			require.True(t, ok, "expected *core.BinaryExpr for %q, got %T", tc.src, expr)
@@ -325,7 +297,11 @@ func TestCompileBinaryExpr(t *testing.T) {
 }
 
 func TestCompileOperatorPrecedence(t *testing.T) {
+	t.Parallel()
+
 	t.Run("mul_over_add", func(t *testing.T) {
+		t.Parallel()
+
 		bin := compile(t, "1 + 2 * 3").(*core.BinaryExpr)
 		assert.Equal(t, "+", bin.Op)
 		rightBin, ok := bin.Right.(*core.BinaryExpr)
@@ -334,6 +310,8 @@ func TestCompileOperatorPrecedence(t *testing.T) {
 	})
 
 	t.Run("left_associative_add", func(t *testing.T) {
+		t.Parallel()
+
 		bin := compile(t, "1 * 2 + 3").(*core.BinaryExpr)
 		assert.Equal(t, "+", bin.Op)
 		leftBin, ok := bin.Left.(*core.BinaryExpr)
@@ -342,6 +320,8 @@ func TestCompileOperatorPrecedence(t *testing.T) {
 	})
 
 	t.Run("and_over_or", func(t *testing.T) {
+		t.Parallel()
+
 		bin := compile(t, "a || b && c").(*core.BinaryExpr)
 		assert.Equal(t, "||", bin.Op)
 		rightBin, ok := bin.Right.(*core.BinaryExpr)
@@ -350,6 +330,8 @@ func TestCompileOperatorPrecedence(t *testing.T) {
 	})
 
 	t.Run("eq_over_and", func(t *testing.T) {
+		t.Parallel()
+
 		bin := compile(t, "a == b && c != d").(*core.BinaryExpr)
 		assert.Equal(t, "&&", bin.Op)
 		_, ok := bin.Left.(*core.BinaryExpr)
@@ -359,6 +341,8 @@ func TestCompileOperatorPrecedence(t *testing.T) {
 	})
 
 	t.Run("unary_over_binary", func(t *testing.T) {
+		t.Parallel()
+
 		bin := compile(t, "!a && b").(*core.BinaryExpr)
 		assert.Equal(t, "&&", bin.Op)
 		_, ok := bin.Left.(*core.UnaryExpr)
@@ -366,6 +350,8 @@ func TestCompileOperatorPrecedence(t *testing.T) {
 	})
 
 	t.Run("grouping_overrides_precedence", func(t *testing.T) {
+		t.Parallel()
+
 		bin := compile(t, "(1 + 2) * 3").(*core.BinaryExpr)
 		assert.Equal(t, "*", bin.Op)
 		_, ok := bin.Left.(*core.BinaryExpr)
@@ -374,7 +360,11 @@ func TestCompileOperatorPrecedence(t *testing.T) {
 }
 
 func TestCompileAssignExpr(t *testing.T) {
+	t.Parallel()
+
 	t.Run("to_ident", func(t *testing.T) {
+		t.Parallel()
+
 		expr := compile(t, `x = "hello"`)
 		a, ok := expr.(*core.AssignExpr)
 		require.True(t, ok)
@@ -383,6 +373,8 @@ func TestCompileAssignExpr(t *testing.T) {
 	})
 
 	t.Run("to_event_path", func(t *testing.T) {
+		t.Parallel()
+
 		expr := compile(t, `.foo = 42`)
 		a, ok := expr.(*core.AssignExpr)
 		require.True(t, ok)
@@ -397,6 +389,8 @@ func TestCompileAssignExpr(t *testing.T) {
 	})
 
 	t.Run("to_index_expr", func(t *testing.T) {
+		t.Parallel()
+
 		expr := compile(t, `arr[0] = 99`)
 		a, ok := expr.(*core.AssignExpr)
 		require.True(t, ok)
@@ -405,6 +399,8 @@ func TestCompileAssignExpr(t *testing.T) {
 	})
 
 	t.Run("right_associative", func(t *testing.T) {
+		t.Parallel()
+
 		expr := compile(t, `x = y = 1`)
 		outer, ok := expr.(*core.AssignExpr)
 		require.True(t, ok)
@@ -414,7 +410,11 @@ func TestCompileAssignExpr(t *testing.T) {
 }
 
 func TestCompileIfExpr(t *testing.T) {
+	t.Parallel()
+
 	t.Run("no_else", func(t *testing.T) {
+		t.Parallel()
+
 		expr := compile(t, `if .x > 0 { .y = 1 }`)
 		ifExpr, ok := expr.(*core.IfExpr)
 		require.True(t, ok)
@@ -424,6 +424,8 @@ func TestCompileIfExpr(t *testing.T) {
 	})
 
 	t.Run("with_else", func(t *testing.T) {
+		t.Parallel()
+
 		expr := compile(t, `if .ok { .r = "yes" } else { .r = "no" }`)
 		ifExpr, ok := expr.(*core.IfExpr)
 		require.True(t, ok)
@@ -432,6 +434,8 @@ func TestCompileIfExpr(t *testing.T) {
 	})
 
 	t.Run("else_if_chain", func(t *testing.T) {
+		t.Parallel()
+
 		src := `if .s >= 500 { .sev = "crit" } else if .s >= 400 { .sev = "warn" } else { .sev = "ok" }`
 		expr := compile(t, src)
 		ifExpr, ok := expr.(*core.IfExpr)
@@ -442,6 +446,8 @@ func TestCompileIfExpr(t *testing.T) {
 	})
 
 	t.Run("multi_statement_then_block", func(t *testing.T) {
+		t.Parallel()
+
 		src := `if true { .a = 1; .b = 2 }`
 		expr := compile(t, src)
 		ifExpr, ok := expr.(*core.IfExpr)
@@ -451,7 +457,11 @@ func TestCompileIfExpr(t *testing.T) {
 }
 
 func TestCompileForExpr(t *testing.T) {
+	t.Parallel()
+
 	t.Run("index_only", func(t *testing.T) {
+		t.Parallel()
+
 		expr := compile(t, `for i in .arr {}`)
 		f, ok := expr.(*core.ForExpr)
 		require.True(t, ok)
@@ -460,6 +470,8 @@ func TestCompileForExpr(t *testing.T) {
 	})
 
 	t.Run("index_and_item", func(t *testing.T) {
+		t.Parallel()
+
 		expr := compile(t, `for i, v in .arr {}`)
 		f, ok := expr.(*core.ForExpr)
 		require.True(t, ok)
@@ -468,6 +480,8 @@ func TestCompileForExpr(t *testing.T) {
 	})
 
 	t.Run("blank_index", func(t *testing.T) {
+		t.Parallel()
+
 		expr := compile(t, `for _, v in .arr {}`)
 		f, ok := expr.(*core.ForExpr)
 		require.True(t, ok)
@@ -476,6 +490,8 @@ func TestCompileForExpr(t *testing.T) {
 	})
 
 	t.Run("blank_item", func(t *testing.T) {
+		t.Parallel()
+
 		expr := compile(t, `for i, _ in .arr {}`)
 		f, ok := expr.(*core.ForExpr)
 		require.True(t, ok)
@@ -484,6 +500,8 @@ func TestCompileForExpr(t *testing.T) {
 	})
 
 	t.Run("body_statements", func(t *testing.T) {
+		t.Parallel()
+
 		expr := compile(t, `for i in .items { .items[i] = .items[i] + 1 }`)
 		f, ok := expr.(*core.ForExpr)
 		require.True(t, ok)
@@ -491,6 +509,8 @@ func TestCompileForExpr(t *testing.T) {
 	})
 
 	t.Run("iter_is_ident", func(t *testing.T) {
+		t.Parallel()
+
 		expr := compile(t, `for i in myArr {}`)
 		f, ok := expr.(*core.ForExpr)
 		require.True(t, ok)
@@ -501,7 +521,11 @@ func TestCompileForExpr(t *testing.T) {
 }
 
 func TestCompileDelExpr(t *testing.T) {
+	t.Parallel()
+
 	t.Run("event_path", func(t *testing.T) {
+		t.Parallel()
+
 		expr := compile(t, `del .secret`)
 		d, ok := expr.(*core.DelExpr)
 		require.True(t, ok)
@@ -511,6 +535,8 @@ func TestCompileDelExpr(t *testing.T) {
 	})
 
 	t.Run("nested_event_path", func(t *testing.T) {
+		t.Parallel()
+
 		expr := compile(t, `del .user.password`)
 		d, ok := expr.(*core.DelExpr)
 		require.True(t, ok)
@@ -518,6 +544,8 @@ func TestCompileDelExpr(t *testing.T) {
 	})
 
 	t.Run("metadata_path", func(t *testing.T) {
+		t.Parallel()
+
 		expr := compile(t, `del %meta`)
 		d, ok := expr.(*core.DelExpr)
 		require.True(t, ok)
@@ -526,7 +554,11 @@ func TestCompileDelExpr(t *testing.T) {
 }
 
 func TestCompileArrayExpr(t *testing.T) {
+	t.Parallel()
+
 	t.Run("empty", func(t *testing.T) {
+		t.Parallel()
+
 		expr := compile(t, `[]`)
 		arr, ok := expr.(*core.ArrayExpr)
 		require.True(t, ok)
@@ -534,6 +566,8 @@ func TestCompileArrayExpr(t *testing.T) {
 	})
 
 	t.Run("integers", func(t *testing.T) {
+		t.Parallel()
+
 		expr := compile(t, `[1, 2, 3]`)
 		arr, ok := expr.(*core.ArrayExpr)
 		require.True(t, ok)
@@ -541,6 +575,8 @@ func TestCompileArrayExpr(t *testing.T) {
 	})
 
 	t.Run("mixed_types", func(t *testing.T) {
+		t.Parallel()
+
 		expr := compile(t, `[1, "two", true]`)
 		arr, ok := expr.(*core.ArrayExpr)
 		require.True(t, ok)
@@ -554,6 +590,8 @@ func TestCompileArrayExpr(t *testing.T) {
 	})
 
 	t.Run("trailing_comma_not_required", func(t *testing.T) {
+		t.Parallel()
+
 		expr := compile(t, `[1, 2]`)
 		arr, ok := expr.(*core.ArrayExpr)
 		require.True(t, ok)
@@ -561,48 +599,116 @@ func TestCompileArrayExpr(t *testing.T) {
 	})
 }
 
+func compileObj(t *testing.T, src string) *core.ObjectExpr {
+	t.Helper()
+	expr := compile(t, src)
+	obj, ok := expr.(*core.ObjectExpr)
+	require.True(t, ok, "expected *core.ObjectExpr, got %T", expr)
+	return obj
+}
+
+type kvExpect struct {
+	key string
+	val func(t *testing.T, expr core.Expr)
+}
+
+func litVal[L any, V any](want V, get func(*L) V) func(*testing.T, core.Expr) {
+	return func(t *testing.T, expr core.Expr) {
+		t.Helper()
+		lit, ok := any(expr).(*L)
+		require.True(t, ok, "expected %T, got %T", (*L)(nil), expr)
+		assert.Equal(t, want, get(lit))
+	}
+}
+
+func nullVal() func(*testing.T, core.Expr) {
+	return func(t *testing.T, expr core.Expr) {
+		t.Helper()
+		_, ok := any(expr).(*core.NullLit)
+		require.True(t, ok, "expected *core.NullLit, got %T", expr)
+	}
+}
+
 func TestCompileObjectExpr(t *testing.T) {
-	t.Run("empty", func(t *testing.T) {
-		expr := compile(t, `{}`)
-		obj, ok := expr.(*core.ObjectExpr)
-		require.True(t, ok)
-		assert.Empty(t, obj.Pairs)
-	})
+	t.Parallel()
 
-	t.Run("string_key", func(t *testing.T) {
-		expr := compile(t, `{"name": "alice"}`)
-		obj, ok := expr.(*core.ObjectExpr)
-		require.True(t, ok)
-		require.Len(t, obj.Pairs, 1)
-		assert.Equal(t, "name", obj.Pairs[0].Key)
-	})
+	tests := []struct {
+		name  string
+		src   string
+		pairs []kvExpect
+	}{
+		{
+			name:  "empty",
+			src:   `{}`,
+			pairs: nil,
+		},
+		{
+			name: "string_key",
+			src:  `{"name": "alice"}`,
+			pairs: []kvExpect{
+				{"name", litVal("alice", func(l *core.StringLit) string { return l.Value })},
+			},
+		},
+		{
+			name: "ident_key",
+			src:  `{level: "info"}`,
+			pairs: []kvExpect{
+				{"level", litVal("info", func(l *core.StringLit) string { return l.Value })},
+			},
+		},
+		{
+			name: "raw_string_key",
+			src:  `{s'raw\key': 1}`,
+			pairs: []kvExpect{
+				{`raw\key`, litVal(1, func(l *core.IntLit) int64 { return l.Value })},
+			},
+		},
+		{
+			name: "multiple_pairs_all_scalar_types",
+			src:  `{"n": 42, "s": "hi", "b": true, "f": 3.14, "z": null}`,
+			pairs: []kvExpect{
+				{"n", litVal(42, func(l *core.IntLit) int64 { return l.Value })},
+				{"s", litVal("hi", func(l *core.StringLit) string { return l.Value })},
+				{"b", litVal(true, func(l *core.BoolLit) bool { return l.Value })},
+				{"f", litVal(3.14, func(l *core.FloatLit) float64 { return l.Value })},
+				{"z", nullVal()},
+			},
+		},
+		{
+			name: "bool_false_value",
+			src:  `{"ok": false}`,
+			pairs: []kvExpect{
+				{"ok", litVal(false, func(l *core.BoolLit) bool { return l.Value })},
+			},
+		},
+		{
+			name: "integer_zero",
+			src:  `{"count": 0}`,
+			pairs: []kvExpect{
+				{"count", litVal(0, func(l *core.IntLit) int64 { return l.Value })},
+			},
+		},
+	}
 
-	t.Run("ident_key", func(t *testing.T) {
-		expr := compile(t, `{level: "info"}`)
-		obj, ok := expr.(*core.ObjectExpr)
-		require.True(t, ok)
-		require.Len(t, obj.Pairs, 1)
-		assert.Equal(t, "level", obj.Pairs[0].Key)
-	})
-
-	t.Run("raw_string_key", func(t *testing.T) {
-		expr := compile(t, `{s'raw\key': 1}`)
-		obj, ok := expr.(*core.ObjectExpr)
-		require.True(t, ok)
-		require.Len(t, obj.Pairs, 1)
-		assert.Equal(t, `raw\key`, obj.Pairs[0].Key)
-	})
-
-	t.Run("multiple_pairs", func(t *testing.T) {
-		expr := compile(t, `{"a": 1, "b": 2}`)
-		obj, ok := expr.(*core.ObjectExpr)
-		require.True(t, ok)
-		assert.Len(t, obj.Pairs, 2)
-	})
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			obj := compileObj(t, tc.src)
+			require.Len(t, obj.Pairs, len(tc.pairs), "wrong number of pairs")
+			for i, kv := range tc.pairs {
+				assert.Equal(t, kv.key, obj.Pairs[i].Key, "pair[%d] key", i)
+				kv.val(t, obj.Pairs[i].Value)
+			}
+		})
+	}
 }
 
 func TestCompileCallExpr(t *testing.T) {
+	t.Parallel()
+
 	t.Run("no_args", func(t *testing.T) {
+		t.Parallel()
+
 		expr := compile(t, `now()`)
 		call, ok := expr.(*core.CallExpr)
 		require.True(t, ok)
@@ -611,6 +717,8 @@ func TestCompileCallExpr(t *testing.T) {
 	})
 
 	t.Run("positional_args", func(t *testing.T) {
+		t.Parallel()
+
 		expr := compile(t, `upcase(.level)`)
 		call, ok := expr.(*core.CallExpr)
 		require.True(t, ok)
@@ -620,6 +728,8 @@ func TestCompileCallExpr(t *testing.T) {
 	})
 
 	t.Run("named_arg", func(t *testing.T) {
+		t.Parallel()
+
 		expr := compile(t, `fn(key: "value")`)
 		call, ok := expr.(*core.CallExpr)
 		require.True(t, ok)
@@ -630,6 +740,8 @@ func TestCompileCallExpr(t *testing.T) {
 	})
 
 	t.Run("mixed_positional_and_named", func(t *testing.T) {
+		t.Parallel()
+
 		expr := compile(t, `fn(.x, sep: ",")`)
 		call, ok := expr.(*core.CallExpr)
 		require.True(t, ok)
@@ -640,7 +752,11 @@ func TestCompileCallExpr(t *testing.T) {
 }
 
 func TestCompileIndexExpr(t *testing.T) {
+	t.Parallel()
+
 	t.Run("array_index", func(t *testing.T) {
+		t.Parallel()
+
 		expr := compile(t, `arr[0]`)
 		idx, ok := expr.(*core.IndexExpr)
 		require.True(t, ok)
@@ -652,6 +768,8 @@ func TestCompileIndexExpr(t *testing.T) {
 	})
 
 	t.Run("object_string_index", func(t *testing.T) {
+		t.Parallel()
+
 		expr := compile(t, `obj["key"]`)
 		idx, ok := expr.(*core.IndexExpr)
 		require.True(t, ok)
@@ -661,6 +779,8 @@ func TestCompileIndexExpr(t *testing.T) {
 	})
 
 	t.Run("dynamic_index", func(t *testing.T) {
+		t.Parallel()
+
 		expr := compile(t, `arr[i]`)
 		idx, ok := expr.(*core.IndexExpr)
 		require.True(t, ok)
@@ -671,6 +791,8 @@ func TestCompileIndexExpr(t *testing.T) {
 }
 
 func TestCompileGrouped(t *testing.T) {
+	t.Parallel()
+
 	expr := compile(t, `(42)`)
 	_, ok := expr.(*core.IntLit)
 	require.True(t, ok, "grouped literal should unwrap to the literal itself")
@@ -682,6 +804,8 @@ func TestCompileGrouped(t *testing.T) {
 }
 
 func TestCompileMultipleStatements(t *testing.T) {
+	t.Parallel()
+
 	exprs := compileN(t, `.a = 1; .b = 2; .c = 3`)
 	assert.Len(t, exprs, 3)
 	for _, e := range exprs {
@@ -691,6 +815,8 @@ func TestCompileMultipleStatements(t *testing.T) {
 }
 
 func TestCompileMultipleStatementsNewline(t *testing.T) {
+	t.Parallel()
+
 	src := `
 	.x = 1
 	.y = 2
@@ -700,97 +826,91 @@ func TestCompileMultipleStatementsNewline(t *testing.T) {
 }
 
 func TestCompileSemicolonOnlyLines(t *testing.T) {
+	t.Parallel()
+
 	exprs := compileN(t, `;; .x = 1 ;;`)
 	assert.Len(t, exprs, 1)
 }
 
 func TestCompileErrors(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name        string
 		src         string
 		errContains string
 	}{
-
 		{
-			"lexer_unexpected_char",
-			"@var",
-			"unexpected character",
-		},
-
-		{
-			"assign_to_literal",
-			"42 = 1",
-			"left side of assignment must be a variable, path, or index expression",
+			name:        "lexer_unexpected_char",
+			src:         "@var",
+			errContains: "unexpected character",
 		},
 		{
-			"assign_to_binary_expr",
-			"(a + b) = 1",
-			"left side of assignment",
-		},
-
-		{
-			"call_on_non_ident",
-			"foo()()",
-			"function call requires an identifier on the left",
-		},
-
-		{
-			"metadata_path_missing_ident",
-			"% 42",
-			"expected metadata field name after %",
-		},
-
-		{
-			"unclosed_bracket",
-			"[1, 2",
-			"",
-		},
-
-		{
-			"unclosed_block",
-			"if .x { .y = 1",
-			"",
-		},
-
-		{
-			"del_non_path",
-			"del null",
-			"del requires a path",
+			name:        "assign_to_literal",
+			src:         "42 = 1",
+			errContains: "left side of assignment must be a variable, path, or index expression",
 		},
 		{
-			"del_literal",
-			"del 42",
-			"del requires a path",
+			name:        "assign_to_binary_expr",
+			src:         "(a + b) = 1",
+			errContains: "left side of assignment",
 		},
-
 		{
-			"for_blank_blank",
-			"for _, _ in .arr {}",
-			"for loop must bind at least one variable",
+			name:        "call_on_non_ident",
+			src:         "foo()()",
+			errContains: "function call requires an identifier on the left",
 		},
-
 		{
-			"for_missing_in",
-			"for i .arr {}",
-			"expected KW_IN",
+			name:        "metadata_path_missing_ident",
+			src:         "% 42",
+			errContains: "expected metadata field name after %",
 		},
-
 		{
-			"object_int_key",
-			"{1: 2}",
-			"object key must be a string or identifier",
+			name:        "unclosed_bracket",
+			src:         "[1, 2",
+			errContains: "",
 		},
-
 		{
-			"unexpected_token",
-			")",
-			"unexpected token",
+			name:        "unclosed_block",
+			src:         "if .x { .y = 1",
+			errContains: "",
+		},
+		{
+			name:        "del_non_path",
+			src:         "del null",
+			errContains: "del requires a path",
+		},
+		{
+			name:        "del_literal",
+			src:         "del 42",
+			errContains: "del requires a path",
+		},
+		{
+			name:        "for_blank_blank",
+			src:         "for _, _ in .arr {}",
+			errContains: "for loop must bind at least one variable",
+		},
+		{
+			name:        "for_missing_in",
+			src:         "for i .arr {}",
+			errContains: "expected KW_IN",
+		},
+		{
+			name:        "object_int_key",
+			src:         "{1: 2}",
+			errContains: "object key must be a string or identifier",
+		},
+		{
+			name:        "unexpected_token",
+			src:         ")",
+			errContains: "unexpected token",
 		},
 	}
 
 	for _, tc := range tests {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			err := mustFail(t, tc.src)
 			if tc.errContains != "" {
 				assert.Contains(t, err.Error(), tc.errContains)
@@ -800,6 +920,8 @@ func TestCompileErrors(t *testing.T) {
 }
 
 func TestNewCompilerError(t *testing.T) {
+	t.Parallel()
+
 	_, err := NewCompiler("@bad_char")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unexpected character")

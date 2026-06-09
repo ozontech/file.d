@@ -9,20 +9,20 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func newJSONRoot(t *testing.T, json string) *insaneJSON.Root {
+func newJSONRoot(t *testing.T, json string) (*insaneJSON.Root, func()) {
 	t.Helper()
 	root := insaneJSON.Spawn()
 	require.NoError(t, root.DecodeString(json), "bad fixture JSON: %s", json)
-	return root
+	return root, func() { insaneJSON.Release(root) }
 }
 
-func newTestTarget(t *testing.T, json string, meta map[string]string) (*RootTarget, *insaneJSON.Root) {
+func newTestTarget(t *testing.T, json string, meta map[string]string) (*RootTarget, func()) {
 	t.Helper()
 	if meta == nil {
 		meta = map[string]string{}
 	}
-	root := newJSONRoot(t, json)
-	return NewRootTarget(root, "test.log", meta), root
+	root, release := newJSONRoot(t, json)
+	return NewRootTarget(root, "test.log", meta), release
 }
 
 func eventPath(fields ...string) core.Path {
@@ -45,6 +45,8 @@ func indexedPath(field string, idx int) core.Path {
 }
 
 func TestRootTargetGet(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name     string
 		json     string
@@ -102,10 +104,11 @@ func TestRootTargetGet(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			target, root := newTestTarget(t, tc.json, nil)
-			defer insaneJSON.Release(root)
+			t.Parallel()
+
+			target, release := newTestTarget(t, tc.json, nil)
+			defer release()
 
 			val, err := target.Get(tc.path)
 			require.NoError(t, err)
@@ -118,8 +121,10 @@ func TestRootTargetGet(t *testing.T) {
 }
 
 func TestRootTargetGetEmptyPath(t *testing.T) {
-	target, root := newTestTarget(t, `{"a": 1}`, nil)
-	defer insaneJSON.Release(root)
+	t.Parallel()
+
+	target, release := newTestTarget(t, `{"a": 1}`, nil)
+	defer release()
 
 	path := core.Path{Root: core.EventRoot, Segments: nil}
 	val, err := target.Get(path)
@@ -128,51 +133,86 @@ func TestRootTargetGetEmptyPath(t *testing.T) {
 }
 
 func TestRootTargetSet(t *testing.T) {
+	t.Parallel()
+
 	t.Run("update_existing_field", func(t *testing.T) {
-		target, root := newTestTarget(t, `{"a": 1}`, nil)
-		defer insaneJSON.Release(root)
+		t.Parallel()
+
+		target, release := newTestTarget(t, `{"a": 1}`, nil)
+		defer release()
 
 		require.NoError(t, target.Set(eventPath("a"), core.IntegerValue{V: 99}))
-		assert.Equal(t, "99", root.Dig("a").AsString())
+		val, err := target.Get(eventPath("a"))
+		require.NoError(t, err)
+		assert.Equal(t, "99", val.String())
 	})
 
 	t.Run("create_new_field", func(t *testing.T) {
-		target, root := newTestTarget(t, `{"a": 1}`, nil)
-		defer insaneJSON.Release(root)
+		t.Parallel()
+
+		target, release := newTestTarget(t, `{"a": 1}`, nil)
+		defer release()
 
 		require.NoError(t, target.Set(eventPath("b"), core.StringValue{V: "new"}))
-		require.NotNil(t, root.Dig("b"))
-		assert.Equal(t, "new", root.Dig("b").AsString())
+		val, err := target.Get(eventPath("b"))
+		require.NoError(t, err)
+		assert.Equal(t, "new", val.String())
 	})
 
 	t.Run("set_nested_field", func(t *testing.T) {
-		target, root := newTestTarget(t, `{"user": {"name": "bob", "age": 30}}`, nil)
-		defer insaneJSON.Release(root)
+		t.Parallel()
+
+		target, release := newTestTarget(t, `{"user": {"name": "bob", "age": 30}}`, nil)
+		defer release()
 
 		require.NoError(t, target.Set(eventPath("user", "name"), core.StringValue{V: "alice"}))
-		assert.Equal(t, "alice", root.Dig("user", "name").AsString())
-		assert.Equal(t, "30", root.Dig("user", "age").AsString())
+
+		val, err := target.Get(eventPath("user", "name"))
+		require.NoError(t, err)
+		assert.Equal(t, "alice", val.String())
+
+		val, err = target.Get(eventPath("user", "age"))
+		require.NoError(t, err)
+		assert.Equal(t, "30", val.String())
 	})
 
 	t.Run("set_array_element_positive_index", func(t *testing.T) {
-		target, root := newTestTarget(t, `{"arr": [1, 2, 3]}`, nil)
-		defer insaneJSON.Release(root)
+		t.Parallel()
+
+		target, release := newTestTarget(t, `{"arr": [1, 2, 3]}`, nil)
+		defer release()
 
 		require.NoError(t, target.Set(indexedPath("arr", 1), core.IntegerValue{V: 99}))
-		assert.Equal(t, "99", root.Dig("arr", "1").AsString())
-		assert.Equal(t, "1", root.Dig("arr", "0").AsString())
-		assert.Equal(t, "3", root.Dig("arr", "2").AsString())
+
+		val, err := target.Get(indexedPath("arr", 1))
+		require.NoError(t, err)
+		assert.Equal(t, "99", val.String())
+
+		val, err = target.Get(indexedPath("arr", 0))
+		require.NoError(t, err)
+		assert.Equal(t, "1", val.String())
+
+		val, err = target.Get(indexedPath("arr", 2))
+		require.NoError(t, err)
+		assert.Equal(t, "3", val.String())
 	})
 
 	t.Run("set_array_element_negative_index", func(t *testing.T) {
-		target, root := newTestTarget(t, `{"arr": [1, 2, 3]}`, nil)
-		defer insaneJSON.Release(root)
+		t.Parallel()
+
+		target, release := newTestTarget(t, `{"arr": [1, 2, 3]}`, nil)
+		defer release()
 
 		require.NoError(t, target.Set(indexedPath("arr", -1), core.IntegerValue{V: 77}))
-		assert.Equal(t, "77", root.Dig("arr", "2").AsString())
+
+		val, err := target.Get(indexedPath("arr", 2))
+		require.NoError(t, err)
+		assert.Equal(t, "77", val.String())
 	})
 
 	t.Run("set_various_value_types", func(t *testing.T) {
+		t.Parallel()
+
 		vals := []struct {
 			name    string
 			value   core.Value
@@ -186,18 +226,23 @@ func TestRootTargetSet(t *testing.T) {
 		for _, v := range vals {
 			v := v
 			t.Run(v.name, func(t *testing.T) {
-				target, root := newTestTarget(t, `{"x": 0}`, nil)
-				defer insaneJSON.Release(root)
+				target, release := newTestTarget(t, `{"x": 0}`, nil)
+				defer release()
 
 				require.NoError(t, target.Set(eventPath("x"), v.value))
-				assert.Equal(t, v.wantStr, root.Dig("x").AsString())
+
+				val, err := target.Get(eventPath("x"))
+				require.NoError(t, err)
+				assert.Equal(t, v.wantStr, val.String())
 			})
 		}
 	})
 
 	t.Run("set_root_error", func(t *testing.T) {
-		target, root := newTestTarget(t, `{}`, nil)
-		defer insaneJSON.Release(root)
+		t.Parallel()
+
+		target, release := newTestTarget(t, `{}`, nil)
+		defer release()
 
 		err := target.Set(core.Path{Root: core.EventRoot}, core.IntegerValue{V: 1})
 		require.Error(t, err)
@@ -205,17 +250,24 @@ func TestRootTargetSet(t *testing.T) {
 	})
 
 	t.Run("set_parent_missing_is_silent_noop", func(t *testing.T) {
-		target, root := newTestTarget(t, `{}`, nil)
-		defer insaneJSON.Release(root)
+		t.Parallel()
+
+		target, release := newTestTarget(t, `{}`, nil)
+		defer release()
 
 		err := target.Set(eventPath("user", "name"), core.StringValue{V: "alice"})
 		require.NoError(t, err)
-		assert.Nil(t, root.Dig("user"))
+
+		val, err := target.Get(eventPath("user"))
+		require.NoError(t, err)
+		assert.Equal(t, "null", val.String())
 	})
 
 	t.Run("set_array_out_of_bounds_error", func(t *testing.T) {
-		target, root := newTestTarget(t, `{"arr": [1]}`, nil)
-		defer insaneJSON.Release(root)
+		t.Parallel()
+
+		target, release := newTestTarget(t, `{"arr": [1]}`, nil)
+		defer release()
 
 		err := target.Set(indexedPath("arr", 5), core.IntegerValue{V: 9})
 		require.Error(t, err)
@@ -223,8 +275,10 @@ func TestRootTargetSet(t *testing.T) {
 	})
 
 	t.Run("set_array_negative_out_of_bounds_error", func(t *testing.T) {
-		target, root := newTestTarget(t, `{"arr": [1]}`, nil)
-		defer insaneJSON.Release(root)
+		t.Parallel()
+
+		target, release := newTestTarget(t, `{"arr": [1]}`, nil)
+		defer release()
 
 		err := target.Set(indexedPath("arr", -5), core.IntegerValue{V: 9})
 		require.Error(t, err)
@@ -233,35 +287,60 @@ func TestRootTargetSet(t *testing.T) {
 }
 
 func TestRootTargetDelete(t *testing.T) {
+	t.Parallel()
+
 	t.Run("delete_existing_field", func(t *testing.T) {
-		target, root := newTestTarget(t, `{"a": 1, "b": 2}`, nil)
-		defer insaneJSON.Release(root)
+		t.Parallel()
+
+		target, release := newTestTarget(t, `{"a": 1, "b": 2}`, nil)
+		defer release()
 
 		require.NoError(t, target.Delete(eventPath("a")))
-		assert.Nil(t, root.Dig("a"), "deleted field must be gone")
-		assert.NotNil(t, root.Dig("b"), "sibling field must survive")
+
+		val, err := target.Get(eventPath("a"))
+		require.NoError(t, err)
+		assert.Equal(t, "null", val.String())
+
+		val, err = target.Get(eventPath("b"))
+		require.NoError(t, err)
+		assert.Equal(t, "2", val.String())
 	})
 
 	t.Run("delete_nested_field", func(t *testing.T) {
-		target, root := newTestTarget(t, `{"user": {"name": "alice", "age": 30}}`, nil)
-		defer insaneJSON.Release(root)
+		t.Parallel()
+
+		target, release := newTestTarget(t, `{"user": {"name": "alice", "age": 30}}`, nil)
+		defer release()
 
 		require.NoError(t, target.Delete(eventPath("user", "age")))
-		assert.Nil(t, root.Dig("user", "age"))
-		assert.Equal(t, "alice", root.Dig("user", "name").AsString())
+
+		val, err := target.Get(eventPath("user", "age"))
+		require.NoError(t, err)
+		assert.Equal(t, "null", val.String())
+
+		val, err = target.Get(eventPath("user", "name"))
+		require.NoError(t, err)
+		assert.Equal(t, "alice", val.String())
 	})
 
 	t.Run("delete_missing_field_is_noop", func(t *testing.T) {
-		target, root := newTestTarget(t, `{"a": 1}`, nil)
-		defer insaneJSON.Release(root)
+		t.Parallel()
+
+		target, release := newTestTarget(t, `{"a": 1}`, nil)
+		defer release()
 
 		require.NoError(t, target.Delete(eventPath("gone")))
-		assert.NotNil(t, root.Dig("a"))
+
+		val, err := target.Get(eventPath("a"))
+		require.NoError(t, err)
+		assert.Equal(t, "1", val.String())
 	})
 
 	t.Run("delete_root_error", func(t *testing.T) {
-		target, root := newTestTarget(t, `{}`, nil)
-		defer insaneJSON.Release(root)
+		t.Parallel()
+
+		target, release := newTestTarget(t, `{}`, nil)
+		defer release()
 
 		err := target.Delete(core.Path{Root: core.EventRoot})
 		require.Error(t, err)
@@ -270,19 +349,24 @@ func TestRootTargetDelete(t *testing.T) {
 }
 
 func TestRootTargetMetadata(t *testing.T) {
-	t.Run("get_single_field", func(t *testing.T) {
-		meta := map[string]string{"source": "kafka"}
-		target, root := newTestTarget(t, `{}`, meta)
-		defer insaneJSON.Release(root)
+	t.Parallel()
 
+	t.Run("get_single_field", func(t *testing.T) {
+		t.Parallel()
+
+		meta := map[string]string{"source": "kafka"}
+		target, release := newTestTarget(t, `{}`, meta)
+		defer release()
 		val, err := target.Get(metaPath("source"))
 		require.NoError(t, err)
 		assert.Equal(t, "kafka", val.String())
 	})
 
 	t.Run("get_missing_metadata_returns_null", func(t *testing.T) {
-		target, root := newTestTarget(t, `{}`, map[string]string{})
-		defer insaneJSON.Release(root)
+		t.Parallel()
+
+		target, release := newTestTarget(t, `{}`, map[string]string{})
+		defer release()
 
 		val, err := target.Get(metaPath("missing"))
 		require.NoError(t, err)
@@ -290,9 +374,11 @@ func TestRootTargetMetadata(t *testing.T) {
 	})
 
 	t.Run("get_all_metadata_with_empty_segments", func(t *testing.T) {
+		t.Parallel()
+
 		meta := map[string]string{"k1": "v1", "k2": "v2"}
-		target, root := newTestTarget(t, `{}`, meta)
-		defer insaneJSON.Release(root)
+		target, release := newTestTarget(t, `{}`, meta)
+		defer release()
 
 		path := core.Path{Root: core.MetadataRoot}
 		val, err := target.Get(path)
@@ -305,8 +391,10 @@ func TestRootTargetMetadata(t *testing.T) {
 	})
 
 	t.Run("get_multi_segment_metadata_error", func(t *testing.T) {
-		target, root := newTestTarget(t, `{}`, map[string]string{"a": "b"})
-		defer insaneJSON.Release(root)
+		t.Parallel()
+
+		target, release := newTestTarget(t, `{}`, map[string]string{"a": "b"})
+		defer release()
 
 		path := core.Path{Root: core.MetadataRoot, Segments: []core.Segment{core.FieldSeg("a"), core.FieldSeg("b")}}
 		_, err := target.Get(path)
@@ -315,26 +403,32 @@ func TestRootTargetMetadata(t *testing.T) {
 	})
 
 	t.Run("set_metadata_string", func(t *testing.T) {
+		t.Parallel()
+
 		meta := map[string]string{}
-		target, root := newTestTarget(t, `{}`, meta)
-		defer insaneJSON.Release(root)
+		target, release := newTestTarget(t, `{}`, meta)
+		defer release()
 
 		require.NoError(t, target.Set(metaPath("env"), core.StringValue{V: "prod"}))
 		assert.Equal(t, "prod", meta["env"])
 	})
 
 	t.Run("overwrite_existing_metadata", func(t *testing.T) {
+		t.Parallel()
+
 		meta := map[string]string{"env": "dev"}
-		target, root := newTestTarget(t, `{}`, meta)
-		defer insaneJSON.Release(root)
+		target, release := newTestTarget(t, `{}`, meta)
+		defer release()
 
 		require.NoError(t, target.Set(metaPath("env"), core.StringValue{V: "prod"}))
 		assert.Equal(t, "prod", meta["env"])
 	})
 
 	t.Run("set_metadata_non_string_error", func(t *testing.T) {
-		target, root := newTestTarget(t, `{}`, map[string]string{})
-		defer insaneJSON.Release(root)
+		t.Parallel()
+
+		target, release := newTestTarget(t, `{}`, map[string]string{})
+		defer release()
 
 		err := target.Set(metaPath("n"), core.IntegerValue{V: 42})
 		require.Error(t, err)
@@ -342,9 +436,11 @@ func TestRootTargetMetadata(t *testing.T) {
 	})
 
 	t.Run("delete_metadata_field", func(t *testing.T) {
+		t.Parallel()
+
 		meta := map[string]string{"key": "value", "other": "stays"}
-		target, root := newTestTarget(t, `{}`, meta)
-		defer insaneJSON.Release(root)
+		target, release := newTestTarget(t, `{}`, meta)
+		defer release()
 
 		require.NoError(t, target.Delete(metaPath("key")))
 		_, ok := meta["key"]
@@ -353,9 +449,11 @@ func TestRootTargetMetadata(t *testing.T) {
 	})
 
 	t.Run("delete_missing_metadata_is_noop", func(t *testing.T) {
+		t.Parallel()
+
 		meta := map[string]string{"k": "v"}
-		target, root := newTestTarget(t, `{}`, meta)
-		defer insaneJSON.Release(root)
+		target, release := newTestTarget(t, `{}`, meta)
+		defer release()
 
 		require.NoError(t, target.Delete(metaPath("missing")))
 		assert.Equal(t, "v", meta["k"])
@@ -363,6 +461,8 @@ func TestRootTargetMetadata(t *testing.T) {
 }
 
 func TestToInsaneJSONPath(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name    string
 		segs    []core.Segment
@@ -411,8 +511,9 @@ func TestToInsaneJSONPath(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			result := toInsaneJSONPath(tc.segs, tc.initBuf)
 			assert.Equal(t, tc.want, result)
 		})
@@ -420,6 +521,8 @@ func TestToInsaneJSONPath(t *testing.T) {
 }
 
 func TestValueToJSON(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name    string
 		value   core.Value
@@ -458,8 +561,9 @@ func TestValueToJSON(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			result, err := valueToJSON(tc.value)
 			if tc.wantErr {
 				require.Error(t, err)
@@ -472,6 +576,8 @@ func TestValueToJSON(t *testing.T) {
 	}
 
 	t.Run("json_node_value_real_int_node", func(t *testing.T) {
+		t.Parallel()
+
 		root := insaneJSON.Spawn()
 		defer insaneJSON.Release(root)
 		require.NoError(t, root.DecodeString(`{"n": 42}`))
@@ -484,6 +590,8 @@ func TestValueToJSON(t *testing.T) {
 	})
 
 	t.Run("array_with_string_elements", func(t *testing.T) {
+		t.Parallel()
+
 		arr := core.ArrayValue{V: []core.Value{
 			core.StringValue{V: "a"},
 			core.StringValue{V: "b"},
@@ -494,6 +602,8 @@ func TestValueToJSON(t *testing.T) {
 	})
 
 	t.Run("nested_array_in_array", func(t *testing.T) {
+		t.Parallel()
+
 		inner := core.ArrayValue{V: []core.Value{core.IntegerValue{V: 1}}}
 		outer := core.ArrayValue{V: []core.Value{inner, core.IntegerValue{V: 2}}}
 		result, err := valueToJSON(outer)
@@ -503,6 +613,8 @@ func TestValueToJSON(t *testing.T) {
 }
 
 func TestFormatSegments(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name string
 		segs []core.Segment
@@ -515,14 +627,16 @@ func TestFormatSegments(t *testing.T) {
 		{"negative_index", []core.Segment{core.FieldSeg("x"), core.IndexSeg(-1)}, ".x[-1]"},
 	}
 	for _, tc := range tests {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			assert.Equal(t, tc.want, formatSegments(tc.segs))
 		})
 	}
 }
 
 func TestResolveIndexRuntime(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		idx    int
 		length int
@@ -537,7 +651,6 @@ func TestResolveIndexRuntime(t *testing.T) {
 		{-6, 5, -1},
 	}
 	for _, tc := range tests {
-		tc := tc
 		t.Run(
 			func() string {
 				if tc.idx < 0 {
@@ -546,6 +659,7 @@ func TestResolveIndexRuntime(t *testing.T) {
 				return "idx_" + string(rune('0'+tc.idx)) + "_len_" + string(rune('0'+tc.length))
 			}(),
 			func(t *testing.T) {
+				t.Parallel()
 				assert.Equal(t, tc.want, resolveIndex(tc.idx, tc.length))
 			},
 		)

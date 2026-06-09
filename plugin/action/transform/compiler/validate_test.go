@@ -17,6 +17,8 @@ func compileExprs(t *testing.T, src string) []core.Expr {
 }
 
 func TestValidateRegexValid(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name    string
 		pattern string
@@ -27,8 +29,9 @@ func TestValidateRegexValid(t *testing.T) {
 		{"anchored", `^\d{4}-\d{2}-\d{2}$`},
 	}
 	for _, tc := range tests {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			expr := &core.RegexLit{Node: n(), Pattern: tc.pattern}
 			err := ValidateCalls([]core.Expr{expr}, nil)
 			require.NoError(t, err)
@@ -39,6 +42,8 @@ func TestValidateRegexValid(t *testing.T) {
 }
 
 func TestValidateRegexInvalid(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name    string
 		pattern string
@@ -48,8 +53,9 @@ func TestValidateRegexInvalid(t *testing.T) {
 		{"unclosed_group", `(no close`},
 	}
 	for _, tc := range tests {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			expr := &core.RegexLit{Node: n(), Pattern: tc.pattern}
 			err := ValidateCalls([]core.Expr{expr}, nil)
 			require.Error(t, err)
@@ -59,6 +65,8 @@ func TestValidateRegexInvalid(t *testing.T) {
 }
 
 func TestValidateTimestampValid(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name  string
 		value string
@@ -70,8 +78,9 @@ func TestValidateTimestampValid(t *testing.T) {
 		{"date_only", "2024-01-15"},
 	}
 	for _, tc := range tests {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			expr := &core.TimestampLit{Node: n(), Value: tc.value}
 			err := ValidateCalls([]core.Expr{expr}, nil)
 			require.NoError(t, err)
@@ -81,6 +90,8 @@ func TestValidateTimestampValid(t *testing.T) {
 }
 
 func TestValidateTimestampInvalid(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name  string
 		value string
@@ -90,8 +101,9 @@ func TestValidateTimestampInvalid(t *testing.T) {
 		{"unix_epoch", "1700000000"},
 	}
 	for _, tc := range tests {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			expr := &core.TimestampLit{Node: n(), Value: tc.value}
 			err := ValidateCalls([]core.Expr{expr}, nil)
 			require.Error(t, err)
@@ -101,7 +113,11 @@ func TestValidateTimestampInvalid(t *testing.T) {
 }
 
 func TestValidateDuplicateObjectKey(t *testing.T) {
+	t.Parallel()
+
 	t.Run("duplicate_key_error", func(t *testing.T) {
+		t.Parallel()
+
 		expr := &core.ObjectExpr{
 			Node: n(),
 			Pairs: []core.KVPair{
@@ -117,6 +133,8 @@ func TestValidateDuplicateObjectKey(t *testing.T) {
 	})
 
 	t.Run("no_duplicate_ok", func(t *testing.T) {
+		t.Parallel()
+
 		expr := &core.ObjectExpr{
 			Node: n(),
 			Pairs: []core.KVPair{
@@ -129,6 +147,8 @@ func TestValidateDuplicateObjectKey(t *testing.T) {
 	})
 
 	t.Run("empty_object_ok", func(t *testing.T) {
+		t.Parallel()
+
 		expr := &core.ObjectExpr{Node: n()}
 		err := ValidateCalls([]core.Expr{expr}, nil)
 		require.NoError(t, err)
@@ -136,6 +156,8 @@ func TestValidateDuplicateObjectKey(t *testing.T) {
 }
 
 func TestValidateNestedRegexInBinary(t *testing.T) {
+	t.Parallel()
+
 	expr := &core.BinaryExpr{
 		Node:  n(),
 		Op:    "==",
@@ -147,6 +169,8 @@ func TestValidateNestedRegexInBinary(t *testing.T) {
 }
 
 func TestValidateNestedInvalidRegexInsideArray(t *testing.T) {
+	t.Parallel()
+
 	expr := &core.ArrayExpr{
 		Node: n(),
 		Elements: []core.Expr{
@@ -161,6 +185,8 @@ func TestValidateNestedInvalidRegexInsideArray(t *testing.T) {
 }
 
 func TestValidateDuplicateKeyInNestedObject(t *testing.T) {
+	t.Parallel()
+
 	innerObj := &core.ObjectExpr{
 		Node: n(),
 		Pairs: []core.KVPair{
@@ -179,6 +205,8 @@ func TestValidateDuplicateKeyInNestedObject(t *testing.T) {
 }
 
 func TestValidateFromCompiledRegex(t *testing.T) {
+	t.Parallel()
+
 	exprs := compileExprs(t, `r'\d+'`)
 	err := ValidateCalls(exprs, nil)
 	require.NoError(t, err)
@@ -188,6 +216,8 @@ func TestValidateFromCompiledRegex(t *testing.T) {
 }
 
 func TestValidateFromCompiledTimestamp(t *testing.T) {
+	t.Parallel()
+
 	exprs := compileExprs(t, `t'2024-06-01T00:00:00Z'`)
 	err := ValidateCalls(exprs, nil)
 	require.NoError(t, err)
@@ -197,6 +227,8 @@ func TestValidateFromCompiledTimestamp(t *testing.T) {
 }
 
 func TestValidateCompiledDuplicateKey(t *testing.T) {
+	t.Parallel()
+
 	exprs := compileExprs(t, `{"a": 1, "a": 2}`)
 	err := ValidateCalls(exprs, nil)
 	require.Error(t, err)
@@ -205,6 +237,8 @@ func TestValidateCompiledDuplicateKey(t *testing.T) {
 }
 
 func TestValidateEmptyExprList(t *testing.T) {
+	t.Parallel()
+
 	err := ValidateCalls(nil, nil)
 	require.NoError(t, err)
 

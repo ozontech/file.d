@@ -13,6 +13,8 @@ type tokenCase struct {
 }
 
 func TestParse(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name    string
 		input   string
@@ -327,12 +329,12 @@ func TestParse(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := Parse(tc.input)
+			t.Parallel()
 
+			got, err := Parse(tc.input)
+			require.Equal(t, tc.wantErr, err != nil)
 			if tc.wantErr {
-				require.Error(t, err)
 				return
 			}
 

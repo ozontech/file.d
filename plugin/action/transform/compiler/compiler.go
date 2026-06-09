@@ -14,7 +14,7 @@ type compileError struct {
 }
 
 func (e *compileError) Error() string {
-	return fmt.Sprintf("parse error at (%s): %s", e.Pos, e.Message)
+	return fmt.Sprintf("compile error at (%s): %s", e.Pos, e.Message)
 }
 
 // Compiler builds an AST from a slice of tokens.

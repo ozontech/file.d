@@ -96,6 +96,8 @@ func (c *mockContext) CallFunc(pos Position, name string, positional []Value, na
 }
 
 func TestEvalLiterals(t *testing.T) {
+	t.Parallel()
+
 	ctx := newMockCtx()
 
 	tests := []struct {
@@ -112,8 +114,9 @@ func TestEvalLiterals(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			got, err := tc.expr.Eval(ctx)
 			require.NoError(t, err)
 			assert.Equal(t, tc.want, got)
@@ -122,7 +125,11 @@ func TestEvalLiterals(t *testing.T) {
 }
 
 func TestEvalIdentExpr(t *testing.T) {
+	t.Parallel()
+
 	t.Run("existing_var", func(t *testing.T) {
+		t.Parallel()
+
 		ctx := newMockCtx()
 		ctx.vars["x"] = IntegerValue{V: 42}
 		got, err := (&IdentExpr{Node: n(), Name: "x"}).Eval(ctx)
@@ -131,6 +138,8 @@ func TestEvalIdentExpr(t *testing.T) {
 	})
 
 	t.Run("missing_var_returns_null", func(t *testing.T) {
+		t.Parallel()
+
 		ctx := newMockCtx()
 		got, err := (&IdentExpr{Node: n(), Name: "undefined"}).Eval(ctx)
 		require.NoError(t, err)
@@ -139,7 +148,11 @@ func TestEvalIdentExpr(t *testing.T) {
 }
 
 func TestEvalPathExpr(t *testing.T) {
+	t.Parallel()
+
 	t.Run("single_field", func(t *testing.T) {
+		t.Parallel()
+
 		ctx := newMockCtx()
 		ctx.target.store["status"] = IntegerValue{V: 200}
 		expr := &PathExpr{Node: n(), Root: EventRoot, Segments: []PathSegment{{Field: "status"}}}
@@ -149,6 +162,8 @@ func TestEvalPathExpr(t *testing.T) {
 	})
 
 	t.Run("nested_fields", func(t *testing.T) {
+		t.Parallel()
+
 		ctx := newMockCtx()
 		ctx.target.store["user.name"] = StringValue{V: "alice"}
 		expr := &PathExpr{
@@ -162,6 +177,8 @@ func TestEvalPathExpr(t *testing.T) {
 	})
 
 	t.Run("missing_path_returns_null", func(t *testing.T) {
+		t.Parallel()
+
 		ctx := newMockCtx()
 		expr := &PathExpr{Node: n(), Root: EventRoot, Segments: []PathSegment{{Field: "gone"}}}
 		got, err := expr.Eval(ctx)
@@ -170,6 +187,8 @@ func TestEvalPathExpr(t *testing.T) {
 	})
 
 	t.Run("integer_index_segment", func(t *testing.T) {
+		t.Parallel()
+
 		ctx := newMockCtx()
 		ctx.target.store["2"] = StringValue{V: "third"}
 		expr := &PathExpr{
@@ -183,6 +202,8 @@ func TestEvalPathExpr(t *testing.T) {
 	})
 
 	t.Run("string_index_becomes_field", func(t *testing.T) {
+		t.Parallel()
+
 		ctx := newMockCtx()
 		ctx.target.store["key"] = BoolValue{V: true}
 		expr := &PathExpr{
@@ -196,6 +217,8 @@ func TestEvalPathExpr(t *testing.T) {
 	})
 
 	t.Run("invalid_index_type_error", func(t *testing.T) {
+		t.Parallel()
+
 		ctx := newMockCtx()
 		expr := &PathExpr{
 			Node:     n(),
@@ -208,6 +231,8 @@ func TestEvalPathExpr(t *testing.T) {
 	})
 
 	t.Run("index_eval_error_propagates", func(t *testing.T) {
+		t.Parallel()
+
 		ctx := newMockCtx()
 		expr := &PathExpr{
 			Node:     n(),
@@ -220,9 +245,13 @@ func TestEvalPathExpr(t *testing.T) {
 }
 
 func TestEvalArrayExpr(t *testing.T) {
+	t.Parallel()
+
 	ctx := newMockCtx()
 
 	t.Run("empty", func(t *testing.T) {
+		t.Parallel()
+
 		got, err := (&ArrayExpr{Node: n()}).Eval(ctx)
 		require.NoError(t, err)
 		arr, ok := got.(ArrayValue)
@@ -231,6 +260,8 @@ func TestEvalArrayExpr(t *testing.T) {
 	})
 
 	t.Run("with_elements", func(t *testing.T) {
+		t.Parallel()
+
 		expr := &ArrayExpr{
 			Node: n(),
 			Elements: []Expr{
@@ -248,9 +279,13 @@ func TestEvalArrayExpr(t *testing.T) {
 }
 
 func TestEvalObjectExpr(t *testing.T) {
+	t.Parallel()
+
 	ctx := newMockCtx()
 
 	t.Run("empty", func(t *testing.T) {
+		t.Parallel()
+
 		got, err := (&ObjectExpr{Node: n()}).Eval(ctx)
 		require.NoError(t, err)
 		obj, ok := got.(ObjectValue)
@@ -259,6 +294,8 @@ func TestEvalObjectExpr(t *testing.T) {
 	})
 
 	t.Run("multiple_pairs", func(t *testing.T) {
+		t.Parallel()
+
 		expr := &ObjectExpr{
 			Node: n(),
 			Pairs: []KVPair{
@@ -275,6 +312,8 @@ func TestEvalObjectExpr(t *testing.T) {
 }
 
 func TestEvalUnaryExpr(t *testing.T) {
+	t.Parallel()
+
 	ctx := newMockCtx()
 
 	tests := []struct {
@@ -297,8 +336,9 @@ func TestEvalUnaryExpr(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			expr := &UnaryExpr{Node: n(), Op: tc.op, Operand: tc.operand}
 			got, err := expr.Eval(ctx)
 			if tc.wantErr {
@@ -312,6 +352,8 @@ func TestEvalUnaryExpr(t *testing.T) {
 }
 
 func TestEvalBinaryExpr(t *testing.T) {
+	t.Parallel()
+
 	ctx := newMockCtx()
 
 	iL := func(v int64) Expr { return &IntLit{Node: n(), Value: v} }
@@ -368,8 +410,9 @@ func TestEvalBinaryExpr(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
 			expr := &BinaryExpr{Node: n(), Left: tc.left, Op: tc.op, Right: tc.right}
 			got, err := expr.Eval(ctx)
 			if tc.wantErr {
@@ -383,11 +426,15 @@ func TestEvalBinaryExpr(t *testing.T) {
 }
 
 func TestEvalBinaryShortCircuit(t *testing.T) {
+	t.Parallel()
+
 	errExpr := func() Expr {
 		return &UnaryExpr{Node: n(), Op: "-", Operand: &StringLit{Node: n(), Value: "x"}}
 	}
 
 	t.Run("and_false_skips_right", func(t *testing.T) {
+		t.Parallel()
+
 		ctx := newMockCtx()
 		expr := &BinaryExpr{
 			Node:  n(),
@@ -401,6 +448,8 @@ func TestEvalBinaryShortCircuit(t *testing.T) {
 	})
 
 	t.Run("or_true_skips_right", func(t *testing.T) {
+		t.Parallel()
+
 		ctx := newMockCtx()
 		expr := &BinaryExpr{
 			Node:  n(),
@@ -415,7 +464,11 @@ func TestEvalBinaryShortCircuit(t *testing.T) {
 }
 
 func TestEvalAssignExpr(t *testing.T) {
+	t.Parallel()
+
 	t.Run("to_ident", func(t *testing.T) {
+		t.Parallel()
+
 		ctx := newMockCtx()
 		expr := &AssignExpr{
 			Node:   n(),
@@ -431,6 +484,8 @@ func TestEvalAssignExpr(t *testing.T) {
 	})
 
 	t.Run("to_path", func(t *testing.T) {
+		t.Parallel()
+
 		ctx := newMockCtx()
 		expr := &AssignExpr{
 			Node:   n(),
@@ -444,6 +499,8 @@ func TestEvalAssignExpr(t *testing.T) {
 	})
 
 	t.Run("to_array_index", func(t *testing.T) {
+		t.Parallel()
+
 		ctx := newMockCtx()
 		ctx.vars["arr"] = ArrayValue{V: []Value{IntegerValue{V: 1}, IntegerValue{V: 2}, IntegerValue{V: 3}}}
 		expr := &AssignExpr{
@@ -464,6 +521,8 @@ func TestEvalAssignExpr(t *testing.T) {
 	})
 
 	t.Run("to_array_negative_index", func(t *testing.T) {
+		t.Parallel()
+
 		ctx := newMockCtx()
 		ctx.vars["arr"] = ArrayValue{V: []Value{IntegerValue{V: 1}, IntegerValue{V: 2}, IntegerValue{V: 3}}}
 		expr := &AssignExpr{
@@ -482,6 +541,8 @@ func TestEvalAssignExpr(t *testing.T) {
 	})
 
 	t.Run("to_array_grow_with_nulls", func(t *testing.T) {
+		t.Parallel()
+
 		ctx := newMockCtx()
 		ctx.vars["arr"] = ArrayValue{V: []Value{IntegerValue{V: 1}}}
 		expr := &AssignExpr{
@@ -504,6 +565,8 @@ func TestEvalAssignExpr(t *testing.T) {
 	})
 
 	t.Run("to_array_out_of_bounds_err", func(t *testing.T) {
+		t.Parallel()
+
 		ctx := newMockCtx()
 		ctx.vars["arr"] = ArrayValue{V: []Value{IntegerValue{V: 1}}}
 		expr := &AssignExpr{
@@ -521,6 +584,8 @@ func TestEvalAssignExpr(t *testing.T) {
 	})
 
 	t.Run("to_object_key", func(t *testing.T) {
+		t.Parallel()
+
 		ctx := newMockCtx()
 		ctx.vars["obj"] = ObjectValue{V: map[string]Value{"a": IntegerValue{V: 1}}}
 		expr := &AssignExpr{
@@ -540,6 +605,8 @@ func TestEvalAssignExpr(t *testing.T) {
 	})
 
 	t.Run("to_index_on_non_ident_err", func(t *testing.T) {
+		t.Parallel()
+
 		ctx := newMockCtx()
 		expr := &AssignExpr{
 			Node: n(),
