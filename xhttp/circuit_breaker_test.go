@@ -60,8 +60,7 @@ func TestNewCircuitBreaker(t *testing.T) {
 			uris, err := parseEndpoints(tt.endpoints)
 			require.NoError(t, err)
 
-			ctx := t.Context()
-			cb := newCircuitBreaker(ctx, zap.NewNop(), uris, tt.banPeriod, 5*time.Minute, nil)
+			cb := newCircuitBreaker(t.Context(), zap.NewNop(), uris, tt.banPeriod, 5*time.Minute, nil)
 
 			if tt.disabled {
 				require.Nil(t, cb, "circuit breaker must be disabled with these parameters")
@@ -96,17 +95,6 @@ func TestCircuitBreakerScenarios(t *testing.T) {
 			wantBanUntil: map[int]time.Duration{
 				1: 10 * time.Second,
 			},
-		},
-		{
-			name:      "ban_all_endpoint",
-			endpoints: defaultEndpoints,
-			banPeriod: 10 * time.Second,
-			steps: []cbStep{
-				{operation: opBanEndpoint, idxEp: 0},
-				{operation: opBanEndpoint, idxEp: 1},
-				{operation: opBanEndpoint, idxEp: 2},
-			},
-			wantActive: nil,
 		},
 		{
 			name:      "ban_refreshes_ban_until",
@@ -161,12 +149,10 @@ func TestCircuitBreakerScenarios(t *testing.T) {
 			t.Parallel()
 
 			synctest.Test(t, func(t *testing.T) {
-				ctx := t.Context()
-
 				uris, err := parseEndpoints(tt.endpoints)
 				require.NoError(t, err)
 
-				cb := newCircuitBreaker(ctx, zap.NewNop(), uris, tt.banPeriod, 30*time.Second, nil)
+				cb := newCircuitBreaker(t.Context(), zap.NewNop(), uris, tt.banPeriod, 30*time.Second, nil)
 				require.NotNil(t, cb)
 				cb.setNowFn(time.Now)
 
@@ -201,6 +187,27 @@ func TestCircuitBreakerScenarios(t *testing.T) {
 	}
 }
 
+func TestCircuitBreakerAllBannedFallback(t *testing.T) {
+	t.Parallel()
+
+	synctest.Test(t, func(t *testing.T) {
+		uris, err := parseEndpoints(defaultEndpoints)
+		require.NoError(t, err)
+
+		cb := newCircuitBreaker(t.Context(), zap.NewNop(), uris, 10*time.Second, 3*time.Second, nil)
+		require.NotNil(t, cb)
+		cb.setNowFn(time.Now)
+
+		for _, ep := range cb.endpoints {
+			cb.banEndpoint(ep.uri)
+		}
+		require.Empty(t, cb.activeEndpoints)
+
+		ep0, ep1, ep2 := cb.endpoints[0].uri.String(), cb.endpoints[1].uri.String(), cb.endpoints[2].uri.String()
+		require.ElementsMatch(t, []string{ep0, ep1, ep2}, pickedURIs(cb, 3))
+	})
+}
+
 func TestCircuitBreakerFullCycle(t *testing.T) {
 	t.Parallel()
 
@@ -208,8 +215,7 @@ func TestCircuitBreakerFullCycle(t *testing.T) {
 		uris, err := parseEndpoints(defaultEndpoints)
 		require.NoError(t, err)
 
-		ctx := t.Context()
-		cb := newCircuitBreaker(ctx, zap.NewNop(), uris, 10*time.Second, 3*time.Second, nil)
+		cb := newCircuitBreaker(t.Context(), zap.NewNop(), uris, 10*time.Second, 3*time.Second, nil)
 		require.NotNil(t, cb)
 		cb.setNowFn(time.Now)
 
@@ -241,9 +247,6 @@ func pickedURIs(cb *circuitBreaker, workers int) []string {
 	for range workers {
 		wg.Go(func() {
 			uri := cb.getEndpoint()
-			if uri == nil {
-				return
-			}
 
 			mu.Lock()
 			seen[uri.String()] = struct{}{}
