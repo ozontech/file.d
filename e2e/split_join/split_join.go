@@ -87,7 +87,7 @@ func (c *Config) Send(t *testing.T) {
 		_ = file.Close()
 	}(file)
 
-	for i := 0; i < messages; i++ {
+	for range messages {
 		_, err = file.WriteString(sample + "\n")
 		require.NoError(t, err)
 	}

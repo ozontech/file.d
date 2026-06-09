@@ -107,7 +107,6 @@ func TestJson(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -143,15 +142,15 @@ func TestJson(t *testing.T) {
 
 func genBenchFields(count int) string {
 	var sb strings.Builder
-	for i := 0; i < count; i++ {
-		sb.WriteString(fmt.Sprintf(`"field_%d":"vaaaaaaaaaaaaaal_%d",`, i, i))
+	for i := range count {
+		fmt.Fprintf(&sb, `"field_%d":"vaaaaaaaaaaaaaal_%d",`, i, i)
 	}
 	return sb.String()
 }
 
 func genBenchParams(count, maxLen int) map[string]int {
 	m := map[string]int{}
-	for i := 0; i < count; i++ {
+	for i := range count {
 		m[fmt.Sprintf("field_%d", i)] = maxLen
 	}
 	return m
@@ -165,25 +164,25 @@ func BenchmarkCutFieldsBySize(b *testing.B) {
 		params map[string]int
 	}{
 		{
-			json: []byte(fmt.Sprintf(benchJsonFormat, genBenchFields(0))),
+			json: fmt.Appendf(nil, benchJsonFormat, genBenchFields(0)),
 			params: map[string]int{
 				"message": 7,
 			},
 		},
 		{
-			json:   []byte(fmt.Sprintf(benchJsonFormat, genBenchFields(10))),
+			json:   fmt.Appendf(nil, benchJsonFormat, genBenchFields(10)),
 			params: genBenchParams(9, 3),
 		},
 		{
-			json:   []byte(fmt.Sprintf(benchJsonFormat, genBenchFields(100))),
+			json:   fmt.Appendf(nil, benchJsonFormat, genBenchFields(100)),
 			params: genBenchParams(98, 5),
 		},
 		{
-			json:   []byte(fmt.Sprintf(benchJsonFormat, genBenchFields(1000))),
+			json:   fmt.Appendf(nil, benchJsonFormat, genBenchFields(1000)),
 			params: genBenchParams(997, 7),
 		},
 		{
-			json:   []byte(fmt.Sprintf(benchJsonFormat, genBenchFields(10000))),
+			json:   fmt.Appendf(nil, benchJsonFormat, genBenchFields(10000)),
 			params: genBenchParams(9996, 9),
 		},
 	}
@@ -199,7 +198,7 @@ func BenchmarkCutFieldsBySize(b *testing.B) {
 				cutPositions: make([]jsonCutPos, 0, len(benchCase.params)),
 				mu:           &sync.Mutex{},
 			}
-			for i := 0; i < b.N; i++ {
+			for range b.N {
 				_ = d.cutFieldsBySize(benchCase.json)
 			}
 		})

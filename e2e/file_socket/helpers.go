@@ -132,10 +132,10 @@ func (s *testServer) collected() []string {
 	return out
 }
 
-func (s *testServer) waitForMessages(minCount, retries int, delay time.Duration) ([]map[string]interface{}, error) {
+func (s *testServer) waitForMessages(minCount, retries int, delay time.Duration) ([]map[string]any, error) {
 	time.Sleep(2 * time.Second)
 
-	for i := 0; i < retries; i++ {
+	for range retries {
 		msgs := s.collected()
 		if len(msgs) >= minCount {
 			return decodeMessages(msgs)
@@ -150,10 +150,10 @@ func (s *testServer) waitForMessages(minCount, retries int, delay time.Duration)
 	)
 }
 
-func decodeMessages(raw []string) ([]map[string]interface{}, error) {
-	result := make([]map[string]interface{}, 0, len(raw))
+func decodeMessages(raw []string) ([]map[string]any, error) {
+	result := make([]map[string]any, 0, len(raw))
 	for _, s := range raw {
-		var m map[string]interface{}
+		var m map[string]any
 		if err := json.Unmarshal([]byte(s), &m); err != nil {
 			return nil, fmt.Errorf("failed to decode message %q: %w", s, err)
 		}

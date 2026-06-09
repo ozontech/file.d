@@ -89,7 +89,7 @@ func TestModifyRegex(t *testing.T) {
 
 	root := insaneJSON.Spawn()
 	defer insaneJSON.Release(root)
-	for i := 0; i < len(testEvents); i++ {
+	for i := range len(testEvents) {
 		fvs := testEvents[i].fieldsValues
 		_ = root.DecodeString(outEvents[i])
 		for field := range fvs {

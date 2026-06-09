@@ -244,8 +244,7 @@ func isNotFileBeingWritten(filePath string) bool {
 	}
 
 	// Check the output for write access
-	lines := strings.Split(string(output), "\n")
-	for _, line := range lines {
+	for line := range strings.SplitSeq(string(output), "\n") {
 		// Check if the line contains 'w' indicating write access
 		if strings.Contains(line, "w") {
 			return true // File is being written to

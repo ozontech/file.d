@@ -70,7 +70,7 @@ func (c *Config) Send(t *testing.T) {
 		msgs[i].Partition = int32(i)
 	}
 
-	for i := 0; i < c.Count; i++ {
+	for range c.Count {
 		result := client.ProduceSync(context.TODO(), msgs...)
 		err := result.FirstErr()
 		if err != nil {

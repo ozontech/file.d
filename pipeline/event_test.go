@@ -21,7 +21,7 @@ func TestEventPoolDump(t *testing.T) {
 
 func BenchmarkEventPoolOneGoroutine(b *testing.B) {
 	bench := func(b *testing.B, p pool) {
-		for i := 0; i < b.N; i++ {
+		for range b.N {
 			p.back(p.get(1))
 		}
 	}
@@ -39,14 +39,14 @@ func BenchmarkEventPoolOneGoroutine(b *testing.B) {
 func BenchmarkEventPoolManyGoroutines(b *testing.B) {
 	bench := func(b *testing.B, p pool) {
 		workers := runtime.GOMAXPROCS(0)
-		for i := 0; i < b.N; i++ {
+		for range b.N {
 			wg := &sync.WaitGroup{}
 			wg.Add(workers)
-			for j := 0; j < workers; j++ {
+			for range workers {
 				go func() {
 					defer wg.Done()
 
-					for k := 0; k < 1000; k++ {
+					for range 1000 {
 						p.back(p.get(1))
 					}
 				}()
@@ -68,10 +68,9 @@ func BenchmarkEventPoolManyGoroutines(b *testing.B) {
 func BenchmarkEventPoolSlowestPath(b *testing.B) {
 	bench := func(b *testing.B, p pool) {
 		wg := &sync.WaitGroup{}
-		for i := 0; i < b.N; i++ {
-			const concurrency = 1_000
-			wg.Add(concurrency)
-			for j := 0; j < concurrency; j++ {
+		for range b.N {
+			wg.Add(1000)
+			for range 1000 {
 				go func() {
 					defer wg.Done()
 					e := p.get(1)
@@ -98,15 +97,15 @@ func TestLowMemPool(t *testing.T) {
 	r := require.New(t)
 	test := func(capacity, batchSize int) {
 		p := newTestLowMemoryEventPool(capacity)
-		for i := 0; i < batchSize; i++ {
+		for range batchSize {
 			batch := make([]*Event, batchSize)
-			for j := 0; j < batchSize; j++ {
+			for j := range batchSize {
 				batch[j] = p.get(1)
 			}
 			r.Equal(int64(batchSize), p.inUse())
 			r.Equal(int64(0), p.waiters())
 
-			for j := 0; j < batchSize; j++ {
+			for j := range batchSize {
 				p.back(batch[j])
 			}
 		}
@@ -133,7 +132,7 @@ func TestEventPoolSlowWait(t *testing.T) {
 		const waiters = 16
 		// Create 16 goroutines to wait on new events.
 		wg := new(sync.WaitGroup)
-		for i := 0; i < waiters; i++ {
+		for range waiters {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
@@ -146,7 +145,7 @@ func TestEventPoolSlowWait(t *testing.T) {
 		}
 
 		// Wait for all goroutines to be waiting.
-		for i := 0; i < 50; i++ {
+		for range 50 {
 			if p.waiters() == waiters {
 				break
 			}
@@ -183,10 +182,10 @@ func TestWakeupWaiters(t *testing.T) {
 		concurrency  = 5_000
 	)
 	pool := newTestEventPool(poolCapacity)
-	for i := 0; i < 1_000; i++ {
+	for range 1000 {
 		wg := new(sync.WaitGroup)
 		wg.Add(concurrency)
-		for i := 0; i < concurrency; i++ {
+		for range concurrency {
 			go func() {
 				defer wg.Done()
 				e := pool.get(1)

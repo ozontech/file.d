@@ -158,7 +158,7 @@ func NewBatcher(opts BatcherOptions) *Batcher { // nolint: gocritic // hugeParam
 
 	freeBatches := make(chan *Batch, opts.Workers)
 	fullBatches := make(chan *Batch, opts.Workers)
-	for i := 0; i < opts.Workers; i++ {
+	for range opts.Workers {
 		freeBatches <- newBatch(opts.BatchSizeCount, opts.BatchSizeBytes, opts.FlushTimeout)
 	}
 
@@ -185,7 +185,7 @@ func (b *Batcher) Start(ctx context.Context) {
 	}()
 
 	b.workersWg.Add(b.opts.Workers)
-	for i := 0; i < b.opts.Workers; i++ {
+	for range b.opts.Workers {
 		go b.work()
 	}
 

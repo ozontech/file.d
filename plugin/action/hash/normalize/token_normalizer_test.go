@@ -496,6 +496,8 @@ func TestTokenNormalizerCustom(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			n, err := NewTokenNormalizer(tt.params)
 			require.Equal(t, tt.wantErr, err != nil || n == nil)
 			if tt.wantErr {

@@ -122,7 +122,7 @@ func TestConcurrentOperations(t *testing.T) {
 	for _, key := range keys {
 		go func(k string) {
 			defer wg.Done()
-			for i := 0; i < 100; i++ {
+			for range 100 {
 				cache.Set(k)
 			}
 		}(key)
@@ -140,7 +140,7 @@ func TestConcurrentOperations(t *testing.T) {
 	for _, key := range keys {
 		go func(k string) {
 			defer wg.Done()
-			for i := 0; i < 100; i++ {
+			for range 100 {
 				cacheKeyIsExists(cache, k)
 				cache.Set(k + "-new")
 			}
@@ -153,7 +153,7 @@ func TestConcurrentOperations(t *testing.T) {
 	for _, key := range keys {
 		go func(k string) {
 			defer wg.Done()
-			for i := 0; i < 100; i++ {
+			for range 100 {
 				cache.delete(k)
 			}
 		}(key)
@@ -164,13 +164,13 @@ func TestConcurrentOperations(t *testing.T) {
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		for i := 0; i < 100; i++ {
+		for range 100 {
 			cache.CountPrefix("key")
 		}
 	}()
 	go func() {
 		defer wg.Done()
-		for i := 0; i < 100; i++ {
+		for range 100 {
 			cache.Set("key-x")
 			cache.Set("key-y")
 			cache.delete("key-x")

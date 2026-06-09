@@ -230,6 +230,8 @@ func TestMaskFunctions(t *testing.T) {
 
 	for _, tCase := range suits {
 		t.Run(tCase.name, func(t *testing.T) {
+			t.Parallel()
+
 			buf := make([]byte, 0, 2048)
 			tCase.masks.Re_ = regexp.MustCompile(tCase.masks.Re)
 			buf, masked := tCase.masks.maskValue(tCase.input, buf)
@@ -396,6 +398,8 @@ func TestGroupNumbers(t *testing.T) {
 
 	for _, s := range suits {
 		t.Run(s.name, func(t *testing.T) {
+			t.Parallel()
+
 			if s.isFatal {
 				assert.PanicsWithValue(t,
 					s.fatalMsg,
@@ -527,6 +531,8 @@ func TestPlugin(t *testing.T) {
 
 	for _, s := range suits {
 		t.Run(s.name, func(t *testing.T) {
+			t.Parallel()
+
 			sut, input, output := test.NewPipelineMock(
 				test.NewActionPluginStaticInfo(factory, config,
 					pipeline.MatchModeAnd,
@@ -784,6 +790,8 @@ func TestPluginWithComplexMasks(t *testing.T) {
 
 	for _, s := range suits {
 		t.Run(s.name, func(t *testing.T) {
+			t.Parallel()
+
 			config := test.NewConfig(&Config{
 				Masks:               s.masks,
 				AppliedMetricName:   s.metricName,

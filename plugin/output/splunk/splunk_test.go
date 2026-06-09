@@ -27,7 +27,6 @@ func TestSplunk(t *testing.T) {
 	}
 
 	for _, tt := range suites {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -96,7 +95,6 @@ func TestParseSplunkError(t *testing.T) {
 		},
 	}
 	for _, tt := range cases {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -157,7 +155,6 @@ func TestCopyFields(t *testing.T) {
 	}
 
 	for _, tt := range suites {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 

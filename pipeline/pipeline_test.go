@@ -68,6 +68,8 @@ func TestInInvalidMessages(t *testing.T) {
 
 	for _, tCase := range cases {
 		t.Run(tCase.name, func(t *testing.T) {
+			t.Parallel()
+
 			pipe := pipeline.New("test_pipeline", tCase.pipelineSettings, prometheus.NewRegistry(), zap.NewNop())
 
 			pipe.SetInput(getFakeInputInfo())
@@ -101,7 +103,7 @@ func BenchmarkMetaTemplater(b *testing.B) {
 		},
 	})
 
-	for i := 0; i < b.N; i++ {
+	for i := range b.N {
 		rest := i % 100
 		pipe.In(
 			pipeline.SourceID(1<<16+rest),

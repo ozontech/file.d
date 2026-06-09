@@ -115,6 +115,8 @@ func TestPlugin_Do(t *testing.T) {
 
 	for _, tc := range tcs {
 		t.Run(tc.Name, func(t *testing.T) {
+			t.Parallel()
+
 			require.NoError(t, root.DecodeString(tc.Root))
 			cfg.Parse(tc.Config, nil)
 

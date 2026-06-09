@@ -82,7 +82,7 @@ func NewConfig() *Config {
 }
 
 func NewConfigFromFile(paths []string) *Config {
-	mergedConfig := make(map[interface{}]interface{})
+	mergedConfig := make(map[any]any)
 
 	for _, path := range paths {
 		logger.Infof("reading config %q", path)
@@ -90,7 +90,7 @@ func NewConfigFromFile(paths []string) *Config {
 		if err != nil {
 			logger.Fatalf("can't read config file %q: %s", path, err)
 		}
-		var currentConfig map[interface{}]interface{}
+		var currentConfig map[any]any
 		if err := yaml.Unmarshal(yamlContents, &currentConfig); err != nil {
 			logger.Fatalf("can't parse config file yaml %q: %s", path, err)
 		}
@@ -631,7 +631,7 @@ func ParseNestedFields(fields []string) ([][]string, error) {
 	return result, nil
 }
 
-func SetDefaultValues(data interface{}) error {
+func SetDefaultValues(data any) error {
 	t := reflect.TypeOf(data).Elem()
 	v := reflect.ValueOf(data).Elem()
 
@@ -670,9 +670,10 @@ func SetDefaultValues(data interface{}) error {
 			case reflect.Bool:
 				currentValue := vField.Bool()
 				if !currentValue {
-					if defaultValue == "true" {
+					switch defaultValue {
+					case "true":
 						vField.SetBool(true)
-					} else if defaultValue == "false" {
+					case "false":
 						vField.SetBool(false)
 					}
 				}
@@ -731,8 +732,8 @@ func mergeYAMLs(a, b map[interface{}]interface{}) map[interface{}]interface{} {
 	}
 	for k, v := range b {
 		if existingValue, exists := merged[k]; exists {
-			if existingMap, ok := existingValue.(map[interface{}]interface{}); ok {
-				if newMap, ok := v.(map[interface{}]interface{}); ok {
+			if existingMap, ok := existingValue.(map[any]any); ok {
+				if newMap, ok := v.(map[any]any); ok {
 					merged[k] = mergeYAMLs(existingMap, newMap)
 					continue
 				}

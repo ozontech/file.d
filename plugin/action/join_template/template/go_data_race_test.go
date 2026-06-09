@@ -10,8 +10,7 @@ import (
 func BenchmarkGoDataRaceStartMixedRes(b *testing.B) {
 	lines := getLines(sample.GoDataRace)
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		for _, line := range lines {
 			goDataRaceStartCheck(line)
 		}
@@ -21,8 +20,7 @@ func BenchmarkGoDataRaceStartMixedRes(b *testing.B) {
 func BenchmarkGoDataRaceFinishMixedRes(b *testing.B) {
 	lines := getLines(sample.GoDataRace)
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		for _, line := range lines {
 			goDataRaceFinishCheck(line)
 		}
@@ -32,8 +30,7 @@ func BenchmarkGoDataRaceFinishMixedRes(b *testing.B) {
 func BenchmarkGoDataRaceStartNegativeRes(b *testing.B) {
 	lines := getRandLines()
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		for _, line := range lines {
 			goDataRaceStartCheck(line)
 		}
@@ -43,8 +40,7 @@ func BenchmarkGoDataRaceStartNegativeRes(b *testing.B) {
 func BenchmarkGoDataRaceFinishNegativeRes(b *testing.B) {
 	lines := getRandLines()
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		for _, line := range lines {
 			goDataRaceFinishCheck(line)
 		}

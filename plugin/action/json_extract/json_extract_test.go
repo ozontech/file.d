@@ -175,7 +175,6 @@ func TestJsonExtract(t *testing.T) {
 		},
 	}
 	for _, tt := range cases {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -209,8 +208,8 @@ func TestJsonExtract(t *testing.T) {
 
 func genBenchFields(count int) string {
 	var sb strings.Builder
-	for i := 0; i < count; i++ {
-		sb.WriteString(fmt.Sprintf(`"field_%d":"val_%d",`, i, i))
+	for i := range count {
+		fmt.Fprintf(&sb, `"field_%d":"val_%d",`, i, i)
 	}
 	return sb.String()
 }

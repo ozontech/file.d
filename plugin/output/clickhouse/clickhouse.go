@@ -692,7 +692,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 		return err
 	}
 
-	for i := 0; i < attempts; i++ {
+	for i := range attempts {
 		requestID := p.requestID.Inc()
 
 		p.mu.RLock()

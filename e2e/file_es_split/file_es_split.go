@@ -51,7 +51,7 @@ func (c *Config) Send(t *testing.T) {
 		_ = file.Close()
 	}()
 
-	for i := 0; i < n; i++ {
+	for range n {
 		err = addEvent(file, successEvent)
 		require.NoError(t, err)
 	}
@@ -59,7 +59,7 @@ func (c *Config) Send(t *testing.T) {
 	err = addEvent(file, failEvent)
 	require.NoError(t, err)
 
-	for i := 0; i < 2*n; i++ {
+	for range 2 * n {
 		err = addEvent(file, successEvent)
 		require.NoError(t, err)
 	}
