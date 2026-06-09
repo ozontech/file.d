@@ -643,8 +643,6 @@ func TestApplyConfigFuncs(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
 			object, err := simplejson.NewJson([]byte(tt.json))
 			require.NoError(t, err)
 			for _, env := range tt.environs {
@@ -858,8 +856,6 @@ func TestMergeYAMLs(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
 			result := mergeYAMLs(tt.a, tt.b)
 			if !reflect.DeepEqual(result, tt.expected) {
 				t.Errorf("expected %v, got %v", tt.expected, result)
