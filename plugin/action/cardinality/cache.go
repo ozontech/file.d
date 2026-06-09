@@ -7,20 +7,21 @@ import (
 	"github.com/ozontech/file.d/xtime"
 )
 
-// entry holds a timestamp for a single cached key.
-type entry struct {
-	ts int64
+// bucket holds keys for a single prefix with fast counting.
+type bucket struct {
+	keys  map[string]int64
+	minTs int64 // oldest key timestamp; 0 if empty
 }
 
 type Cache struct {
 	mu   *sync.RWMutex
-	tree map[string]*map[string]*entry // prefix -> (full key -> timestamp)
+	tree map[string]*bucket
 	ttl  int64
 }
 
 func NewCache(ttl time.Duration) *Cache {
 	return &Cache{
-		tree: make(map[string]*map[string]*entry),
+		tree: make(map[string]*bucket),
 		ttl:  ttl.Nanoseconds(),
 		mu:   &sync.RWMutex{},
 	}
@@ -32,45 +33,81 @@ func (c *Cache) Set(prefix, key string) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	bucket, ok := c.tree[prefix]
+	b, ok := c.tree[prefix]
 	if !ok {
-		bucket = &map[string]*entry{}
-		c.tree[prefix] = bucket
+		b = &bucket{keys: make(map[string]int64)}
+		c.tree[prefix] = b
 	}
 
-	e, exists := (*bucket)[key]
-	if exists {
-		e.ts = xtime.GetInaccurateUnixNano()
+	ts := xtime.GetInaccurateUnixNano()
+	if _, exists := b.keys[key]; exists {
+		b.keys[key] = ts
 		return true
 	}
 
-	(*bucket)[key] = &entry{ts: xtime.GetInaccurateUnixNano()}
+	b.keys[key] = ts
+	if b.minTs == 0 || ts < b.minTs {
+		b.minTs = ts
+	}
 	return false
 }
 
 // CountPrefix returns the number of non-expired keys under the prefix.
-// Expired keys are scheduled for async deletion.
-func (c *Cache) CountPrefix(prefix string) (count int) {
-	var keysToDelete []string
+// Expired keys are cleaned synchronously on the first call that detects them.
+func (c *Cache) CountPrefix(prefix string) int {
 	threshold := xtime.GetInaccurateUnixNano() - c.ttl
 
 	c.mu.RLock()
-	bucket := c.tree[prefix]
-	if bucket != nil {
-		for key, e := range *bucket {
-			if e.ts < threshold {
-				keysToDelete = append(keysToDelete, key)
-			} else {
-				count++
-			}
-		}
+	b := c.tree[prefix]
+	if b == nil {
+		c.mu.RUnlock()
+		return 0
 	}
+
+	// Oldest key hasn't expired → no keys expired. Return count in O(1).
+	if b.minTs >= threshold {
+		count := len(b.keys)
+		c.mu.RUnlock()
+		return count
+	}
+
+	// Some keys may have expired — upgrade to write lock and scan.
 	c.mu.RUnlock()
 
-	if len(keysToDelete) > 0 {
-		go c.delete(prefix, keysToDelete...)
+	c.mu.Lock()
+	b = c.tree[prefix]
+	if b == nil {
+		c.mu.Unlock()
+		return 0
 	}
-	return
+
+	// Recompute threshold and re-check under write lock.
+	threshold = xtime.GetInaccurateUnixNano() - c.ttl
+	if b.minTs >= threshold {
+		count := len(b.keys)
+		c.mu.Unlock()
+		return count
+	}
+
+	count := 0
+	newMinTs := int64(0)
+	for key, ts := range b.keys {
+		if ts >= threshold {
+			count++
+			if newMinTs == 0 || ts < newMinTs {
+				newMinTs = ts
+			}
+		} else {
+			delete(b.keys, key)
+		}
+	}
+	b.minTs = newMinTs
+	if len(b.keys) == 0 {
+		delete(c.tree, prefix)
+	}
+	c.mu.Unlock()
+
+	return count
 }
 
 func (c *Cache) delete(prefix string, keysToDelete ...string) {
@@ -80,16 +117,30 @@ func (c *Cache) delete(prefix string, keysToDelete ...string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	bucket := c.tree[prefix]
-	if bucket == nil {
+	b := c.tree[prefix]
+	if b == nil {
 		return
 	}
 
+	minTsDeleted := false
 	for _, key := range keysToDelete {
-		delete(*bucket, key)
+		if ts, ok := b.keys[key]; ok {
+			if ts == b.minTs {
+				minTsDeleted = true
+			}
+			delete(b.keys, key)
+		}
 	}
 
-	if len(*bucket) == 0 {
+	if len(b.keys) == 0 {
 		delete(c.tree, prefix)
+		b.minTs = 0
+	} else if minTsDeleted {
+		b.minTs = 0
+		for _, ts := range b.keys {
+			if b.minTs == 0 || ts < b.minTs {
+				b.minTs = ts
+			}
+		}
 	}
 }

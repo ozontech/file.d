@@ -215,7 +215,7 @@ func TestTTL(t *testing.T) {
 	t.Run("key expires after TTL", func(t *testing.T) {
 		time.Sleep(1 * time.Second)
 		assert.Equal(t, 0, cache.CountPrefix(prefix))
-		time.Sleep(100 * time.Millisecond) // cause delete in async
+		// CountPrefix now cleans expired keys synchronously, so no need to wait.
 		found := cacheKeyIsExists(cache, prefix, key)
 		assert.False(t, found)
 	})
@@ -224,11 +224,11 @@ func TestTTL(t *testing.T) {
 func cacheKeyIsExists(c *Cache, prefix, key string) bool {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	bucket := c.tree[prefix]
-	if bucket == nil {
+	b := c.tree[prefix]
+	if b == nil {
 		return false
 	}
-	_, found := (*bucket)[key]
+	_, found := b.keys[key]
 
 	return found
 }
