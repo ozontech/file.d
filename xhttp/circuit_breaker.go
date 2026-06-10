@@ -23,7 +23,7 @@ type circuitBreaker struct {
 	activeEndpoints []int
 	idxByURI        map[string]int
 	banPeriod       time.Duration
-	fallbackEpIdx   atomic.Int64
+	fallbackEpIdx   atomic.Uint64
 
 	logger                *zap.Logger
 	bannedEndpointsMetric *metric.Gauge
@@ -90,7 +90,7 @@ func (cb *circuitBreaker) getEndpoint() *fasthttp.URI {
 	defer cb.mu.RUnlock()
 
 	if len(cb.activeEndpoints) == 0 {
-		idx := int(cb.fallbackEpIdx.Add(1) % int64(len(cb.endpoints)))
+		idx := int(cb.fallbackEpIdx.Add(1) % uint64(len(cb.endpoints)))
 		return cb.endpoints[idx].uri
 	}
 
