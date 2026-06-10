@@ -775,7 +775,8 @@ func (p *Plugin) do(clickhouse Clickhouse, queryInput proto.Input) error {
 }
 
 func (p *Plugin) fallbackInsert(input proto.Input) error {
-	var lastErr error
+	lastErr := errNoAvailableClickhouseAddresses
+
 	for range len(p.config.Addresses) {
 		idx := int(p.requestID.Add(1) % int64(len(p.config.Addresses)))
 		addr := p.config.Addresses[idx]
