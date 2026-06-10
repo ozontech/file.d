@@ -39,7 +39,7 @@ func TestPlugin_getInstance(t *testing.T) {
 	}
 
 	type args struct {
-		id    int64
+		id    uint64
 		retry int
 	}
 	tests := []struct {
@@ -54,21 +54,21 @@ func TestPlugin_getInstance(t *testing.T) {
 			name:      "one instance and first retry",
 			instances: instances[:1],
 			stategy:   StrategyInOrder,
-			args:      args{id: rand.Int63(), retry: 0},
+			args:      args{id: rand.Uint64(), retry: 0},
 			want:      instances[0],
 		},
 		{
 			name:      "one instance and some retry",
 			instances: instances[:1],
 			stategy:   StrategyInOrder,
-			args:      args{id: rand.Int63(), retry: 123},
+			args:      args{id: rand.Uint64(), retry: 123},
 			want:      instances[0],
 		},
 		{
 			name:      "many instances and some retry",
 			instances: instances,
 			stategy:   StrategyInOrder,
-			args:      args{id: rand.Int63(), retry: 123},
+			args:      args{id: rand.Uint64(), retry: 123},
 			want:      instances[3], // 123%3
 		},
 		// round-robin
@@ -90,7 +90,7 @@ func TestPlugin_getInstance(t *testing.T) {
 			name:      "one instances and rand retry",
 			instances: instances[:1],
 			stategy:   StrategyRoundRobin,
-			args:      args{id: rand.Int63(), retry: rand.Int()},
+			args:      args{id: rand.Uint64(), retry: rand.Int()},
 			want:      instances[0],
 		},
 	}

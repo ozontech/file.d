@@ -64,7 +64,7 @@ type Plugin struct {
 
 	// TODO: support shards
 	instances []instance
-	requestID atomic.Int64
+	requestID atomic.Uint64
 
 	// plugin metrics
 	insertErrorsMetric    *metric.Counter
@@ -778,7 +778,7 @@ func (p *Plugin) fallbackInsert(input proto.Input) error {
 	lastErr := errNoAvailableClickhouseAddresses
 
 	for range len(p.config.Addresses) {
-		idx := int(p.requestID.Add(1) % int64(len(p.config.Addresses)))
+		idx := int(p.requestID.Add(1) % uint64(len(p.config.Addresses)))
 		addr := p.config.Addresses[idx]
 
 		p.mu.RLock()
@@ -828,13 +828,13 @@ func (p *Plugin) banInstance(addr Address) {
 	p.bannedEndpointsMetric.Set(float64(bannedCount))
 }
 
-func (p *Plugin) getInstance(requestID int64, retry int) instance {
+func (p *Plugin) getInstance(requestID uint64, retry int) instance {
 	var instanceIdx int
 	switch p.config.InsertStrategy_ {
 	case StrategyInOrder:
 		instanceIdx = retry % len(p.instances)
 	case StrategyRoundRobin:
-		instanceIdx = int(requestID) % len(p.instances)
+		instanceIdx = int(requestID % uint64(len(p.instances)))
 	}
 	return p.instances[instanceIdx]
 }
