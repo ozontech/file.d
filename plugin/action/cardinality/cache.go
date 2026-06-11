@@ -52,43 +52,38 @@ func (c *Cache) Set(prefix, key string) bool {
 	return false
 }
 
-// CountPrefix returns the number of non-expired keys under the prefix.
-// Expired keys are cleaned synchronously on the first call that detects them.
-func (c *Cache) CountPrefix(prefix string) int {
+// fastPath checks whether a bucket is nil or fully valid under the given lock.
+// It returns (count, true) when the result is conclusive, or (0, false) when
+// a slow-path scan is needed. On return false the lock is still held.
+func (c *Cache) fastPath(prefix string, lock, unlock func()) (int, bool) {
 	threshold := xtime.GetInaccurateUnixNano() - c.ttl
 
-	c.mu.RLock()
+	lock()
 	b := c.tree[prefix]
 	if b == nil {
-		c.mu.RUnlock()
-		return 0
+		unlock()
+		return 0, true
 	}
 
 	// Oldest key hasn't expired → no keys expired. Return count in O(1).
 	if b.minTs >= threshold {
 		count := len(b.keys)
-		c.mu.RUnlock()
-		return count
+		unlock()
+		return count, true
 	}
 
-	// Some keys may have expired — upgrade to write lock and scan.
-	c.mu.RUnlock()
+	return 0, false // lock still held
+}
 
-	c.mu.Lock()
-	b = c.tree[prefix]
+// cleanBucket scans a bucket under write lock, deletes expired keys, and
+// updates minTs. The lock must already be held.
+func (c *Cache) cleanBucket(prefix string) (int, int64) {
+	b := c.tree[prefix]
 	if b == nil {
-		c.mu.Unlock()
-		return 0
+		return 0, 0
 	}
 
-	// Recompute threshold and re-check under write lock.
-	threshold = xtime.GetInaccurateUnixNano() - c.ttl
-	if b.minTs >= threshold {
-		count := len(b.keys)
-		c.mu.Unlock()
-		return count
-	}
-
+	threshold := xtime.GetInaccurateUnixNano() - c.ttl
 	count := 0
 	newMinTs := int64(0)
 	for key, ts := range b.keys {
@@ -105,8 +100,24 @@ func (c *Cache) CountPrefix(prefix string) int {
 	if len(b.keys) == 0 {
 		delete(c.tree, prefix)
 	}
-	c.mu.Unlock()
 
+	return count, newMinTs
+}
+
+// CountPrefix returns the number of non-expired keys under the prefix.
+// Expired keys are cleaned synchronously on the first call that detects them.
+func (c *Cache) CountPrefix(prefix string) int {
+	if count, ok := c.fastPath(prefix, c.mu.RLock, c.mu.RUnlock); ok {
+		return count
+	}
+	c.mu.RUnlock()
+
+	if count, ok := c.fastPath(prefix, c.mu.Lock, c.mu.Unlock); ok {
+		return count
+	}
+
+	count, _ := c.cleanBucket(prefix)
+	c.mu.Unlock()
 	return count
 }
 
