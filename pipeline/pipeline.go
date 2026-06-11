@@ -89,8 +89,9 @@ type Pipeline struct {
 	started  bool
 	settings *Settings
 
-	decoderType decoder.Type // decoder type set in the config
-	decoder     decoder.Decoder
+	decoderType     decoder.Type // decoder type set in the config
+	decoder         decoder.Decoder
+	initDecoderOnce *sync.Once
 
 	eventPool pool
 	streamer  *streamer
@@ -225,6 +226,8 @@ func New(name string, settings *Settings, registry *prometheus.Registry, lg *zap
 
 		eventLog:   make([]string, 0, 128),
 		eventLogMu: &sync.Mutex{},
+
+		initDecoderOnce: &sync.Once{},
 	}
 
 	pipeline.registerMetrics()
@@ -342,14 +345,6 @@ func (p *Pipeline) Start() {
 
 	p.input.Start(p.inputInfo.Config, inputParams)
 
-	// If decoder is still set to AUTO after input plugin start, it means
-	// no plugin called SuggestDecoder to override it.
-	// In this case, the JSON decoder is used by default.
-	if p.decoderType == decoder.AUTO {
-		p.decoderType = decoder.JSON
-		p.decoder, _ = decoder.New(decoder.JSON, nil)
-	}
-
 	p.streamer.start()
 
 	go p.maintenance()
@@ -414,6 +409,16 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offsets Offsets, byt
 		return EventSeqIDError
 	}
 	length := len(bytes)
+
+	p.initDecoderOnce.Do(func() {
+		// If decoder is still set to AUTO after input plugin start, it means
+		// no plugin called SuggestDecoder to override it.
+		// In this case, the JSON decoder is used by default.
+		if p.decoderType == decoder.AUTO {
+			p.decoderType = decoder.JSON
+			p.decoder, _ = decoder.New(decoder.JSON, nil)
+		}
+	})
 
 	var (
 		dec decoder.Type
