@@ -3,7 +3,6 @@ package cardinality
 import (
 	"fmt"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/ozontech/file.d/cfg"
@@ -74,7 +73,7 @@ The resulting events:
 ```
 }*/
 
-var sharedCaches sync.Map
+var sharedCaches = make(map[string]*Cache)
 
 type Plugin struct {
 	cache  *Cache
@@ -185,8 +184,12 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 
 func getSharedCache(ttl time.Duration, pipelineName string, index int) *Cache {
 	key := pipelineName + "/" + fmt.Sprint(index)
-	actual, _ := sharedCaches.LoadOrStore(key, NewCache(ttl))
-	return actual.(*Cache)
+	cache, ok := sharedCaches[key]
+	if !ok {
+		cache = NewCache(ttl)
+		sharedCaches[key] = cache
+	}
+	return cache
 }
 
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginParams) {
