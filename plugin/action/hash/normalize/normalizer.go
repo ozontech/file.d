@@ -1,5 +1,5 @@
 package normalize
 
 type Normalizer interface {
-	Normalize(out, data []byte) []byte
+	Normalize(out, data []byte, cropped bool) []byte
 }

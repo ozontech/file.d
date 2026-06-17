@@ -112,8 +112,11 @@ func TestNormalizeByBytesOnly(t *testing.T) {
 	tests := []struct {
 		name string
 
-		input []string
-		want  string
+		input   []string
+		cropped bool
+
+		want     string
+		wantSame bool
 	}{
 		{
 			name:  "curly_brackets",
@@ -158,14 +161,37 @@ func TestNormalizeByBytesOnly(t *testing.T) {
 			want: "some <grave_quoted> here",
 		},
 		{
-			name:  "partial_token1",
-			input: []string{`some "dsadsadasd asd qw`},
-			want:  "some <double_quoted>",
+			name: "quotes_wordwrap",
+			input: []string{
+				`Can't breath h'e'r'e`,
+				`Can"t breath h"e"r"e`,
+				"Can`t breath h`e`r`e",
+			},
+			wantSame: true,
 		},
 		{
-			name:  "partial_token2",
-			input: []string{`some {"a":1,b:{"c":2,"d":3},e:[4,5,6]`},
-			want:  "some <curly_bracketed>",
+			name:    "partial_token_quotes_cropped",
+			input:   []string{`some "dsadsadasd asd qw`},
+			cropped: true,
+			want:    "some <double_quoted>",
+		},
+		{
+			name:     "partial_token_quotes_not_cropped",
+			input:    []string{`some "dsadsadasd asd qw`},
+			cropped:  false,
+			wantSame: true,
+		},
+		{
+			name:    "partial_token_brackets_cropped",
+			input:   []string{`some {"a":1,b:{"c":2,"d":3},e:[4,5,6]`},
+			cropped: true,
+			want:    "some <curly_bracketed>",
+		},
+		{
+			name:    "partial_token_brackets_not_cropped",
+			input:   []string{`some {"a":1,b:{"c":2,"d":3},e:[4,5,6]`},
+			cropped: false,
+			want:    `some {<double_quoted>:1,b:<curly_bracketed>,e:<square_bracketed>`,
 		},
 		{
 			name:  "multiple",
@@ -188,8 +214,13 @@ func TestNormalizeByBytesOnly(t *testing.T) {
 			out := make([]byte, 0)
 
 			for _, i := range tt.input {
-				out = n.Normalize(out, []byte(i))
-				assert.Equal(t, tt.want, string(out), "wrong out with input=%q", i)
+				out = n.Normalize(out, []byte(i), tt.cropped)
+
+				if tt.wantSame {
+					assert.Equal(t, i, string(out), "wrong out with input=%q", i)
+				} else {
+					assert.Equal(t, tt.want, string(out), "wrong out with input=%q", i)
+				}
 			}
 		})
 	}
@@ -422,7 +453,7 @@ func TestTokenNormalizerBuiltin(t *testing.T) {
 			out := make([]byte, 0)
 
 			for _, i := range tt.inputs {
-				out = n.Normalize(out, []byte(i))
+				out = n.Normalize(out, []byte(i), false)
 				assert.Equal(t, tt.want, string(out), "wrong out with input=%q", i)
 			}
 		})
@@ -496,6 +527,8 @@ func TestTokenNormalizerCustom(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			n, err := NewTokenNormalizer(tt.params)
 			require.Equal(t, tt.wantErr, err != nil || n == nil)
 			if tt.wantErr {
@@ -503,7 +536,7 @@ func TestTokenNormalizerCustom(t *testing.T) {
 			}
 
 			for _, i := range tt.inputs {
-				out = n.Normalize(out, []byte(i))
+				out = n.Normalize(out, []byte(i), false)
 				assert.Equal(t, tt.want, string(out), "wrong out with input=%q", i)
 			}
 		})
@@ -553,7 +586,7 @@ func BenchmarkTokenNormalizer(b *testing.B) {
 		name := fmt.Sprintf("input_len_%d", len(benchCase.input))
 		b.Run(name, func(b *testing.B) {
 			for i := 0; i < b.N; i++ {
-				out = n.Normalize(out, benchCase.input)
+				out = n.Normalize(out, benchCase.input, false)
 			}
 		})
 	}
