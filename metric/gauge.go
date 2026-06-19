@@ -17,6 +17,10 @@ func newGauge(c prometheus.Gauge) *Gauge {
 	}
 }
 
+func (g *Gauge) getHeldMetric() *heldMetric[prometheus.Gauge] {
+	return g.heldMetric
+}
+
 func (g *Gauge) Set(v float64) {
 	g.metric.Set(v)
 	g.updateUsage()
@@ -43,30 +47,33 @@ func (g *Gauge) Sub(v float64) {
 }
 
 // should only be used in tests
-func (c *Gauge) ToFloat64() float64 {
-	return testutil.ToFloat64(c.metric)
+func (g *Gauge) ToFloat64() float64 {
+	return testutil.ToFloat64(g.metric)
 }
 
 type GaugeVec struct {
-	store *heldMetricsStore[prometheus.Gauge]
+	store *heldMetricsStore[prometheus.Gauge, *Gauge]
 	vec   *prometheus.GaugeVec
 }
 
 func newGaugeVec(gv *prometheus.GaugeVec, maxLabelValueLength int) *GaugeVec {
 	return &GaugeVec{
-		vec:   gv,
-		store: newHeldMetricsStore[prometheus.Gauge](maxLabelValueLength),
+		vec: gv,
+		store: newHeldMetricsStore[prometheus.Gauge, *Gauge](
+			maxLabelValueLength,
+			func(hm *heldMetric[prometheus.Gauge]) *Gauge {
+				return &Gauge{heldMetric: hm}
+			},
+		),
 	}
 }
 
 func (gv *GaugeVec) WithLabelValues(lvs ...string) *Gauge {
-	return &Gauge{
-		heldMetric: gv.store.GetOrCreate(lvs, gv.vec.WithLabelValues),
-	}
+	return gv.store.GetOrCreate(lvs, gv.vec.WithLabelValues)
 }
 
-func (cv *GaugeVec) DeleteLabelValues(lvs ...string) bool {
-	return cv.store.Delete(lvs, cv.vec)
+func (gv *GaugeVec) DeleteLabelValues(lvs ...string) bool {
+	return gv.store.Delete(lvs, gv.vec)
 }
 
 func (gv *GaugeVec) DeleteOldMetrics(holdDuration time.Duration) {
