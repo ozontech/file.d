@@ -187,7 +187,7 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
-	// > Interval for checking banned endpoints availability.
+	// > Interval for checking banned endpoints.
 	ReconnectInterval  cfg.Duration `json:"reconnect_interval" default:"5s" parse:"duration"` // *
 	ReconnectInterval_ time.Duration
 }

@@ -42,6 +42,6 @@ Period for which addresses will be banned in case of unavailability.
 
 **`reconnect_interval`** *`duration`* *`default=5s`* 
 
-Interval for checking banned endpoints availability.
+Interval for checking banned endpoints.
 
 <br>

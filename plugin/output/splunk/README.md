@@ -162,7 +162,7 @@ If set to 0, circuit breaker is disabled.
 
 **`reconnect_interval`** *`cfg.Duration`* *`default=5s`* 
 
-Interval for checking banned endpoints availability.
+Interval for checking banned endpoints.
 
 <br>
 
