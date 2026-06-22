@@ -153,5 +153,18 @@ or the "event" key with any of its subkeys.
 
 <br>
 
+**`ban_period`** *`cfg.Duration`* *`default=10s`* 
+
+Period for which addresses will be banned in case of unavailability.
+If set to 0, circuit breaker is disabled.
+
+<br>
+
+**`reconnect_interval`** *`cfg.Duration`* *`default=5s`* 
+
+Interval for checking banned endpoints.
+
+<br>
+
 
 <br>*Generated using [__insane-doc__](https://github.com/vitkovskii/insane-doc)*
