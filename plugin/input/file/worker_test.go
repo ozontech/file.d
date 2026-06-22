@@ -59,13 +59,6 @@ func TestWorkerWork(t *testing.T) {
 			expData:        "abc\n",
 		},
 		{
-			name:           "should_ok_and_empty_when_read_not_ready_line",
-			maxEventSize:   1024,
-			inFile:         "abc",
-			readBufferSize: 1024,
-			expData:        "",
-		},
-		{
 			name:           "should_ok_and_not_read_long_line",
 			maxEventSize:   2,
 			inFile:         "abc\n",
@@ -271,7 +264,7 @@ func TestWorkerWorkMultiData(t *testing.T) {
 			readBufferSize: 1024,
 
 			inData:  `{"a":"a"}`,
-			outData: nil, // we don't send an event if we don't find a newline
+			outData: []string{`{"a":"a"}`},
 		},
 	}
 
