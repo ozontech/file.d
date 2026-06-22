@@ -65,12 +65,14 @@ func TestWatcher(t *testing.T) {
 			require.NoError(t, err)
 			err = f1.Close()
 			require.NoError(t, err)
+			wg.Add(1)
 
 			f2, err := os.Create(filepath.Join(dir, "watch2.log"))
 			require.NoError(t, err)
 			err = f2.Close()
 			require.NoError(t, err)
 			wg.Add(1)
+			wg.Wait()
 
 			f1, err = os.OpenFile(f1Name, os.O_WRONLY, 0o600)
 			require.NoError(t, err)
