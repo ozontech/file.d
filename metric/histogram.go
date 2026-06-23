@@ -33,7 +33,7 @@ type HistogramVec struct {
 func newHistogramVec(hv *prometheus.HistogramVec, maxLabelValueLength int) *HistogramVec {
 	return &HistogramVec{
 		vec: hv,
-		store: newHeldMetricsStore[prometheus.Histogram, *Histogram](
+		store: newHeldMetricsStore(
 			maxLabelValueLength,
 			func(hm *heldMetric[prometheus.Histogram]) *Histogram {
 				return &Histogram{heldMetric: hm}

@@ -44,7 +44,7 @@ type CounterVec struct {
 func newCounterVec(cv *prometheus.CounterVec, maxLabelValueLength int) *CounterVec {
 	return &CounterVec{
 		vec: cv,
-		store: newHeldMetricsStore[prometheus.Counter, *Counter](
+		store: newHeldMetricsStore(
 			maxLabelValueLength,
 			func(hm *heldMetric[prometheus.Counter]) *Counter {
 				return &Counter{heldMetric: hm}
