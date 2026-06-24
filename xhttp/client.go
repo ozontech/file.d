@@ -1,13 +1,16 @@
 package xhttp
 
 import (
+	"context"
 	"fmt"
 	"math/rand"
 	"net/http"
 	"time"
 
+	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/xtls"
 	"github.com/valyala/fasthttp"
+	"go.uber.org/zap"
 )
 
 const gzipContentEncoding = "gzip"
@@ -23,24 +26,29 @@ type ClientKeepAliveConfig struct {
 }
 
 type ClientConfig struct {
-	Endpoints            []string
-	ConnectionTimeout    time.Duration
-	AuthHeader           string
-	CustomHeaders        map[string]string
-	GzipCompressionLevel string
-	TLS                  *ClientTLSConfig
-	KeepAlive            *ClientKeepAliveConfig
+	Endpoints             []string
+	ConnectionTimeout     time.Duration
+	AuthHeader            string
+	CustomHeaders         map[string]string
+	GzipCompressionLevel  string
+	TLS                   *ClientTLSConfig
+	KeepAlive             *ClientKeepAliveConfig
+	BanPeriod             time.Duration
+	ReconnectInterval     time.Duration
+	Logger                *zap.Logger
+	BannedEndpointsMetric *metric.Gauge
 }
 
 type Client struct {
 	client               *fasthttp.Client
 	endpoints            []*fasthttp.URI
+	cb                   *circuitBreaker
 	authHeader           string
 	customHeaders        map[string]string
 	gzipCompressionLevel int
 }
 
-func NewClient(cfg *ClientConfig) (*Client, error) {
+func NewClient(ctx context.Context, cfg *ClientConfig) (*Client, error) {
 	client := &fasthttp.Client{
 		ReadTimeout:  cfg.ConnectionTimeout,
 		WriteTimeout: cfg.ConnectionTimeout,
@@ -70,8 +78,16 @@ func NewClient(cfg *ClientConfig) (*Client, error) {
 	}
 
 	return &Client{
-		client:               client,
-		endpoints:            endpoints,
+		client:    client,
+		endpoints: endpoints,
+		cb: newCircuitBreaker(
+			ctx,
+			cfg.Logger,
+			endpoints,
+			cfg.BanPeriod,
+			cfg.ReconnectInterval,
+			cfg.BannedEndpointsMetric,
+		),
 		authHeader:           cfg.AuthHeader,
 		customHeaders:        cfg.CustomHeaders,
 		gzipCompressionLevel: parseGzipCompressionLevel(cfg.GzipCompressionLevel),
@@ -89,16 +105,15 @@ func (c *Client) DoTimeout(
 	resp := fasthttp.AcquireResponse()
 	defer fasthttp.ReleaseResponse(resp)
 
-	var endpoint *fasthttp.URI
-	if len(c.endpoints) == 1 {
-		endpoint = c.endpoints[0]
-	} else {
-		endpoint = c.endpoints[rand.Int()%len(c.endpoints)]
+	endpoint := c.getEndpoint()
+	if endpoint == nil {
+		return 0, fmt.Errorf("no available endpoints")
 	}
 
 	c.prepareRequest(req, endpoint, method, contentType, body)
 
 	if err := c.client.DoTimeout(req, resp, timeout); err != nil {
+		c.banEndpoint(endpoint)
 		return 0, fmt.Errorf("can't send request to %s: %w", endpoint.String(), err)
 	}
 
@@ -106,6 +121,9 @@ func (c *Client) DoTimeout(
 	statusCode := resp.Header.StatusCode()
 
 	if !(http.StatusOK <= statusCode && statusCode <= http.StatusAccepted) {
+		if shouldBanEndpoint(statusCode) {
+			c.banEndpoint(endpoint)
+		}
 		return statusCode, fmt.Errorf("response status from %s isn't OK: status=%d, body=%s", endpoint.String(), statusCode, string(respContent))
 	}
 
@@ -166,5 +184,34 @@ func parseGzipCompressionLevel(level string) int {
 		return fasthttp.CompressHuffmanOnly
 	default:
 		return -1
+	}
+}
+
+func (c *Client) getEndpoint() *fasthttp.URI {
+	if c.cb != nil {
+		return c.cb.getEndpoint()
+	}
+
+	if len(c.endpoints) == 0 {
+		return nil
+	}
+	return c.endpoints[rand.Intn(len(c.endpoints))]
+}
+
+func (c *Client) banEndpoint(endpoint *fasthttp.URI) {
+	if c.cb != nil {
+		c.cb.banEndpoint(endpoint)
+	}
+}
+
+func shouldBanEndpoint(statusCode int) bool {
+	switch statusCode {
+	case http.StatusBadGateway,
+		http.StatusServiceUnavailable,
+		http.StatusGatewayTimeout,
+		http.StatusTooManyRequests:
+		return true
+	default:
+		return false
 	}
 }

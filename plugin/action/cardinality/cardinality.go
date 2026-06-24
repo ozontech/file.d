@@ -73,6 +73,8 @@ The resulting events:
 ```
 }*/
 
+var sharedCaches = make(map[string]*Cache)
+
 type Plugin struct {
 	cache  *Cache
 	config *Config
@@ -83,6 +85,7 @@ type Plugin struct {
 
 	cardinalityUniqueValuesLimit *metric.Gauge
 	cardinalityUniqueValuesGauge *metric.GaugeVec
+	cardinalityUniqueValuesTotal *metric.CounterVec
 }
 
 type parsedField struct {
@@ -179,11 +182,21 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 	return &Plugin{}, &Config{}
 }
 
+func getSharedCache(ttl time.Duration, pipelineName string, index int) *Cache {
+	key := pipelineName + "/" + fmt.Sprint(index)
+	cache, ok := sharedCaches[key]
+	if !ok {
+		cache = NewCache(ttl)
+		sharedCaches[key] = cache
+	}
+	return cache
+}
+
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginParams) {
 	p.config = config.(*Config)
 	p.logger = params.Logger.Desugar()
 
-	p.cache = NewCache(p.config.TTL_)
+	p.cache = getSharedCache(p.config.TTL_, params.PipelineName, params.Index)
 
 	if len(p.config.Fields) == 0 {
 		p.logger.Fatal("you have to set fields")
@@ -222,7 +235,19 @@ func (p *Plugin) registerMetrics(ctl *metric.Ctl, prefix string) {
 	}
 	p.cardinalityUniqueValuesGauge = ctl.RegisterGaugeVec(
 		metricName,
-		"Count of unique values",
+		"Current count of unique values observed per key group",
+		keyMetricLabels(p.keys)...,
+	)
+
+	var metricTotalName string
+	if prefix == "" {
+		metricTotalName = "cardinality_unique_values_count_total"
+	} else {
+		metricTotalName = fmt.Sprintf(`cardinality_%s_unique_values_count_total`, prefix)
+	}
+	p.cardinalityUniqueValuesTotal = ctl.RegisterCounterVec(
+		metricTotalName,
+		"Cumulative number of newly seen unique values per key group since process start",
 		keyMetricLabels(p.keys)...,
 	)
 
@@ -286,11 +311,12 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 		p.fields.valsBuf[i] = value
 	}
 
-	isOldValue := p.cache.Set(string(p.fields.appendTo(prefixKey)))
+	isOldValue := p.cache.Set(string(prefixKey), string(p.fields.appendTo(prefixKey)))
 	if !isOldValue {
 		// is new value
 		keysCount++
 		p.cardinalityUniqueValuesGauge.WithLabelValues(p.keys.valsBuf...).Set(float64(keysCount))
+		p.cardinalityUniqueValuesTotal.WithLabelValues(p.keys.valsBuf...).Inc()
 	}
 
 	return pipeline.ActionPass
