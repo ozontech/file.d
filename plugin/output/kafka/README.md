@@ -72,6 +72,17 @@ Should be set equal to or smaller than the broker's `message.max.bytes`.
 
 <br>
 
+**`encoding`** *`encoder.EncodingConfig`* 
+
+Configure event serialization before sending.
+Includes:
+1) Type - codec to use for serializing events:
+* `json` - serializes the full event as a JSON object (default).
+* `raw`  - extracts a single field and sends its value as-is.
+2) Params - Encoder parameters.
+
+<br>
+
 **`compression`** *`string`* *`default=none`* *`options=none|gzip|snappy|lz4|zstd`* 
 
 Compression codec

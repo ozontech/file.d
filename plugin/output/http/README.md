@@ -17,7 +17,7 @@ Content-Type header for HTTP requests.
 
 <br>
 
-**`encoding`** *`EncodingConfig`* 
+**`encoding`** *`encoder.EncodingConfig`* 
 
 Configure event serialization before sending.
 Includes:
