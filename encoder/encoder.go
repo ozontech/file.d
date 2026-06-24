@@ -1,4 +1,4 @@
-package http
+package encoder
 
 import (
 	"encoding/json"
@@ -14,48 +14,6 @@ const (
 
 type Encoder interface {
 	Encode(event *pipeline.Event, buf []byte) []byte
-}
-
-type JSONEncoderParams struct{}
-
-type JSONEncoder struct{}
-
-func newJSONEncoder(_ *JSONEncoderParams) *JSONEncoder {
-	return &JSONEncoder{}
-}
-
-func (e *JSONEncoder) Encode(event *pipeline.Event, buf []byte) []byte {
-	buf, _ = event.Encode(buf)
-	return buf
-}
-
-type RawEncoderParams struct {
-	Field string `json:"field" default:"message"`
-}
-
-type RawEncoder struct {
-	field string
-}
-
-func newRawEncoder(params *RawEncoderParams) *RawEncoder {
-	field := params.Field
-	if field == "" {
-		field = "message"
-	}
-	return &RawEncoder{field: field}
-}
-
-func (e *RawEncoder) Encode(event *pipeline.Event, buf []byte) []byte {
-	node := event.Root.Dig(e.field)
-	if node == nil {
-		return buf[:0]
-	}
-
-	if node.IsString() {
-		return append(buf, node.AsBytes()...)
-	}
-
-	return node.Encode(buf)
 }
 
 type EncodingConfig struct {

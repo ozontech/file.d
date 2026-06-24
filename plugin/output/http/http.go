@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/ozontech/file.d/cfg"
+	"github.com/ozontech/file.d/encoder"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
@@ -32,7 +33,7 @@ type Plugin struct {
 	config *Config
 
 	client  *xhttp.Client
-	encoder Encoder
+	encoder encoder.Encoder
 
 	logger     *zap.Logger
 	controller pipeline.OutputPluginController
@@ -72,7 +73,7 @@ type Config struct {
 	// > * `raw`  - extracts a single field and sends its value as-is.
 	//  > By default `json` is used.
 	// > 2) Params - Encoder parameters.
-	Encoding EncodingConfig `json:"encoding" child:"true"` // *
+	Encoding encoder.EncodingConfig `json:"encoding" child:"true"` // *
 
 	// > @3@4@5@6
 	// >
@@ -234,7 +235,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	}
 
 	var err error
-	p.encoder, err = NewEncoder(p.config.Encoding)
+	p.encoder, err = encoder.NewEncoder(p.config.Encoding)
 	if err != nil {
 		p.logger.Fatal("can't create encoder", zap.Error(err))
 	}

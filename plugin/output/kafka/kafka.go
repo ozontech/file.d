@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/ozontech/file.d/cfg"
+	"github.com/ozontech/file.d/encoder"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
@@ -35,6 +36,7 @@ type Plugin struct {
 	controller   pipeline.OutputPluginController
 
 	client     KafkaClient
+	encoder    encoder.Encoder
 	batcher    *pipeline.RetriableBatcher
 	ctx        context.Context
 	cancelFunc context.CancelFunc
@@ -109,6 +111,17 @@ type Config struct {
 	// > Should be set equal to or smaller than the broker's `message.max.bytes`.
 	MaxMessageBytes  cfg.Expression `json:"max_message_bytes" default:"1000000" parse:"expression"` // *
 	MaxMessageBytes_ int
+
+	// > @3@4@5@6
+	// >
+	// > Configure event serialization before sending.
+	// > Includes:
+	// > 1) Type - codec to use for serializing events:
+	// > * `json` - serializes the full event as a JSON object (default).
+	// > * `raw`  - extracts a single field and sends its value as-is.
+	//  > By default `json` is used.
+	// > 2) Params - Encoder parameters.
+	Encoding encoder.EncodingConfig `json:"encoding" child:"true"` // *
 
 	// > @3@4@5@6
 	// >
@@ -250,6 +263,12 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		p.logger.Fatal("'retention' can't be <1")
 	}
 
+	var err error
+	p.encoder, err = encoder.NewEncoder(p.config.Encoding)
+	if err != nil {
+		p.logger.Fatal("can't create encoder", zap.Error(err))
+	}
+
 	p.logger.Infof("workers count=%d, batch size=%d", p.config.WorkersCount_, p.config.BatchSize_)
 
 	p.client = NewClient(p.config, p.logger.Desugar())
@@ -330,7 +349,8 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 	defer cancel()
 
 	batch.ForEach(func(event *pipeline.Event) {
-		outBuf, start = event.Encode(outBuf)
+		start = len(outBuf)
+		outBuf = p.encoder.Encode(event, outBuf)
 
 		topic := p.config.DefaultTopic
 		if p.config.UseTopicField {
