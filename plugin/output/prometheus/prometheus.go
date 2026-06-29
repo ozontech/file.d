@@ -12,6 +12,7 @@ import (
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
+	insaneJSON "github.com/ozontech/insane-json"
 
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -210,23 +211,38 @@ func (p *Plugin) Stop() {
 
 func (p *Plugin) Out(event *pipeline.Event) {
 	msg := event.Root
-	typeNode := msg.Dig("type")
-	if typeNode == nil {
+
+	if msg.IsArray() {
+		arr := msg.AsArray()
+		for _, metricNode := range arr {
+			if !metricNode.IsObject() {
+				continue
+			}
+
+			p.processMetricNode(metricNode)
+		}
+
 		if !p.isAvailable {
 			<-p.retryChan // Block until Prometheus is available
 		}
-		p.controller.Commit(event)
+	}
+
+	p.controller.Commit(event)
+}
+
+func (p *Plugin) processMetricNode(msg *insaneJSON.Node) {
+	metricTypeNode := msg.Dig("type")
+	if metricTypeNode == nil {
 		return
 	}
-	metricType := typeNode.AsString()
-	typeNode.Suicide()
+	metricType := metricTypeNode.AsString()
+	metricTypeNode.Suicide()
 
 	if metricType != metricTypeCounter && metricType != metricTypeGauge {
 		p.logger.Warn(
 			"unsupported metric type, skipping",
 			zap.String("type", metricType),
 		)
-		p.controller.Commit(event)
 		return
 	}
 
@@ -262,13 +278,13 @@ func (p *Plugin) Out(event *pipeline.Event) {
 		})
 	}
 
-	p.collector.handleMetric(
-		labels,
-		value,
-		timestamp,
-		metricType,
-		ttl,
-	)
+	p.collector.handleMetric(metricData{
+		labels:     labels,
+		value:      value,
+		timestamp:  timestamp,
+		metricType: metricType,
+		ttl:        ttl,
+	})
 }
 
 func (p *Plugin) sendToStorage(values []promwrite.TimeSeries) error {

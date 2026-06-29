@@ -13,15 +13,14 @@ pipelines:
   example:
     actions:
       - type: event_to_metrics
-        config:
-          metrics:
-            - name: events_total
-              type: counter
-              value: []
-              ttl: 60s
-              labels:
-                service: service
-                environment: environment
+        metrics:
+          - name: events_total
+            type: counter
+            value: []
+            ttl: 60s
+            labels:
+              service: service
+              environment: environment
     output:
       type: prometheus
 ```
@@ -53,26 +52,25 @@ pipelines:
   example:
     actions:
       - type: event_to_metrics
-        config:
-          time_field: timestamp
-          time_field_format: rfc3339
-          metrics:
-            - name: response_time_ms
-              type: gauge
-              value:
-                - response.duration_ms
-              ttl: 5m
-              labels:
-                method: request.method
-                endpoint: request.path
-                status: response.status_code
-            - name: request_size_bytes
-              type: gauge
-              value:
-                - request.size
-              ttl: 5m
-              labels:
-                method: request.method
+        time_field: timestamp
+        time_field_format: rfc3339
+        metrics:
+          - name: response_time_ms
+            type: gauge
+            value:
+              - response.duration_ms
+            ttl: 5m
+            labels:
+              method: request.method
+              endpoint: request.path
+              status: response.status_code
+          - name: request_size_bytes
+            type: gauge
+            value:
+              - request.size
+            ttl: 5m
+            labels:
+              method: request.method
     output:
       type: prometheus
 ```
@@ -128,31 +126,30 @@ pipelines:
 	metrics:
 	    actions:
 	    - type: event_to_metrics
-	        config:
-	        time_field: timestamp
-	        time_field_format: rfc3339
-	        metrics:
-	            # Counter for total requests
-	            - name: http_requests_total
-	            type: counter
-	            value: []
-	            ttl: 60s
-	            labels:
-	                service: api
-	                method: request.method
-	                path: request.path
-	                status: response.status_code
+        time_field: timestamp
+        time_field_format: rfc3339
+        metrics:
+            # Counter for total requests
+            - name: http_requests_total
+            type: counter
+            value: []
+            ttl: 60s
+            labels:
+                service: api
+                method: request.method
+                path: request.path
+                status: response.status_code
 
-	            # Gauge for response time
-	            - name: http_response_time_ms
-	            type: gauge
-	            value:
-	                - response.duration_ms
-	            ttl: 5m
-	            labels:
-	                service: api
-	                method: request.method
-	                path: request.path
+            # Gauge for response time
+            - name: http_response_time_ms
+            type: gauge
+            value:
+                - response.duration_ms
+            ttl: 5m
+            labels:
+                service: api
+                method: request.method
+                path: request.path
 
 	    output:
 		    type: prometheus
@@ -226,7 +223,7 @@ Field selector(s) to extract the metric value from the event. If not specified o
 
 <br>
 
-**`labels`** *`map[string]string`* 
+**`labels`** *`map[string]cfg.FieldSelector`* 
 
 Labels are key-value pairs that provide context for the metric.
 

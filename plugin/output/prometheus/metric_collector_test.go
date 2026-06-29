@@ -72,16 +72,16 @@ func TestMetricCollector(t *testing.T) {
 
 		// First value - should not be sent
 		now := time.Now()
-		collector.handleMetric(labels, 10.0, now.UnixMilli(), metricTypeCounter, 0)
+		collector.handleMetric(metricData{labels: labels, value: 10.0, timestamp: now.UnixMilli(), metricType: metricTypeCounter, ttl: 0})
 		assert.Empty(t, testSender.getSentMetrics())
 
 		// Second value in same time window - should accumulate but not send
-		collector.handleMetric(labels, 5.0, now.UnixMilli(), metricTypeCounter, 0)
+		collector.handleMetric(metricData{labels: labels, value: 5.0, timestamp: now.UnixMilli(), metricType: metricTypeCounter, ttl: 0})
 		assert.Empty(t, testSender.getSentMetrics())
 
 		// Third value in next time window - should send accumulated value
 		nextTime := now.Add(10 * time.Second)
-		collector.handleMetric(labels, 3.0, nextTime.UnixMilli(), metricTypeCounter, 0)
+		collector.handleMetric(metricData{labels: labels, value: 3.0, timestamp: nextTime.UnixMilli(), metricType: metricTypeCounter, ttl: 0})
 		time.Sleep(2 * time.Second)
 		sendedMetrics := testSender.getSentMetrics()
 
@@ -103,7 +103,7 @@ func TestMetricCollector(t *testing.T) {
 
 		// First value - should not be sent
 		now := time.Now()
-		collector.handleMetric(labels, 10.0, now.UnixMilli(), metricTypeCounter, 5000)
+		collector.handleMetric(metricData{labels: labels, value: 10.0, timestamp: now.UnixMilli(), metricType: metricTypeCounter, ttl: 5000})
 
 		time.Sleep(3 * time.Second)
 		sendedMetrics := testSender.getSentMetrics()
@@ -132,7 +132,7 @@ func TestMetricCollector(t *testing.T) {
 						{Name: "worker", Value: string(rune(workerID))},
 						{Name: "index", Value: string(rune(j))},
 					}
-					collector.handleMetric(labels, float64(j), time.Now().UnixMilli(), metricTypeCounter, 0)
+					collector.handleMetric(metricData{labels: labels, value: float64(j), timestamp: time.Now().UnixMilli(), metricType: metricTypeCounter, ttl: 0})
 				}
 			}(i)
 		}
@@ -152,7 +152,7 @@ func TestMetricCollector(t *testing.T) {
 func TestCreateTimeSeries(t *testing.T) {
 	t.Run("createTimeSeries with valid metricValue", func(t *testing.T) {
 		now := time.Now()
-		mv := &metricValue{
+		mv := &metricCollectorValue{
 			value:     123.45,
 			timestamp: now.UnixMilli(),
 		}

@@ -1,7 +1,6 @@
 package prometheus
 
 import (
-	"fmt"
 	"sort"
 	"strings"
 	"sync"
@@ -14,7 +13,7 @@ import (
 
 type metricCollector struct {
 	sender       storageSender
-	metrics      map[string]*metricValue
+	metrics      map[string]*metricCollectorValue
 	mutex        sync.RWMutex
 	flushTicker  *time.Ticker
 	shutdownChan chan struct{}
@@ -23,13 +22,21 @@ type metricCollector struct {
 	logger *zap.Logger
 }
 
-type metricValue struct {
+type metricCollectorValue struct {
 	value             float64
 	timestamp         int64
 	lastValueIsSended bool
 	lastUpdateTime    time.Time
 	sendedTimestamp   time.Time
 	expiredAt         time.Time
+}
+
+type metricData struct {
+	labels     []promwrite.Label
+	value      float64
+	timestamp  int64
+	metricType string
+	ttl        int64
 }
 
 type storageSender interface {
@@ -40,7 +47,7 @@ func newCollector(sender storageSender, flushTimeout time.Duration, logger *zap.
 	c := &metricCollector{
 		sender:       sender,
 		logger:       logger,
-		metrics:      make(map[string]*metricValue),
+		metrics:      make(map[string]*metricCollectorValue),
 		flushTicker:  time.NewTicker(flushTimeout),
 		flushTimeout: flushTimeout,
 		shutdownChan: make(chan struct{}),
@@ -49,14 +56,17 @@ func newCollector(sender storageSender, flushTimeout time.Duration, logger *zap.
 	return c
 }
 
-func (p *metricCollector) handleMetric(labels []promwrite.Label, value float64, timestamp int64, metricType string, ttl int64) {
-	key := labelsToKey(labels)
+func (p *metricCollector) handleMetric(data metricData) {
+	key := labelsToKey(data.labels)
 	now := xtime.GetInaccurateTime()
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 
+	value := data.value
+	timestamp := data.timestamp
+
 	if existing, exists := p.metrics[key]; exists {
-		if metricType == metricTypeCounter {
+		if data.metricType == metricTypeCounter {
 			value += existing.value
 		}
 		timestamp = max(timestamp, existing.sendedTimestamp.UnixMilli())
@@ -65,12 +75,12 @@ func (p *metricCollector) handleMetric(labels []promwrite.Label, value float64, 
 	nowUnixTime := now.UnixMilli()
 	timestamp = min(timestamp, nowUnixTime)
 
-	metric := &metricValue{
+	metric := &metricCollectorValue{
 		value:             value,
 		timestamp:         timestamp,
 		lastUpdateTime:    now,
 		lastValueIsSended: false,
-		expiredAt:         now.Add(time.Duration(ttl) * time.Millisecond),
+		expiredAt:         now.Add(time.Duration(data.ttl) * time.Millisecond),
 	}
 	p.metrics[key] = metric
 }
@@ -92,7 +102,7 @@ func (p *metricCollector) flushMetrics() {
 	defer p.mutex.Unlock()
 
 	var toSend []promwrite.TimeSeries
-	now := time.Now()
+	now := xtime.GetInaccurateTime()
 
 	toDelete := []string{}
 
@@ -137,7 +147,7 @@ func (p *metricCollector) shutdown() {
 }
 
 // Helper function
-func createTimeSeries(labels []promwrite.Label, metric *metricValue, roundPeriod time.Duration) promwrite.TimeSeries {
+func createTimeSeries(labels []promwrite.Label, metric *metricCollectorValue, roundPeriod time.Duration) promwrite.TimeSeries {
 	return promwrite.TimeSeries{
 		Labels: labels,
 		Sample: promwrite.Sample{
@@ -164,15 +174,28 @@ func keyToLabels(key string) []promwrite.Label {
 }
 
 func labelsToKey(labels []promwrite.Label) string {
+	// Fast path: if labels are already sorted or only 1-2 labels, skip sorting
+	if len(labels) <= 1 {
+		if len(labels) == 0 {
+			return ""
+		}
+		return labels[0].Name + "=" + labels[0].Value + ","
+	}
+
 	sorted := make([]promwrite.Label, len(labels))
 	copy(sorted, labels)
 	sort.Slice(sorted, func(i, j int) bool {
 		return sorted[i].Name < sorted[j].Name
 	})
 
+	// Preallocate builder with estimated size
 	var b strings.Builder
+	b.Grow(len(labels) * 32) // ~32 bytes per label avg
 	for _, l := range sorted {
-		fmt.Fprintf(&b, "%s=%s,", l.Name, l.Value)
+		b.WriteString(l.Name)
+		b.WriteByte('=')
+		b.WriteString(l.Value)
+		b.WriteByte(',')
 	}
 	return b.String()
 }

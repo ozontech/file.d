@@ -1,7 +1,6 @@
 package event_to_metrics
 
 import (
-	"sync"
 	"time"
 
 	"github.com/ozontech/file.d/cfg"
@@ -9,7 +8,6 @@ import (
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/pipeline/doif"
 	"github.com/ozontech/file.d/xtime"
-	insaneJSON "github.com/ozontech/insane-json"
 	"go.uber.org/zap"
 )
 
@@ -29,15 +27,14 @@ pipelines:
   example:
     actions:
       - type: event_to_metrics
-        config:
-          metrics:
-            - name: events_total
-              type: counter
-              value: []
-              ttl: 60s
-              labels:
-                service: service
-                environment: environment
+        metrics:
+          - name: events_total
+            type: counter
+            value: []
+            ttl: 60s
+            labels:
+              service: service
+              environment: environment
     output:
       type: prometheus
 ```
@@ -69,26 +66,25 @@ pipelines:
   example:
     actions:
       - type: event_to_metrics
-        config:
-          time_field: timestamp
-          time_field_format: rfc3339
-          metrics:
-            - name: response_time_ms
-              type: gauge
-              value:
-                - response.duration_ms
-              ttl: 5m
-              labels:
-                method: request.method
-                endpoint: request.path
-                status: response.status_code
-            - name: request_size_bytes
-              type: gauge
-              value:
-                - request.size
-              ttl: 5m
-              labels:
-                method: request.method
+        time_field: timestamp
+        time_field_format: rfc3339
+        metrics:
+          - name: response_time_ms
+            type: gauge
+            value:
+              - response.duration_ms
+            ttl: 5m
+            labels:
+              method: request.method
+              endpoint: request.path
+              status: response.status_code
+          - name: request_size_bytes
+            type: gauge
+            value:
+              - request.size
+            ttl: 5m
+            labels:
+              method: request.method
     output:
       type: prometheus
 ```
@@ -144,31 +140,30 @@ pipelines:
 	metrics:
 	    actions:
 	    - type: event_to_metrics
-	        config:
-	        time_field: timestamp
-	        time_field_format: rfc3339
-	        metrics:
-	            # Counter for total requests
-	            - name: http_requests_total
-	            type: counter
-	            value: []
-	            ttl: 60s
-	            labels:
-	                service: api
-	                method: request.method
-	                path: request.path
-	                status: response.status_code
+        time_field: timestamp
+        time_field_format: rfc3339
+        metrics:
+            # Counter for total requests
+            - name: http_requests_total
+            type: counter
+            value: []
+            ttl: 60s
+            labels:
+                service: api
+                method: request.method
+                path: request.path
+                status: response.status_code
 
-	            # Gauge for response time
-	            - name: http_response_time_ms
-	            type: gauge
-	            value:
-	                - response.duration_ms
-	            ttl: 5m
-	            labels:
-	                service: api
-	                method: request.method
-	                path: request.path
+            # Gauge for response time
+            - name: http_response_time_ms
+            type: gauge
+            value:
+                - response.duration_ms
+            ttl: 5m
+            labels:
+                service: api
+                method: request.method
+                path: request.path
 
 	    output:
 		    type: prometheus
@@ -209,8 +204,19 @@ type Plugin struct {
 	pluginController pipeline.ActionPluginController
 	format           string
 
-	Metrics []Metric
-	mu      *sync.Mutex
+	Metrics       []Metric
+	metricIndices []int
+
+	metricDataList []metricData
+}
+
+type metricData struct {
+	name       []byte
+	metricType []byte
+	ttl        int64
+	timestamp  int64
+	value      float64
+	labels     map[string]string
 }
 
 // ! config-params
@@ -256,7 +262,8 @@ type Metric struct {
 	// > @3@4@5@6
 	// >
 	// > Labels are key-value pairs that provide context for the metric.
-	Labels map[string]string `json:"labels"` // *
+	Labels      map[string]cfg.FieldSelector `json:"labels"` // *
+	labelFields map[string][]string
 
 	// > @3@4@5@6
 	// >
@@ -270,8 +277,6 @@ type Metric struct {
 	DoIfCheckerMap map[string]any `json:"do_if"` // *
 
 	DoIfChecker *doif.Checker
-
-	use bool
 }
 
 func init() {
@@ -286,11 +291,21 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 }
 
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginParams) {
-	p.mu = &sync.Mutex{}
 	p.config = config.(*Config)
 	p.logger = params.Logger.Desugar()
 	p.pluginController = params.Controller
+
 	p.Metrics = prepareCheckersForMetrics(p.config.Metrics, p.logger)
+	p.metricIndices = make([]int, 0, len(p.Metrics))
+	p.metricDataList = make([]metricData, 0, len(p.Metrics))
+	for i := range p.Metrics {
+		metric := p.Metrics[i]
+		p.metricDataList = append(p.metricDataList, metricData{
+			name:       pipeline.StringToByteUnsafe(metric.Name),
+			metricType: pipeline.StringToByteUnsafe(metric.Type),
+			ttl:        metric.TTL_.Milliseconds(),
+		})
+	}
 
 	format, err := xtime.ParseFormatName(p.config.TimeFieldFormat)
 	if err != nil {
@@ -299,7 +314,12 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 	p.format = format
 }
 
-func prepareCheckersForMetrics(metrics []Metric, logger *zap.Logger) []Metric {
+func prepareCheckersForMetrics(configMetrics []Metric, logger *zap.Logger) []Metric {
+	// Copy to avoid mutating the original config,
+	// which is shared across all processor instances.
+	metrics := make([]Metric, len(configMetrics))
+	copy(metrics, configMetrics)
+
 	for i := range metrics {
 		m := &metrics[i]
 		if m.DoIfCheckerMap != nil {
@@ -312,8 +332,6 @@ func prepareCheckersForMetrics(metrics []Metric, logger *zap.Logger) []Metric {
 					zap.String("metric_name", m.Name),
 				)
 			}
-		} else {
-			m.use = true
 		}
 
 		m.valueFields = make([][]string, 0, len(m.Value))
@@ -322,6 +340,15 @@ func prepareCheckersForMetrics(metrics []Metric, logger *zap.Logger) []Metric {
 				continue
 			}
 			m.valueFields = append(m.valueFields, cfg.ParseFieldSelector(string(fs)))
+		}
+
+		if m.Labels != nil {
+			m.labelFields = make(map[string][]string, len(m.Labels))
+			for labelName, fs := range m.Labels {
+				if fs != "" {
+					m.labelFields[labelName] = cfg.ParseFieldSelector(string(fs))
+				}
+			}
 		}
 	}
 
@@ -332,14 +359,20 @@ func (p *Plugin) Stop() {
 }
 
 func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
-	metricIndices := make([]int, 0, len(p.Metrics))
+	p.metricIndices = p.metricIndices[:0]
 	for i := range p.Metrics {
-		if p.Metrics[i].DoIfChecker == nil || p.Metrics[i].DoIfChecker.Check(event.Root) {
-			metricIndices = append(metricIndices, i)
+		if p.Metrics[i].DoIfChecker == nil || p.Metrics[i].DoIfChecker.Check(doif.NewEventData(event.Root)) {
+			p.metricIndices = append(p.metricIndices, i)
+		} else {
+			p.metricIndices = append(p.metricIndices, -1)
 		}
 	}
 
-	var ts time.Time
+	if len(p.metricIndices) == 0 {
+		return pipeline.ActionDiscard
+	}
+
+	var timestamp time.Time
 
 	if len(p.config.TimeField_) != 0 {
 		tsValue := event.Root.Dig(p.config.TimeField_...).AsString()
@@ -351,53 +384,67 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 				zap.String("TimeFieldFormat", p.config.TimeFieldFormat),
 				zap.String("value", tsValue),
 			)
-			ts = xtime.GetInaccurateTime()
+			timestamp = xtime.GetInaccurateTime()
 		} else {
-			ts = t
+			timestamp = t
 		}
 	} else {
-		ts = xtime.GetInaccurateTime()
+		timestamp = xtime.GetInaccurateTime()
 	}
 
-	children := make([]*insaneJSON.Node, 0, len(metricIndices))
-	for _, idx := range metricIndices {
-		metric := &p.Metrics[idx]
-		elem := new(insaneJSON.Node)
-		object := elem.MutateToObject()
+	var timestampMs int64 = timestamp.UnixMilli()
 
-		object.AddField("name").MutateToBytes([]byte(metric.Name))
-		object.AddField("type").MutateToBytes([]byte(metric.Type))
-		object.AddField("ttl").MutateToInt64(metric.TTL_.Milliseconds())
-		object.AddField("timestamp").MutateToInt64(ts.UnixMilli())
+	for i, metricIdx := range p.metricIndices {
+		if metricIdx == -1 {
+			// skip by do_if condition
+			continue
+		}
+		metric := &p.Metrics[i]
 
-		if len(metric.Value) == 0 {
-			object.AddField("value").MutateToInt(1)
-		} else {
-			var total float64
+		var value float64 = 1
+		if len(metric.Value) > 0 {
+			value = 0
 			for _, fieldPath := range metric.valueFields {
-				total += event.Root.Dig(fieldPath...).AsFloat()
+				value += event.Root.Dig(fieldPath...).AsFloat()
 			}
-			object.AddField("value").MutateToFloat(total)
 		}
 
-		if len(metric.Labels) > 0 {
+		labels := make(map[string]string)
+		if len(metric.labelFields) > 0 {
+			for labelName, fieldPath := range metric.labelFields {
+				labels[labelName] = event.Root.Dig(fieldPath...).AsString()
+			}
+		}
+		metricData := &p.metricDataList[metricIdx]
+		metricData.timestamp = timestampMs
+		metricData.value = value
+		metricData.labels = labels
+	}
+
+	metricsArray := event.Root.MutateToArray()
+	for i, metricIdx := range p.metricIndices {
+		if metricIdx == -1 {
+			// skip by do_if condition
+			continue
+		}
+		metricData := p.metricDataList[i]
+
+		metricNode := metricsArray.AddElement()
+		object := metricNode.MutateToObject()
+
+		object.AddField("name").MutateToBytes(metricData.name)
+		object.AddField("type").MutateToBytes(metricData.metricType)
+		object.AddField("ttl").MutateToInt64(metricData.ttl)
+		object.AddField("timestamp").MutateToInt64(metricData.timestamp)
+		object.AddField("value").MutateToFloat(metricData.value)
+
+		if len(metricData.labels) > 0 {
 			labelsObject := object.AddField("labels").MutateToObject()
-
-			for labelName, labelValue := range metric.Labels {
-				node := event.Root.Dig(labelValue)
-				value := node.AsString()
-				labelsObject.AddField(labelName).MutateToBytes([]byte(value))
+			for labelName, value := range metricData.labels {
+				labelsObject.AddField(labelName).MutateToBytes(pipeline.StringToByteUnsafe(value))
 			}
 		}
-
-		children = append(children, elem)
 	}
 
-	if len(children) == 0 {
-		// zero array or an array that does not contain objects
-		return pipeline.ActionDiscard
-	}
-
-	p.pluginController.Spawn(event, children)
-	return pipeline.ActionBreak
+	return pipeline.ActionPass
 }

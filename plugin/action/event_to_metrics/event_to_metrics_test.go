@@ -17,26 +17,39 @@ func TestEventToMetrics(t *testing.T) {
 		TimeField_:      []string{"time"},
 		TimeFieldFormat: time.RFC3339Nano,
 		Metrics: []Metric{
-			Metric{
+			{
 				Name: "status",
 				Type: "counter",
 				TTL_: 1 * time.Hour,
-				Labels: map[string]string{
+				Labels: map[string]cfg.FieldSelector{
 					"status": "status",
 					"host":   "host",
 				},
 			},
-			Metric{
+			{
 				Name:  "checkout_response_time",
 				Value: []cfg.FieldSelector{"info.response_time"},
 				Type:  "gauge",
-				Labels: map[string]string{
+				Labels: map[string]cfg.FieldSelector{
 					"zone": "info.zone",
 				},
 				DoIfCheckerMap: map[string]any{
 					"op":     "equal",
 					"field":  "info.zone",
 					"values": []any{"checkout"},
+				},
+			},
+			{
+				Name:  "auth_response_time",
+				Value: []cfg.FieldSelector{"info.response_time"},
+				Type:  "gauge",
+				Labels: map[string]cfg.FieldSelector{
+					"zone": "info.zone",
+				},
+				DoIfCheckerMap: map[string]any{
+					"op":     "equal",
+					"field":  "info.zone",
+					"values": []any{"auth"},
 				},
 			},
 		},
@@ -47,35 +60,72 @@ func TestEventToMetrics(t *testing.T) {
 
 	wrongEventsCnt := 0
 	outWg := sync.WaitGroup{}
-	outWg.Add(len(config.Metrics))
+	outWg.Add(1) // Now we get 1 event with array instead of 2 separate events
 
 	output.SetOutFn(func(e *pipeline.Event) {
 		message := e.Root
 
-		metricName := message.Dig("name").AsString()
-		if metricName == "" {
-			return
+		// Handle array of metrics
+		if message.IsArray() {
+			arr := message.AsArray()
+			for _, metricNode := range arr {
+				if !metricNode.IsObject() {
+					continue
+				}
+
+				metricName := metricNode.Dig("name").AsString()
+				if metricName == "" {
+					continue
+				}
+
+				metricType := metricNode.Dig("type").AsString()
+				timestamp := metricNode.Dig("timestamp").AsInt64()
+				ttl := metricNode.Dig("ttl").AsInt64()
+				value := metricNode.Dig("value").AsFloat()
+
+				switch metricName {
+				case "status":
+					assert.Equal(t, "counter", metricType)
+					assert.Equal(t, (1 * time.Hour).Milliseconds(), ttl)
+					assert.Equal(t, float64(1), value)
+				case "checkout_response_time":
+					assert.Equal(t, "gauge", metricType)
+					assert.Equal(t, int64(0), ttl)
+					assert.Equal(t, float64(0.1), value)
+				default:
+					assert.Fail(t, "unknown metric name", metricName)
+				}
+
+				assert.Equal(t, now.UnixMilli(), timestamp)
+			}
+		} else {
+			// Single metric (backward compatibility)
+			metricName := message.Dig("name").AsString()
+			if metricName == "" {
+				return
+			}
+
+			metricType := message.Dig("type").AsString()
+			timestamp := message.Dig("timestamp").AsInt64()
+			ttl := message.Dig("ttl").AsInt64()
+			value := message.Dig("value").AsFloat()
+
+			switch metricName {
+			case "status":
+				assert.Equal(t, "counter", metricType)
+				assert.Equal(t, (1 * time.Hour).Milliseconds(), ttl)
+				assert.Equal(t, float64(1), value)
+			case "checkout_response_time":
+				assert.Equal(t, "gauge", metricType)
+				assert.Equal(t, int64(0), ttl)
+				assert.Equal(t, float64(0.1), value)
+			default:
+				assert.Fail(t, "unknown metric name", metricName)
+			}
+
+			assert.Equal(t, now.UnixMilli(), timestamp)
 		}
 
-		metricType := message.Dig("type").AsString()
-		timestamp := e.Root.Dig("timestamp").AsInt64()
-		ttl := e.Root.Dig("ttl").AsInt64()
-		value := e.Root.Dig("value").AsFloat()
-
-		switch metricName {
-		case "status":
-			assert.Equal(t, "counter", metricType)
-			assert.Equal(t, (1 * time.Hour).Milliseconds(), ttl)
-			assert.Equal(t, float64(1), value)
-		case "checkout_response_time":
-			assert.Equal(t, "gauge", metricType)
-			assert.Equal(t, int64(0), ttl)
-			assert.Equal(t, float64(0.1), value)
-		default:
-			assert.Fail(t, "unknown metric name", metricName)
-		}
-
-		assert.Equal(t, now.UnixMilli(), timestamp)
 		defer outWg.Done()
 	})
 
