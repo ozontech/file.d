@@ -1,0 +1,56 @@
+package http
+
+import (
+	"fmt"
+	"testing"
+
+	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/test"
+	insaneJSON "github.com/ozontech/insane-json"
+	"github.com/stretchr/testify/assert"
+)
+
+func TestEncoding(t *testing.T) {
+	p := &Plugin{}
+	config := &Config{
+		Endpoints: []string{"test"},
+		BatchSize: "1",
+	}
+	test.NewConfig(config, map[string]int{"gomaxprocs": 1})
+
+	p.Start(config, test.NewEmptyOutputPluginParams())
+
+	root, _ := insaneJSON.DecodeBytes([]byte(`{"message":"[INFO] some event","field_a":"AAAA","field_b":"BBBB"}`))
+	defer insaneJSON.Release(root)
+
+	data := data{}
+	event := &pipeline.Event{Root: root}
+
+	encoder := newJSONEncoder(&JSONEncoderParams{})
+	data.outBuf = encoder.Encode(event, data.outBuf)
+	data.outBuf = append(data.outBuf, '\n')
+
+	expected := fmt.Sprintf("%s\n", `{"message":"[INFO] some event","field_a":"AAAA","field_b":"BBBB"}`)
+	assert.Equal(t, expected, string(data.outBuf), "wrong request content")
+
+	var params RawEncoderParams
+	rawEncoder := newRawEncoder(&params)
+
+	data.outBuf = data.outBuf[:0]
+	data.outBuf = rawEncoder.Encode(event, data.outBuf)
+	data.outBuf = append(data.outBuf, '\n')
+
+	expected = fmt.Sprintf("%s\n", `[INFO] some event`)
+	assert.Equal(t, expected, string(data.outBuf), "wrong request content")
+
+	root2, _ := insaneJSON.DecodeBytes([]byte(`{"message":"{\"log\":\"[INFO] some event\"}","field_a":"AAAA","field_b":"BBBB"}`))
+	defer insaneJSON.Release(root2)
+	event.Root = root2
+
+	data.outBuf = data.outBuf[:0]
+	data.outBuf = rawEncoder.Encode(event, data.outBuf)
+	data.outBuf = append(data.outBuf, '\n')
+
+	expected = fmt.Sprintf("%s\n", `{"log":"[INFO] some event"}`)
+	assert.Equal(t, expected, string(data.outBuf), "wrong request content")
+}

@@ -394,11 +394,16 @@ func newPipeline(t *testing.T, configOutput *Config, objStoreF objStoreFactory) 
 		Capacity:            4096,
 		MaintenanceInterval: time.Second * 10,
 		// MaintenanceInterval: time.Second * 100000,
-		AntispamThreshold:  0,
-		AvgEventSize:       2048,
-		StreamField:        "stream",
-		Decoder:            "json",
-		MetricHoldDuration: pipeline.DefaultMetricHoldDuration,
+		Antispam: pipeline.AntispamSettings{
+			Threshold: pipeline.DefaultAntispamThreshold,
+		},
+		AvgEventSize: 2048,
+		StreamField:  "stream",
+		Decoder:      "json",
+		Metric: &pipeline.MetricSettings{
+			HoldDuration:        pipeline.DefaultMetricHoldDuration,
+			MaxLabelValueLength: pipeline.DefaultMetricMaxLabelValueLength,
+		},
 	}
 
 	p := pipeline.New("test_pipeline", settings, prometheus.NewRegistry(), zap.NewNop())

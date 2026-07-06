@@ -10,7 +10,6 @@ import (
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/pipeline/metadata"
 	"github.com/ozontech/file.d/xoauth"
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/twmb/franz-go/pkg/kgo"
 	"go.uber.org/zap"
 )
@@ -58,8 +57,8 @@ type Plugin struct {
 	metaTemplater *metadata.MetaTemplater
 
 	// plugin metrics
-	commitErrorsMetric  prometheus.Counter
-	consumeErrorsMetric prometheus.Counter
+	commitErrorsMetric  *metric.Counter
+	consumeErrorsMetric *metric.Counter
 }
 
 type OffsetType byte
@@ -339,7 +338,11 @@ func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 
 func (p *Plugin) Stop() {
 	p.logger.Info("Stopping")
-	err := p.client.CommitMarkedOffsets(context.Background())
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	err := p.client.CommitMarkedOffsets(ctx)
 	if err != nil {
 		p.commitErrorsMetric.Inc()
 		p.logger.Error("can't commit marked offsets", zap.Error(err))

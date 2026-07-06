@@ -1,9 +1,5 @@
 package doif
 
-import (
-	insaneJSON "github.com/ozontech/insane-json"
-)
-
 // ! do-if-node
 // ^ do-if-node
 
@@ -28,9 +24,13 @@ const (
 	NodeLogicalOp // *
 )
 
+type Data interface {
+	Get(...string) []byte
+}
+
 type Node interface {
 	Type() NodeType
-	Check(*insaneJSON.Root) bool
+	Check(Data) bool
 	isEqualTo(Node, int) error
 }
 
@@ -48,9 +48,6 @@ func (c *Checker) IsEqualTo(c2 *Checker) error {
 	return c.root.isEqualTo(c2.root, 1)
 }
 
-func (c *Checker) Check(eventRoot *insaneJSON.Root) bool {
-	if eventRoot == nil {
-		return false
-	}
-	return c.root.Check(eventRoot)
+func (c *Checker) Check(data Data) bool {
+	return c.root.Check(data)
 }

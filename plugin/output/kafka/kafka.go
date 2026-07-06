@@ -2,7 +2,6 @@ package kafka
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
@@ -11,8 +10,6 @@ import (
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/xoauth"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/twmb/franz-go/pkg/kerr"
 	"github.com/twmb/franz-go/pkg/kgo"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -38,14 +35,16 @@ type Plugin struct {
 	config       *Config
 	avgEventSize int
 	controller   pipeline.OutputPluginController
-	cancel       context.CancelFunc
 
 	client      KafkaClient
 	batcher     *pipeline.RetriableBatcher
 	tokenSource xoauth.TokenSource
 
+	ctx        context.Context
+	cancelFunc context.CancelFunc
+
 	// plugin metrics
-	sendErrorMetric prometheus.Counter
+	sendErrorMetric *metric.Counter
 	router          *pipeline.Router
 }
 
@@ -101,6 +100,12 @@ type Config struct {
 	// > After this timeout the batch will be sent even if batch isn't full.
 	BatchFlushTimeout  cfg.Duration `json:"batch_flush_timeout" default:"200ms" parse:"duration"` // *
 	BatchFlushTimeout_ time.Duration
+
+	// > @3@4@5@6
+	// >
+	// > Timeout for the produce request
+	Timeout  cfg.Duration `json:"timeout" default:"15s" parse:"duration"` // *
+	Timeout_ time.Duration
 
 	// > @3@4@5@6
 	// >
@@ -259,6 +264,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.avgEventSize = params.PipelineSettings.AvgEventSize
 	p.controller = params.Controller
 	p.registerMetrics(params.MetricCtl)
+	p.ctx, p.cancelFunc = context.WithCancel(context.Background())
 
 	if p.config.Retention_ < 1 {
 		p.logger.Fatal("'retention' can't be <1")
@@ -266,16 +272,13 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 
 	p.logger.Info(fmt.Sprintf("workers count=%d, batch size=%d", p.config.WorkersCount_, p.config.BatchSize_))
 
-	ctx, cancel := context.WithCancel(context.Background())
-	p.cancel = cancel
-
 	var err error
-	p.tokenSource, err = cfg.GetKafkaClientOAuthTokenSource(ctx, p.config)
+	p.tokenSource, err = cfg.GetKafkaClientOAuthTokenSource(p.ctx, p.config)
 	if err != nil {
 		p.logger.Fatal(err.Error())
 	}
 
-	p.client = NewClient(ctx, p.config, p.logger, p.tokenSource)
+	p.client = NewClient(p.ctx, p.config, p.logger, p.tokenSource)
 
 	batcherOpts := pipeline.BatcherOptions{
 		PipelineName:   params.PipelineName,
@@ -320,7 +323,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		onError,
 	)
 
-	p.batcher.Start(context.TODO())
+	p.batcher.Start(p.ctx)
 }
 
 func (p *Plugin) Out(event *pipeline.Event) {
@@ -348,6 +351,10 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 	outBuf := data.outBuf[:0]
 	start := 0
 	i := 0
+
+	ctx, cancel := context.WithTimeout(p.ctx, p.config.Timeout_)
+	defer cancel()
+
 	batch.ForEach(func(event *pipeline.Event) {
 		outBuf, start = event.Encode(outBuf)
 
@@ -365,13 +372,11 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 		data.messages[i].Timestamp = time.Now()
 		data.messages[i].Value = outBuf[start:]
 		data.messages[i].Topic = topic
+		data.messages[i].Context = nil // cause we set context on produce batch
 		i++
 	})
 
-	if err := p.client.ProduceSync(context.Background(), data.messages[:i]...).FirstErr(); err != nil {
-		if errors.Is(err, kerr.LeaderNotAvailable) || errors.Is(err, kerr.NotLeaderForPartition) {
-			p.client.ForceMetadataRefresh()
-		}
+	if err := p.client.ProduceSync(ctx, data.messages[:i]...).FirstErr(); err != nil {
 		p.logger.Error("can't write batch", zap.Error(err))
 		p.sendErrorMetric.Inc()
 		return err
@@ -382,9 +387,9 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 
 func (p *Plugin) Stop() {
 	p.batcher.Stop()
+	p.cancelFunc()
 	p.client.Close()
 	if p.tokenSource != nil {
 		p.tokenSource.Stop()
 	}
-	p.cancel()
 }

@@ -25,6 +25,7 @@
   - Action
     - [add_file_name](plugin/action/add_file_name/README.md)
     - [add_host](plugin/action/add_host/README.md)
+    - [cardinality](plugin/action/cardinality/README.md)
     - [convert_date](plugin/action/convert_date/README.md)
     - [convert_log_level](plugin/action/convert_log_level/README.md)
     - [convert_utf8_bytes](plugin/action/convert_utf8_bytes/README.md)
@@ -56,10 +57,12 @@
     - [elasticsearch](plugin/output/elasticsearch/README.md)
     - [file](plugin/output/file/README.md)
     - [gelf](plugin/output/gelf/README.md)
+    - [http](plugin/output/http/README.md)
     - [kafka](plugin/output/kafka/README.md)
     - [loki](plugin/output/loki/README.md)
     - [postgres](plugin/output/postgres/README.md)
     - [s3](plugin/output/s3/README.md)
+    - [socket](plugin/output/socket/README.md)
     - [splunk](plugin/output/splunk/README.md)
     - [stdout](plugin/output/stdout/README.md)
 
@@ -70,6 +73,7 @@
   - [Datetime parse formats](/pipeline/README.md#datetime-parse-formats)
   - [Match modes](/pipeline/README.md#match-modes)
   - [Experimental: Do If rules](/pipeline/doif/README.md#experimental-do-if-rules)
+  - [Decoder](/decoder/readme.md)
 
 - **Other**
   - [Contributing](/docs/contributing.md)

@@ -52,11 +52,11 @@ jobs:
           file: ${{ matrix.image.dockerfile || './build/package/Dockerfile' }}
           platforms: linux/amd64,linux/arm64
           build-args: |
-            VERSION=${{ github.ref_name }}
+            VERSION=${{ github.event.release.tag_name }}
             APP_IMAGE=${{ matrix.image.name }}
           tags: |
-            ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}:${{ github.ref_name }}${{ matrix.image.suffix }}
-            ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}:latest${{ matrix.image.suffix }}
+            ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}:${{ github.event.release.tag_name }}${{ matrix.image.suffix }}
+            ${{ github.event.release.target_commitish == 'master' && format('ghcr.io/{0}/{1}:latest{2}', github.repository_owner, github.event.repository.name, matrix.image.suffix) || '' }}
 
   build-playground:
     runs-on: ubuntu-latest
@@ -85,5 +85,5 @@ jobs:
           file: ./build/package/Dockerfile_playground
           platforms: linux/amd64,linux/arm64
           build-args: |
-            VERSION=${{ github.ref_name }}
-          tags: ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}-playground:${{ github.ref_name }}
+            VERSION=${{ github.event.release.tag_name }}
+          tags: ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}-playground:${{ github.event.release.tag_name }}

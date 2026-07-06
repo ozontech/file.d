@@ -71,6 +71,13 @@ func (c *Config) Configure(t *testing.T, conf *cfg.Config, pipelineName string) 
 	adminClient := kadm.NewClient(c.client)
 	_, err := adminClient.CreateTopic(context.TODO(), 1, 1, nil, c.topic)
 	r.NoError(err)
+
+	// create consumer group
+	pollCtx, pollCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	fetches := c.client.PollFetches(pollCtx)
+	pollCancel()
+	fetches.EachError(func(topic string, p int32, err error) {})
+	fetches.EachRecord(func(r *kgo.Record) {})
 }
 
 func (c *Config) Send(t *testing.T) {
@@ -89,7 +96,7 @@ func (c *Config) Send(t *testing.T) {
 func (c *Config) Validate(t *testing.T) {
 	r := require.New(t)
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancel()
 
 	expectedEventsCount := messages * arrayLen

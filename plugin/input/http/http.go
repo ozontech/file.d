@@ -20,7 +20,6 @@ import (
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/pipeline/metadata"
 	"github.com/ozontech/file.d/xtls"
-	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
 )
 
@@ -109,12 +108,12 @@ type Plugin struct {
 
 	// plugin metrics
 
-	successfulAuthTotal   map[string]prometheus.Counter
-	failedAuthTotal       prometheus.Counter
-	errorsTotal           prometheus.Counter
-	bulkRequestsDoneTotal prometheus.Counter
-	requestsInProgress    prometheus.Gauge
-	processBulkSeconds    prometheus.Observer
+	successfulAuthTotal   map[string]*metric.Counter
+	failedAuthTotal       *metric.Counter
+	errorsTotal           *metric.Counter
+	bulkRequestsDoneTotal *metric.Counter
+	requestsInProgress    *metric.Gauge
+	processBulkSeconds    *metric.Histogram
 
 	metaTemplater *metadata.MetaTemplater
 }
@@ -321,7 +320,7 @@ func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 
 	if p.config.Auth.Strategy_ != StrategyDisabled {
 		httpAuthTotal := ctl.RegisterCounterVec("http_auth_success_total", "", "secret_name")
-		p.successfulAuthTotal = make(map[string]prometheus.Counter, len(p.config.Auth.Secrets))
+		p.successfulAuthTotal = make(map[string]*metric.Counter, len(p.config.Auth.Secrets))
 		for key := range p.config.Auth.Secrets {
 			p.successfulAuthTotal[key] = httpAuthTotal.WithLabelValues(key)
 		}

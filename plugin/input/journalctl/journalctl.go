@@ -10,7 +10,6 @@ import (
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/offset"
 	"github.com/ozontech/file.d/pipeline"
-	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
 )
 
@@ -27,9 +26,9 @@ type Plugin struct {
 	logger        *zap.Logger
 
 	//  plugin metrics
-	offsetErrorsMetric        prometheus.Counter
-	journalCtlStopErrorMetric prometheus.Counter
-	readerErrorsMetric        prometheus.Counter
+	offsetErrorsMetric        *metric.Counter
+	journalCtlStopErrorMetric *metric.Counter
+	readerErrorsMetric        *metric.Counter
 }
 
 type Config struct {

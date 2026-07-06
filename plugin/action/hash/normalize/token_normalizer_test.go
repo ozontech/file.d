@@ -45,7 +45,6 @@ func TestParseBuiltinPatterns(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -101,7 +100,6 @@ func TestHasPattern(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -114,8 +112,11 @@ func TestNormalizeByBytesOnly(t *testing.T) {
 	tests := []struct {
 		name string
 
-		input []string
-		want  string
+		input   []string
+		cropped bool
+
+		want     string
+		wantSame bool
 	}{
 		{
 			name:  "curly_brackets",
@@ -160,14 +161,37 @@ func TestNormalizeByBytesOnly(t *testing.T) {
 			want: "some <grave_quoted> here",
 		},
 		{
-			name:  "partial_token1",
-			input: []string{`some "dsadsadasd asd qw`},
-			want:  "some <double_quoted>",
+			name: "quotes_wordwrap",
+			input: []string{
+				`Can't breath h'e'r'e`,
+				`Can"t breath h"e"r"e`,
+				"Can`t breath h`e`r`e",
+			},
+			wantSame: true,
 		},
 		{
-			name:  "partial_token2",
-			input: []string{`some {"a":1,b:{"c":2,"d":3},e:[4,5,6]`},
-			want:  "some <curly_bracketed>",
+			name:    "partial_token_quotes_cropped",
+			input:   []string{`some "dsadsadasd asd qw`},
+			cropped: true,
+			want:    "some <double_quoted>",
+		},
+		{
+			name:     "partial_token_quotes_not_cropped",
+			input:    []string{`some "dsadsadasd asd qw`},
+			cropped:  false,
+			wantSame: true,
+		},
+		{
+			name:    "partial_token_brackets_cropped",
+			input:   []string{`some {"a":1,b:{"c":2,"d":3},e:[4,5,6]`},
+			cropped: true,
+			want:    "some <curly_bracketed>",
+		},
+		{
+			name:    "partial_token_brackets_not_cropped",
+			input:   []string{`some {"a":1,b:{"c":2,"d":3},e:[4,5,6]`},
+			cropped: false,
+			want:    `some {<double_quoted>:1,b:<curly_bracketed>,e:<square_bracketed>`,
 		},
 		{
 			name:  "multiple",
@@ -184,15 +208,19 @@ func TestNormalizeByBytesOnly(t *testing.T) {
 	require.NoError(t, err)
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
 			out := make([]byte, 0)
 
 			for _, i := range tt.input {
-				out = n.Normalize(out, []byte(i))
-				assert.Equal(t, tt.want, string(out), "wrong out with input=%q", i)
+				out = n.Normalize(out, []byte(i), tt.cropped)
+
+				if tt.wantSame {
+					assert.Equal(t, i, string(out), "wrong out with input=%q", i)
+				} else {
+					assert.Equal(t, tt.want, string(out), "wrong out with input=%q", i)
+				}
 			}
 		})
 	}
@@ -250,20 +278,23 @@ func TestTokenNormalizerBuiltin(t *testing.T) {
 			want:     "some <uuid> here",
 		},
 		{
-			name:     "sha1",
-			inputs:   []string{"some a94a8fe5ccb19ba61c4c0873d391e987982fbbd3 here"},
-			patterns: "sha1",
-			want:     "some <sha1> here",
-		},
-		{
-			name:     "md5",
-			inputs:   []string{"some 098f6bcd4621d373cade4e832627b4f6 here"},
-			patterns: "md5",
-			want:     "some <md5> here",
+			name: "hash",
+			inputs: []string{
+				"some 48757ec9f04efe7faacec8722f3476339b125a6b6172b8a69ff3aa329e0bd0ff here",
+				"some a94a8fe5ccb19ba61c4c0873d391e987982fbbd3 here",
+				"some 098f6bcd4621d373cade4e832627b4f6 here",
+			},
+			patterns: "hash",
+			want:     "some <hash> here",
 		},
 		{
 			name: "datetime",
 			inputs: []string{
+				"some 2025-01-13 20:58:04.019973588 +0000 UTC m=+1417512.275697914 here",
+				"some 2025-01-13 20:58:04.019973588 -0700 MST m=-123.456789012 here",
+				"some 2025-01-13 20:58:04.019973588 +0300 MSK m=+0.123456789 here",
+				"some 2025-01-13 20:58:04.019973588 -0700 MST here",
+				"some 2025-01-13 20:58:04.019973588 +0300 MSK here",
 				"some 2025-01-13T10:20:40Z here",
 				"some 2025-01-13T10:20:40.999999999Z here",
 				"some 2025-01-13T10:20:40-06:00 here",
@@ -309,6 +340,17 @@ func TestTokenNormalizerBuiltin(t *testing.T) {
 			},
 			patterns: "duration",
 			want:     "some <duration> here",
+		},
+		{
+			name: "filepath",
+			inputs: []string{
+				"some /plugin/action/normalize here",
+				"some /Users/seq-ui/action/playlist here",
+				"some /home/user/photos here",
+				"some /sys/kubepods.slice/kuber-buber.slice/photos_video-audio/container123.scope here",
+			},
+			patterns: "filepath",
+			want:     "some <filepath> here",
 		},
 		{
 			name: "hex",
@@ -366,6 +408,7 @@ func TestTokenNormalizerBuiltin(t *testing.T) {
 				- request: www.weather.jp
 				- ip: 1.2.3.4
 				- email: user@subdomain.domain.org
+				- file: /home/user/photos
 
 				Downloaded from https://some.host.test for 5.5s.
 			`,
@@ -379,12 +422,13 @@ func TestTokenNormalizerBuiltin(t *testing.T) {
 				- <float> milk
 				- <bool> bananas
 				- <hex> onions
-				- <uuid>, <sha1>, <md5>
+				- <uuid>, <hash>, <hash>
 
 				User info:
 				- request: <host>
 				- ip: <ip>
 				- email: <email>
+				- file: <filepath>
 
 				Downloaded from <url> for <duration>.
 			`,
@@ -400,7 +444,6 @@ func TestTokenNormalizerBuiltin(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -410,7 +453,7 @@ func TestTokenNormalizerBuiltin(t *testing.T) {
 			out := make([]byte, 0)
 
 			for _, i := range tt.inputs {
-				out = n.Normalize(out, []byte(i))
+				out = n.Normalize(out, []byte(i), false)
 				assert.Equal(t, tt.want, string(out), "wrong out with input=%q", i)
 			}
 		})
@@ -483,8 +526,9 @@ func TestTokenNormalizerCustom(t *testing.T) {
 	out := make([]byte, 0)
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			n, err := NewTokenNormalizer(tt.params)
 			require.Equal(t, tt.wantErr, err != nil || n == nil)
 			if tt.wantErr {
@@ -492,7 +536,7 @@ func TestTokenNormalizerCustom(t *testing.T) {
 			}
 
 			for _, i := range tt.inputs {
-				out = n.Normalize(out, []byte(i))
+				out = n.Normalize(out, []byte(i), false)
 				assert.Equal(t, tt.want, string(out), "wrong out with input=%q", i)
 			}
 		})
@@ -501,26 +545,27 @@ func TestTokenNormalizerCustom(t *testing.T) {
 
 func genBenchInput(count int) []byte {
 	var examples = []string{
-		"s1mple falsehood",                         // no match
-		"test@host1.host2.com",                     // email
-		"http://some.host.com/page1?a=1",           // url
-		"hello-world-123.COM",                      // host
-		"7c1811ed-e98f-4c9c-a9f9-58c757ff494f",     // uuid
-		"a94a8fe5ccb19ba61c4c0873d391e987982fbbd3", // sha1
-		"098f6bcd4621d373cade4e832627b4f6",         // md5
-		"2025-01-13T10:20:40Z",                     // datetime
-		"1.2.3.4",                                  // ip
-		"-1.2m5s",                                  // duration
-		"0x13eb85e69dfbc0758b12acdaae36287d",       // hex
-		"-4.56",                                    // float
-		"123",                                      // int
-		"truE faLse",
+		"48757ec9f04efe7faacec8722f3476339b125a6b6172b8a69ff3aa329e0bd0ff", // hash(sha256)
+		"a94a8fe5ccb19ba61c4c0873d391e987982fbbd3",                         // hash(sha1)
+		"098f6bcd4621d373cade4e832627b4f6",                                 // hash(md5)
+		"s1mple falsehood",                                                 // no match
+		"test@host1.host2.com",                                             // email
+		"http://some.host.com/page1?a=1",                                   // url
+		"hello-world-123.COM",                                              // host
+		"7c1811ed-e98f-4c9c-a9f9-58c757ff494f",                             // uuid
+		"/home/user/photos",                                                // filepath
+		"2025-01-13T10:20:40Z",                                             // datetime
+		"1.2.3.4",                                                          // ip
+		"-1.2m5s",                                                          // duration
+		"0x13eb85e69dfbc0758b12acdaae36287d",                               // hex
+		"-4.56",                                                            // float
+		"123",                                                              // int
 	}
 
 	var sb strings.Builder
-	for i := 0; i < count; i++ {
+	for range count {
 		for _, e := range examples {
-			sb.WriteString(fmt.Sprintf(" %s ", e))
+			fmt.Fprintf(&sb, " %s ", e)
 		}
 	}
 	return []byte(sb.String())
@@ -541,7 +586,7 @@ func BenchmarkTokenNormalizer(b *testing.B) {
 		name := fmt.Sprintf("input_len_%d", len(benchCase.input))
 		b.Run(name, func(b *testing.B) {
 			for i := 0; i < b.N; i++ {
-				out = n.Normalize(out, benchCase.input)
+				out = n.Normalize(out, benchCase.input, false)
 			}
 		})
 	}

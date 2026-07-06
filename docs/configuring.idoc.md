@@ -1,7 +1,7 @@
 # Configuring
 
 You can specify several pipelines with plugins and their parameters in a yaml format.  
-Examples can be found [here](./examples.md).
+Examples can be found [here](/docs/examples.md).
 
 ### Logging
 
@@ -43,6 +43,8 @@ If `-http=':9090'` debug endpoints will be:
 `http://127.0.0.1:9090/pipelines/http_file/1/sample` - for the discard plugin
 
 `http://127.0.0.1:9090/pipelines/http_file/2/sample` - for the join plugin
+
+> **Note**: by default debug server starts on address `:9000` (can be checked using `--help` flag). If your server uses IPv6, the debug server with address configured as `:<port>` will start on IPv6 port.
 
 ### Overriding configurations
 
@@ -225,7 +227,7 @@ Patterns must have a list ([]) or string type, not a number or null.
 
 ### Decoders
 
-If you have logs in specific non-json format, you can specify decoder type in pipeline settings. By default `json` decoder is used. More details can be found [here](../decoder/readme.md).
+If you have logs in specific non-json format, you can specify decoder type in pipeline settings. By default `json` decoder is used. More details can be found [here](/decoder/readme.md).
 
 ```yml
 pipelines:

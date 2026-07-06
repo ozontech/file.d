@@ -119,12 +119,17 @@ func NewPipeline(actions []*pipeline.ActionPluginStaticInfo, pipelineOpts ...str
 		Capacity:            capacity,
 		MaintenanceInterval: time.Second * 5,
 		EventTimeout:        eventTimeout,
-		AntispamThreshold:   0,
-		AvgEventSize:        2048,
-		MetaCacheSize:       32,
-		StreamField:         "stream",
-		Decoder:             "json",
-		MetricHoldDuration:  pipeline.DefaultMetricHoldDuration,
+		Antispam: pipeline.AntispamSettings{
+			Threshold: pipeline.DefaultAntispamThreshold,
+		},
+		AvgEventSize:  2048,
+		MetaCacheSize: 32,
+		StreamField:   "stream",
+		Decoder:       "json",
+		Metric: &pipeline.MetricSettings{
+			HoldDuration:        pipeline.DefaultMetricHoldDuration,
+			MaxLabelValueLength: pipeline.DefaultMetricMaxLabelValueLength,
+		},
 	}
 
 	if lowMem {
@@ -235,7 +240,7 @@ func newDefaultParams() pipeline.PluginDefaultParams {
 	return pipeline.PluginDefaultParams{
 		PipelineName:     "test_pipeline",
 		PipelineSettings: &pipeline.Settings{},
-		MetricCtl:        metric.NewCtl("test", prometheus.NewRegistry()),
+		MetricCtl:        metric.NewCtl("test", prometheus.NewRegistry(), time.Minute, 0),
 	}
 }
 

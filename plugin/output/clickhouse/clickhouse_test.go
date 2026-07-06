@@ -14,12 +14,28 @@ func TestPlugin_getInstance(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 
-	instances := []Clickhouse{
+	pools := []Clickhouse{
 		mockclickhouse.NewMockClickhouse(ctrl),
 		mockclickhouse.NewMockClickhouse(ctrl),
 		mockclickhouse.NewMockClickhouse(ctrl),
 		mockclickhouse.NewMockClickhouse(ctrl),
 		mockclickhouse.NewMockClickhouse(ctrl),
+	}
+
+	addrs := []Address{
+		{Addr: "addr1", Weight: intPtr(1)},
+		{Addr: "addr2", Weight: intPtr(2)},
+		{Addr: "addr3", Weight: intPtr(3)},
+		{Addr: "addr4", Weight: intPtr(4)},
+		{Addr: "addr5", Weight: intPtr(5)},
+	}
+
+	instances := []instance{
+		{addr: addrs[0], pool: pools[0]},
+		{addr: addrs[1], pool: pools[1]},
+		{addr: addrs[2], pool: pools[2]},
+		{addr: addrs[3], pool: pools[3]},
+		{addr: addrs[4], pool: pools[4]},
 	}
 
 	type args struct {
@@ -28,10 +44,10 @@ func TestPlugin_getInstance(t *testing.T) {
 	}
 	tests := []struct {
 		name      string
-		instances []Clickhouse
+		instances []instance
 		stategy   InsertStrategy
 		args      args
-		want      Clickhouse
+		want      instance
 	}{
 		// in-order
 		{
@@ -137,8 +153,9 @@ func Test_addrWithDefaultPort(t *testing.T) {
 func TestAddress_UnmarshalJSON(t *testing.T) {
 	t.Parallel()
 	type fields struct {
-		Addr   string
-		Weight int
+		Addr        string
+		Weight      int
+		WeightIsNil bool
 	}
 	type args struct {
 		b []byte
@@ -157,6 +174,16 @@ func TestAddress_UnmarshalJSON(t *testing.T) {
 			want: fields{
 				Addr:   "127.0.0.1:9001",
 				Weight: 2,
+			},
+		},
+		{
+			name: "ok_object_only_addr",
+			args: args{
+				b: []byte(`{"addr":"127.0.0.1:9001"}`),
+			},
+			want: fields{
+				Addr:   "127.0.0.1:9001",
+				Weight: 1,
 			},
 		},
 		{
@@ -185,6 +212,9 @@ func TestAddress_UnmarshalJSON(t *testing.T) {
 		},
 		{
 			name: "empty",
+			want: fields{
+				WeightIsNil: true,
+			},
 		},
 	}
 	for _, tt := range tests {
@@ -197,8 +227,19 @@ func TestAddress_UnmarshalJSON(t *testing.T) {
 			}
 			if !tt.wantErr {
 				assert.Equal(t, tt.want.Addr, a.Addr)
-				assert.Equal(t, tt.want.Weight, a.Weight)
+				if tt.want.WeightIsNil {
+					assert.Nil(t, a.Weight)
+				} else {
+					assert.NotNil(t, a.Weight)
+					if a.Weight != nil {
+						assert.Equal(t, tt.want.Weight, *a.Weight)
+					}
+				}
 			}
 		})
 	}
+}
+
+func intPtr(a int) *int {
+	return &a
 }

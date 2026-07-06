@@ -46,6 +46,13 @@ Allowed characters in field names are letters, numbers, underscores, dashes, and
 Supports [dead queue](/plugin/output/README.md#dead-queue).
 
 [More details...](plugin/output/gelf/README.md)
+## http
+It sends events to arbitrary HTTP endpoints. It uses POST requests to send events in batches.
+If a network error occurs, the batch will infinitely try to be delivered to the random endpoint.
+
+Supports [dead queue](/plugin/output/README.md#dead-queue).
+
+[More details...](plugin/output/http/README.md)
 ## kafka
 It sends the event batches to kafka brokers using `franz-go` lib.
 
@@ -142,6 +149,17 @@ pipelines:
 ```
 
 [More details...](plugin/output/s3/README.md)
+## socket
+It sends events to a socket endpoint.
+Supports TCP, UDP, and Unix socket protocols.
+
+Events are sent in batches serialized as newline-delimited JSON by default, compatible with the socket input plugin.
+The delimiter used to separate messages is configurable and can be changed in the plugin configuration (default: `\n`).
+If a network error occurs, the batch will be retried according to the backoff settings.
+
+Supports [dead queue](/plugin/output/README.md#dead-queue).
+
+[More details...](plugin/output/socket/README.md)
 ## splunk
 It sends events to splunk.
 

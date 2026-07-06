@@ -32,7 +32,7 @@ type protobufDecoder struct {
 	msgDesc protoreflect.MessageDescriptor
 }
 
-func NewProtobufDecoder(params map[string]any) (Decoder, error) {
+func NewProtobufDecoder(params Params) (Decoder, error) {
 	p, err := extractProtobufParams(params)
 	if err != nil {
 		return nil, fmt.Errorf("can't extract params: %w", err)
@@ -104,7 +104,7 @@ func (d *protobufDecoder) Decode(data []byte, _ ...any) (any, error) {
 	return msgJson, nil
 }
 
-func extractProtobufParams(params map[string]any) (protobufParams, error) {
+func extractProtobufParams(params Params) (protobufParams, error) {
 	fileRaw, ok := params[protoFileParam]
 	if !ok {
 		return protobufParams{}, fmt.Errorf("%q not set", protoFileParam)

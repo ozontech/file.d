@@ -12,7 +12,7 @@ func TestDecodeCSV(t *testing.T) {
 		name string
 
 		input  string
-		params map[string]any
+		params Params
 
 		want          []string
 		wantCreateErr bool
@@ -31,7 +31,7 @@ func TestDecodeCSV(t *testing.T) {
 		{
 			name:  "custom_delimiter",
 			input: `a	b	"c"` + "\n",
-			params: map[string]any{
+			params: Params{
 				delimiterParam: "\t",
 			},
 			want: CSVRow{"a", "b", "c"},
@@ -39,7 +39,7 @@ func TestDecodeCSV(t *testing.T) {
 		{
 			name:  "invalid_columns",
 			input: "",
-			params: map[string]any{
+			params: Params{
 				columnNamesParam: "name",
 			},
 			wantCreateErr: true,
@@ -47,7 +47,7 @@ func TestDecodeCSV(t *testing.T) {
 		{
 			name:  "invalid_delimiter_1",
 			input: "",
-			params: map[string]any{
+			params: Params{
 				delimiterParam: ",,",
 			},
 			wantCreateErr: true,
@@ -55,7 +55,7 @@ func TestDecodeCSV(t *testing.T) {
 		{
 			name:  "invalid_delimiter_2",
 			input: "",
-			params: map[string]any{
+			params: Params{
 				delimiterParam: "\n",
 			},
 			wantCreateErr: true,
@@ -105,7 +105,7 @@ func TestDecodeToJsonCSV(t *testing.T) {
 		name string
 
 		input  string
-		params map[string]any
+		params Params
 
 		want          string
 		wantDecodeErr bool
@@ -118,7 +118,7 @@ func TestDecodeToJsonCSV(t *testing.T) {
 		{
 			name:  "custom_columns",
 			input: `"a","""b""","c"` + "\n",
-			params: map[string]any{
+			params: Params{
 				columnNamesParam: []any{"service", "version", "info"},
 			},
 			want: `{"service":"a","version":"\"b\"","info":"c"}`,
@@ -126,7 +126,7 @@ func TestDecodeToJsonCSV(t *testing.T) {
 		{
 			name:  "custom_prefix",
 			input: `"a";"""b""";"c"` + "\n",
-			params: map[string]any{
+			params: Params{
 				prefixParam:    "csv_",
 				delimiterParam: ";",
 			},
@@ -135,7 +135,7 @@ func TestDecodeToJsonCSV(t *testing.T) {
 		{
 			name:  "wrong_number_of_fields_1",
 			input: "a,b,c,d" + "\n",
-			params: map[string]any{
+			params: Params{
 				columnNamesParam: []any{"column_a", "column_b", "column_c"},
 			},
 			wantDecodeErr: true,
@@ -143,7 +143,7 @@ func TestDecodeToJsonCSV(t *testing.T) {
 		{
 			name:  "wrong_number_of_fields_2",
 			input: "a,b,c,d" + "\n",
-			params: map[string]any{
+			params: Params{
 				columnNamesParam:     []any{"column_a", "column_b", "column_c"},
 				invalidLineModeParam: "continue",
 				prefixParam:          "csv_",
@@ -153,7 +153,7 @@ func TestDecodeToJsonCSV(t *testing.T) {
 		{
 			name:  "wrong_number_of_fields_3",
 			input: "a,b" + "\n",
-			params: map[string]any{
+			params: Params{
 				columnNamesParam:     []any{"column_a", "column_b", "column_c"},
 				invalidLineModeParam: "continue",
 			},

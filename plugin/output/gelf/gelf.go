@@ -11,7 +11,6 @@ import (
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/xtime"
 	insaneJSON "github.com/ozontech/insane-json"
-	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -49,7 +48,7 @@ type Plugin struct {
 	controller   pipeline.OutputPluginController
 
 	// plugin metrics
-	sendErrorMetric prometheus.Counter
+	sendErrorMetric *metric.Counter
 
 	router *pipeline.Router
 }

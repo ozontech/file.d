@@ -7,7 +7,6 @@ import (
 
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/metric"
-	"github.com/prometheus/client_golang/prometheus"
 )
 
 type BatchStatus byte
@@ -126,12 +125,12 @@ type Batcher struct {
 	outSeq    int64
 	commitSeq int64
 
-	batchOutFnSeconds        prometheus.Observer
-	commitWaitingSeconds     prometheus.Observer
-	workersInProgress        prometheus.Gauge
-	batchesDoneByMaxSize     prometheus.Counter
-	batchesDoneByTimeout     prometheus.Counter
-	batchesRoutedToDeadQueue prometheus.Counter
+	batchOutFnSeconds        *metric.Histogram
+	commitWaitingSeconds     *metric.Histogram
+	workersInProgress        *metric.Gauge
+	batchesDoneByMaxSize     *metric.Counter
+	batchesDoneByTimeout     *metric.Counter
+	batchesRoutedToDeadQueue *metric.Counter
 }
 
 type (

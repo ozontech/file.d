@@ -17,7 +17,6 @@ import (
 	"github.com/ozontech/file.d/xhttp"
 
 	insaneJSON "github.com/ozontech/insane-json"
-	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -179,6 +178,19 @@ type Config struct {
 	// >
 	// > Multiplier for exponential increase of retention between retries
 	RetentionExponentMultiplier int `json:"retention_exponentially_multiplier" default:"2"` // *
+
+	// > @3@4@5@6
+	// >
+	// > Period for which addresses will be banned in case of unavailability.
+	// > If set to 0, circuit breaker is disabled.
+	BanPeriod  cfg.Duration `json:"ban_period" default:"10s" parse:"duration"` // *
+	BanPeriod_ time.Duration
+
+	// > @3@4@5@6
+	// >
+	// > Interval for checking banned endpoints.
+	ReconnectInterval  cfg.Duration `json:"reconnect_interval" default:"5s" parse:"duration"` // *
+	ReconnectInterval_ time.Duration
 }
 
 type AuthStrategy byte
@@ -233,7 +245,8 @@ type Plugin struct {
 	batcher *pipeline.RetriableBatcher
 
 	// plugin metrics
-	sendErrorMetric *prometheus.CounterVec
+	sendErrorMetric       *metric.CounterVec
+	bannedEndpointsMetric *metric.Gauge
 
 	labels map[string]string
 
@@ -260,7 +273,18 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 
 	p.labels = p.parseLabels()
 
-	p.prepareClient()
+	if p.config.ReconnectInterval_ < 1 {
+		p.logger.Fatal("'reconnect_interval' can't be <1")
+	}
+	if p.config.BanPeriod_ < 0 {
+		p.logger.Fatal("'ban_period' cant't be <0")
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	p.ctx = ctx
+	p.cancel = cancel
+
+	p.prepareClient(ctx)
 
 	batcherOpts := &pipeline.BatcherOptions{
 		PipelineName:   params.PipelineName,
@@ -303,10 +327,6 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		backoffOpts,
 		onError,
 	)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	p.ctx = ctx
-	p.cancel = cancel
 
 	p.batcher.Start(ctx)
 }
@@ -429,22 +449,31 @@ func (p *Plugin) send(root *insaneJSON.Root) (int, error) {
 
 func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 	p.sendErrorMetric = ctl.RegisterCounterVec("output_loki_send_error_total", "Total Loki send errors", "status_code")
+	p.bannedEndpointsMetric = ctl.RegisterGauge(
+		"output_loki_banned_endpoints_count",
+		"Current number of endpoints banned by circuit breaker",
+	)
+	p.bannedEndpointsMetric.Set(0)
 }
 
-func (p *Plugin) prepareClient() {
+func (p *Plugin) prepareClient(ctx context.Context) {
 	config := &xhttp.ClientConfig{
 		Endpoints:         []string{fmt.Sprintf("%s/loki/api/v1/push", p.config.Address)},
 		ConnectionTimeout: p.config.ConnectionTimeout_ * 2,
 		AuthHeader:        p.getAuthHeader(),
 		CustomHeaders:     p.getCustomHeaders(),
+		BanPeriod:         p.config.BanPeriod_,
+		ReconnectInterval: p.config.ReconnectInterval_,
 		KeepAlive: &xhttp.ClientKeepAliveConfig{
 			MaxConnDuration:     p.config.KeepAlive.MaxConnDuration_,
 			MaxIdleConnDuration: p.config.KeepAlive.MaxIdleConnDuration_,
 		},
+		Logger:                p.logger,
+		BannedEndpointsMetric: p.bannedEndpointsMetric,
 	}
 
 	var err error
-	p.client, err = xhttp.NewClient(config)
+	p.client, err = xhttp.NewClient(ctx, config)
 	if err != nil {
 		p.logger.Fatal("can't create http client", zap.Error(err))
 	}

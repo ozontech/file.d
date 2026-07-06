@@ -15,7 +15,6 @@ import (
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/xhttp"
 	insaneJSON "github.com/ozontech/insane-json"
-	"github.com/prometheus/client_golang/prometheus"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -50,8 +49,9 @@ type Plugin struct {
 	mu           *sync.Mutex
 
 	// plugin metrics
-	sendErrorMetric      *prometheus.CounterVec
-	indexingErrorsMetric prometheus.Counter
+	sendErrorMetric       *metric.CounterVec
+	indexingErrorsMetric  *metric.Counter
+	bannedEndpointsMetric *metric.Gauge
 
 	router *pipeline.Router
 }
@@ -199,6 +199,24 @@ type Config struct {
 	// >
 	// > The name of the ingest pipeline to write events to.
 	IngestPipeline string `json:"ingest_pipeline"` // *
+
+	// > @3@4@5@6
+	// >
+	// > Process ES response and report errors, if any.
+	ProcessResponse bool `json:"process_response" default:"true"` // *
+
+	// > @3@4@5@6
+	// >
+	// > Period for which addresses will be banned in case of unavailability.
+	// > If set to 0, circuit breaker is disabled.
+	BanPeriod  cfg.Duration `json:"ban_period" default:"10s" parse:"duration"` // *
+	BanPeriod_ time.Duration
+
+	// > @3@4@5@6
+	// >
+	// > Interval for checking banned endpoints.
+	ReconnectInterval  cfg.Duration `json:"reconnect_interval" default:"5s" parse:"duration"` // *
+	ReconnectInterval_ time.Duration
 }
 
 type KeepAliveConfig struct {
@@ -239,8 +257,17 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	if len(p.config.IndexValues) == 0 {
 		p.config.IndexValues = append(p.config.IndexValues, "@time")
 	}
+	if p.config.ReconnectInterval_ < 1 {
+		p.logger.Fatal("'reconnect_interval' can't be <1")
+	}
+	if p.config.BanPeriod_ < 0 {
+		p.logger.Fatal("'ban_period' cant't be <0")
+	}
 
-	p.prepareClient()
+	ctx, cancel := context.WithCancel(context.Background())
+	p.cancel = cancel
+
+	p.prepareClient(ctx)
 
 	p.maintenance(nil)
 
@@ -291,9 +318,6 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		onError,
 	)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	p.cancel = cancel
-
 	p.batcher.Start(ctx)
 }
 
@@ -309,17 +333,26 @@ func (p *Plugin) Out(event *pipeline.Event) {
 func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 	p.sendErrorMetric = ctl.RegisterCounterVec("output_elasticsearch_send_error_total", "Total elasticsearch send errors", "status_code")
 	p.indexingErrorsMetric = ctl.RegisterCounter("output_elasticsearch_index_error_total", "Number of elasticsearch indexing errors")
+	p.bannedEndpointsMetric = ctl.RegisterGauge(
+		"output_elasticsearch_banned_endpoints_count",
+		"Current number of endpoints banned by circuit breaker",
+	)
+	p.bannedEndpointsMetric.Set(0)
 }
 
-func (p *Plugin) prepareClient() {
+func (p *Plugin) prepareClient(ctx context.Context) {
 	config := &xhttp.ClientConfig{
 		Endpoints:         prepareEndpoints(p.config.Endpoints, p.config.IngestPipeline),
 		ConnectionTimeout: p.config.ConnectionTimeout_ * 2,
 		AuthHeader:        p.getAuthHeader(),
+		BanPeriod:         p.config.BanPeriod_,
+		ReconnectInterval: p.config.ReconnectInterval_,
 		KeepAlive: &xhttp.ClientKeepAliveConfig{
 			MaxConnDuration:     p.config.KeepAlive.MaxConnDuration_,
 			MaxIdleConnDuration: p.config.KeepAlive.MaxIdleConnDuration_,
 		},
+		Logger:                p.logger,
+		BannedEndpointsMetric: p.bannedEndpointsMetric,
 	}
 	if p.config.CACert != "" {
 		config.TLS = &xhttp.ClientTLSConfig{
@@ -331,7 +364,7 @@ func (p *Plugin) prepareClient() {
 	}
 
 	var err error
-	p.client, err = xhttp.NewClient(config)
+	p.client, err = xhttp.NewClient(ctx, config)
 	if err != nil {
 		p.logger.Fatal("can't create http client", zap.Error(err))
 	}
@@ -412,12 +445,17 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 }
 
 func (p *Plugin) send(data []byte) (int, error) {
+	processFn := p.reportESErrors
+	if !p.config.ProcessResponse {
+		processFn = nil
+	}
+
 	return p.client.DoTimeout(
 		http.MethodPost,
 		NDJSONContentType,
 		data,
 		p.config.ConnectionTimeout_,
-		p.reportESErrors,
+		processFn,
 	)
 }
 
@@ -426,11 +464,18 @@ func (p *Plugin) sendSplit(left int, right int, begin []int, data []byte) (int, 
 		return http.StatusOK, nil
 	}
 
+	processFn := p.reportESErrors
+	if !p.config.ProcessResponse {
+		processFn = nil
+	}
+
 	statusCode, err := p.client.DoTimeout(
 		http.MethodPost,
 		NDJSONContentType,
 		data[begin[left]:begin[right]],
-		p.config.ConnectionTimeout_, p.reportESErrors)
+		p.config.ConnectionTimeout_,
+		processFn,
+	)
 
 	if err != nil {
 		p.sendErrorMetric.WithLabelValues(strconv.Itoa(statusCode)).Inc()

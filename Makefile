@@ -2,12 +2,12 @@ VERSION ?= $(shell git describe --abbrev=4 --dirty --always --tags)
 TIME := $(shell date '+%Y-%m-%d_%H:%M:%S')
 UPSTREAM_BRANCH ?= origin/master
 
-GOLANGCI_LINT_VER=latest
+GOLANGCI_LINT_VER=v2.8.0
 GOOS ?= linux
 GOARCH ?= amd64
 
 .PHONY: build
-build: 
+build:
 	echo "Building for $(GOOS) $(GOARCH)..."
 	go build -trimpath -ldflags "-X github.com/ozontech/file.d/buildinfo.Version=${VERSION}" -o file.d ./cmd/file.d
 
@@ -36,7 +36,7 @@ test-e2e:
 .PHONY: test-e2e-docker-up
 test-e2e-docker-up:
 	for dc in $(shell find e2e -name 'docker-compose.yml') ; do \
-		docker compose -f $$dc up -d ; \
+		docker compose -f $$dc up -d --wait; \
 	done
 
 .PHONY: test-e2e-docker-down
@@ -55,7 +55,13 @@ gen-doc:
 
 .PHONY: lint
 lint:
-	go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@${GOLANGCI_LINT_VER} run
+	go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@${GOLANGCI_LINT_VER} run \
+		--config=.golangci.yml --timeout=5m --new-from-rev=origin/master
+
+.PHONY: lint-full
+lint-full:
+	go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@${GOLANGCI_LINT_VER} run \
+		--config=.golangci.yml --timeout=5m
 
 .PHONY: mock
 mock:

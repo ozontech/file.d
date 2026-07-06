@@ -9,6 +9,10 @@ It is only applicable for input plugins k8s and file.
 It adds field containing hostname to an event.
 
 [More details...](plugin/action/add_host/README.md)
+## cardinality
+Limits the cardinality of fields on events, drops events or just do nothing.
+
+[More details...](plugin/action/cardinality/README.md)
 ## convert_date
 It converts field date/time data to different format.
 

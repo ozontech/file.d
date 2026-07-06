@@ -9,7 +9,7 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/prometheus/client_golang/prometheus"
+	"github.com/ozontech/file.d/metric"
 	"go.uber.org/zap"
 )
 
@@ -26,7 +26,7 @@ type journalReader struct {
 	args   []string
 
 	// reader metrics
-	readerErrorsMetric prometheus.Counter
+	readerErrorsMetric *metric.Counter
 }
 
 func (r *journalReader) readLines(rd io.Reader, config *journalReaderConfig) {
@@ -65,7 +65,7 @@ func (r *journalReader) readLines(rd io.Reader, config *journalReaderConfig) {
 	}
 }
 
-func newJournalReader(config *journalReaderConfig, readerErrorsCounter prometheus.Counter) *journalReader {
+func newJournalReader(config *journalReaderConfig, readerErrorsCounter *metric.Counter) *journalReader {
 	res := &journalReader{
 		config:             config,
 		readerErrorsMetric: readerErrorsCounter,

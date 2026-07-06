@@ -164,5 +164,24 @@ The name of the ingest pipeline to write events to.
 
 <br>
 
+**`process_response`** *`bool`* *`default=true`* 
+
+Process ES response and report errors, if any.
+
+<br>
+
+**`ban_period`** *`cfg.Duration`* *`default=10s`* 
+
+Period for which addresses will be banned in case of unavailability.
+If set to 0, circuit breaker is disabled.
+
+<br>
+
+**`reconnect_interval`** *`cfg.Duration`* *`default=5s`* 
+
+Interval for checking banned endpoints.
+
+<br>
+
 
 <br>*Generated using [__insane-doc__](https://github.com/vitkovskii/insane-doc)*

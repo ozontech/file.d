@@ -40,6 +40,8 @@ result:
 ```
 }*/
 
+const checkTypeOpTag = "check_type"
+
 type checkTypeVal int
 
 const (
@@ -61,13 +63,13 @@ func (t checkTypeVal) String() string {
 	case checkTypeNumber:
 		return "number"
 	case checkTypeString:
-		return "string" // nolint:goconst
+		return "string"
 	case checkTypeNull:
 		return "null"
 	case checkTypeNil:
 		return "nil"
 	default:
-		return "unknown" // nolint:goconst
+		return "unknown"
 	}
 }
 
@@ -154,8 +156,12 @@ func (n *checkTypeOpNode) Type() NodeType {
 	return NodeCheckTypeOp
 }
 
-func (n *checkTypeOpNode) Check(eventRoot *insaneJSON.Root) bool {
-	node := eventRoot.Dig(n.fieldPath...)
+func (n *checkTypeOpNode) Check(data Data) bool {
+	eventData, ok := data.(eventData)
+	if !ok {
+		return false
+	}
+	node := eventData.root.Dig(n.fieldPath...)
 	for _, checkFn := range n.checkTypeFns {
 		if checkFn(node) {
 			return true
@@ -169,7 +175,7 @@ func (n *checkTypeOpNode) isEqualTo(n2 Node, _ int) error {
 	if !ok {
 		return errors.New("nodes have different types expected: checkTypeOpNode")
 	}
-	if n.fieldPathStr != n2f.fieldPathStr || slices.Compare[[]string](n.fieldPath, n2f.fieldPath) != 0 {
+	if n.fieldPathStr != n2f.fieldPathStr || slices.Compare(n.fieldPath, n2f.fieldPath) != 0 {
 		return fmt.Errorf("nodes have different fieldPathStr expected: fieldPathStr=%q fieldPath=%v",
 			n.fieldPathStr, n.fieldPath,
 		)

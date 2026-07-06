@@ -12,7 +12,7 @@ func TestSyslogRFC5424(t *testing.T) {
 		name string
 
 		input  string
-		params map[string]any
+		params Params
 
 		want          SyslogRFC5424Row
 		wantCreateErr bool
@@ -71,7 +71,7 @@ func TestSyslogRFC5424(t *testing.T) {
 		{
 			name:  "valid_full_priority_format",
 			input: "<165>1 2003-10-11T22:14:15.003Z mymachine.example.com myproc 10 ID47 [exampleSDID@32473 iut=\"3\" eventSource=\"Application\" eventID=\"1011\"] An application event log",
-			params: map[string]any{
+			params: Params{
 				syslogFacilityFormatParam: spfString,
 				syslogSeverityFormatParam: spfString,
 			},
@@ -302,7 +302,7 @@ func TestSyslogRFC5424(t *testing.T) {
 		},
 		{
 			name: "invalid_create_1",
-			params: map[string]any{
+			params: Params{
 				syslogFacilityFormatParam: spfString,
 				syslogSeverityFormatParam: 123,
 			},
@@ -310,7 +310,7 @@ func TestSyslogRFC5424(t *testing.T) {
 		},
 		{
 			name: "invalid_create_2",
-			params: map[string]any{
+			params: Params{
 				syslogFacilityFormatParam: "test",
 			},
 			wantCreateErr: true,

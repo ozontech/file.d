@@ -10,6 +10,7 @@ import (
 
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/xtime"
 	"go.uber.org/atomic"
 )
 
@@ -24,9 +25,10 @@ type offsetDB struct {
 }
 
 type inodeOffsets struct {
-	filename string
-	sourceID pipeline.SourceID
-	streams  map[pipeline.StreamName]int64
+	filename          string
+	sourceID          pipeline.SourceID
+	streams           map[pipeline.StreamName]int64
+	lastReadTimestamp int64
 }
 
 type (
@@ -88,6 +90,7 @@ func (o *offsetDB) parseOne(content string, offsets fpOffsets) (string, error) {
 	filename := ""
 	inodeStr := ""
 	sourceIDStr := ""
+	lastReadTimestampStr := ""
 	var err error
 
 	filename, content, err = o.parseLine(content, "- file: ")
@@ -101,6 +104,11 @@ func (o *offsetDB) parseOne(content string, offsets fpOffsets) (string, error) {
 	sourceIDStr, content, err = o.parseLine(content, "  source_id: ")
 	if err != nil {
 		return "", fmt.Errorf("can't parse source_id: %w", err)
+	}
+
+	lastReadTimestampStr, content, err = o.parseOptionalLine(content, "  last_read_timestamp: ")
+	if err != nil {
+		return "", fmt.Errorf("can't parse last_read_timestamp: %w", err)
 	}
 
 	sysInode, err := strconv.ParseUint(inodeStr, 10, 64)
@@ -120,10 +128,21 @@ func (o *offsetDB) parseOne(content string, offsets fpOffsets) (string, error) {
 		return "", fmt.Errorf("wrong offsets format, duplicate inode %d", inode)
 	}
 
+	var lastReadTimestampVal int64
+	if lastReadTimestampStr != "" {
+		lastReadTimestampVal, err = strconv.ParseInt(lastReadTimestampStr, 10, 64)
+		if err != nil {
+			return "", fmt.Errorf("invalid timestamp format %q: %w", lastReadTimestampStr, err)
+		}
+	} else {
+		lastReadTimestampVal = xtime.GetInaccurateUnixNano()
+	}
+
 	offsets[fp] = &inodeOffsets{
-		streams:  make(map[pipeline.StreamName]int64),
-		filename: filename,
-		sourceID: fp,
+		streams:           make(map[pipeline.StreamName]int64),
+		filename:          filename,
+		sourceID:          fp,
+		lastReadTimestamp: lastReadTimestampVal,
 	}
 
 	return o.parseStreams(content, offsets[fp].streams)
@@ -172,21 +191,43 @@ func (o *offsetDB) parseStreams(content string, streams streamsOffsets) (string,
 	return content, nil
 }
 
-func (o *offsetDB) parseLine(content string, start string) (string, string, error) {
-	l := len(start)
+func (o *offsetDB) parseLine(content string, prefix string) (string, string, error) {
+	if content == "" {
+		return "", "", fmt.Errorf("unexpected end of content while looking for %q", prefix)
+	}
 
 	linePos := strings.IndexByte(content, '\n')
 	if linePos < 0 {
-		return "", "", fmt.Errorf("wrong offsets format, no nl: %q", content)
-	}
-	line := content[0:linePos]
-
-	content = content[linePos+1:]
-	if linePos < l || line[0:l] != start {
-		return "", "", fmt.Errorf("wrong offsets file format expected=%q, got=%q", start, line[0:l])
+		return "", "", fmt.Errorf("no newline found in content")
 	}
 
-	return line[l:], content, nil
+	line := content[:linePos]
+	remaining := content[linePos+1:]
+
+	if len(line) < len(prefix) || line[:len(prefix)] != prefix {
+		return "", "", fmt.Errorf("expected prefix %q, got %q", prefix, safeSubstring(line, len(prefix)))
+	}
+
+	return line[len(prefix):], remaining, nil
+}
+
+func (o *offsetDB) parseOptionalLine(content string, prefix string) (string, string, error) {
+	if content == "" {
+		return "", content, nil // No content, return empty value
+	}
+
+	if len(content) >= len(prefix) && content[:len(prefix)] == prefix {
+		return o.parseLine(content, prefix)
+	}
+
+	return "", content, nil
+}
+
+func safeSubstring(s string, length int) string {
+	if len(s) < length {
+		return s
+	}
+	return s[:length]
 }
 
 func (o *offsetDB) save(jobs map[pipeline.SourceID]*Job, mu *sync.RWMutex) {
@@ -232,6 +273,10 @@ func (o *offsetDB) save(jobs map[pipeline.SourceID]*Job, mu *sync.RWMutex) {
 
 		o.buf = append(o.buf, "  source_id: "...)
 		o.buf = strconv.AppendUint(o.buf, uint64(job.sourceID), 10)
+		o.buf = append(o.buf, '\n')
+
+		o.buf = append(o.buf, "  last_read_timestamp: "...)
+		o.buf = strconv.AppendInt(o.buf, job.eofReadInfo.getUnixNanoTimestamp(), 10)
 		o.buf = append(o.buf, '\n')
 
 		o.buf = append(o.buf, "  streams:\n"...)
