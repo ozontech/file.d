@@ -2,7 +2,6 @@ package kafka
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/ozontech/file.d/cfg"
@@ -38,6 +37,7 @@ type Plugin struct {
 
 	client      KafkaClient
 	batcher     *pipeline.RetriableBatcher
+	router      *pipeline.Router
 	tokenSource xoauth.TokenSource
 
 	ctx        context.Context
@@ -45,7 +45,6 @@ type Plugin struct {
 
 	// plugin metrics
 	sendErrorMetric *metric.Counter
-	router          *pipeline.Router
 }
 
 // ! config-params
@@ -184,7 +183,7 @@ type Config struct {
 	// > * **`client_secret`** *`string`* - client secret
 	// > * **`token_url`** *`string`* - resource server's token endpoint URL
 	// > * **`scopes`** *`[]string`* - optional requested permissions
-	// > * **`auth_style`** *`string`* - specifies how the endpoint wants the client ID & client secret sent
+	// > * **`auth_style`** *`string`* *`default=params`* *`options=params|header`* - specifies how the endpoint wants the client ID & client secret sent
 	SaslOAuth cfg.KafkaClientOAuthConfig `json:"sasl_oauth" child:"true"` // *
 
 	// > @3@4@5@6
@@ -270,12 +269,15 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		p.logger.Fatal("'retention' can't be <1")
 	}
 
-	p.logger.Info(fmt.Sprintf("workers count=%d, batch size=%d", p.config.WorkersCount_, p.config.BatchSize_))
+	p.logger.Info("starting",
+		zap.Int("workers_count", p.config.WorkersCount_),
+		zap.Int("batch_size", p.config.BatchSize_),
+	)
 
 	var err error
 	p.tokenSource, err = cfg.GetKafkaClientOAuthTokenSource(p.ctx, p.config)
 	if err != nil {
-		p.logger.Fatal(err.Error())
+		p.logger.Fatal("can't create oauth token source", zap.Error(err))
 	}
 
 	p.client = NewClient(p.ctx, p.config, p.logger, p.tokenSource)
@@ -386,6 +388,8 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 }
 
 func (p *Plugin) Stop() {
+	p.logger.Info("stopping")
+
 	p.batcher.Stop()
 	p.cancelFunc()
 	p.client.Close()

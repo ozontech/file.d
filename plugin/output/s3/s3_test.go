@@ -2,6 +2,7 @@ package s3
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"math/rand"
 	"os"
@@ -22,7 +23,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
-	"golang.org/x/net/context"
 )
 
 const targetFile = "filetests/log.log"

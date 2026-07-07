@@ -48,13 +48,15 @@ pipelines:
 type Plugin struct {
 	config     *Config
 	logger     *zap.Logger
-	cancel     context.CancelFunc
 	controller pipeline.InputPluginController
 
 	client        *kgo.Client
 	s             *splitConsume
 	tokenSource   xoauth.TokenSource
 	metaTemplater *metadata.MetaTemplater
+
+	ctx        context.Context
+	cancelFunc context.CancelFunc
 
 	// plugin metrics
 	commitErrorsMetric  *metric.Counter
@@ -199,8 +201,8 @@ type Config struct {
 	// > * **`client_id`** *`string`* - client ID
 	// > * **`client_secret`** *`string`* - client secret
 	// > * **`token_url`** *`string`* - resource server's token endpoint URL
-	// > * **`scopes`** *`string`* - optional requested permissions
-	// > * **`auth_style`** *`string`* - specifies how the endpoint wants the client ID & client secret sent
+	// > * **`scopes`** *`[]string`* - optional requested permissions
+	// > * **`auth_style`** *`string`* *`default=params`* *`options=params|header`* - specifies how the endpoint wants the client ID & client secret sent
 	SaslOAuth cfg.KafkaClientOAuthConfig `json:"sasl_oauth" child:"true"` // *
 
 	// > @3@4@5@6
@@ -289,6 +291,9 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	p.logger = params.Logger.Desugar()
 	p.config = config.(*Config)
 	p.registerMetrics(params.MetricCtl)
+	p.ctx, p.cancelFunc = context.WithCancel(context.Background())
+
+	p.logger.Info("starting")
 
 	if len(p.config.Meta) > 0 {
 		p.metaTemplater = metadata.NewMetaTemplater(
@@ -303,9 +308,6 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 		idByTopic[topic] = i
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	p.cancel = cancel
-
 	p.s = &splitConsume{
 		consumers:              make(map[tp]*pconsumer),
 		bufferSize:             p.config.ChannelBufferSize,
@@ -318,17 +320,17 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	}
 
 	var err error
-	p.tokenSource, err = cfg.GetKafkaClientOAuthTokenSource(ctx, p.config)
+	p.tokenSource, err = cfg.GetKafkaClientOAuthTokenSource(p.ctx, p.config)
 	if err != nil {
-		p.logger.Fatal(err.Error())
+		p.logger.Fatal("can't create oauth token source", zap.Error(err))
 	}
 
-	p.client = NewClient(ctx, p.config, p.logger, p.s, p.tokenSource)
+	p.client = NewClient(p.ctx, p.config, p.logger, p.s, p.tokenSource)
 
 	p.controller.UseSpread()
 	p.controller.DisableStreams()
 
-	go p.s.consume(ctx, p.client)
+	go p.s.consume(p.ctx, p.client)
 }
 
 func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
@@ -337,7 +339,7 @@ func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 }
 
 func (p *Plugin) Stop() {
-	p.logger.Info("Stopping")
+	p.logger.Info("stopping")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -347,11 +349,14 @@ func (p *Plugin) Stop() {
 		p.commitErrorsMetric.Inc()
 		p.logger.Error("can't commit marked offsets", zap.Error(err))
 	}
+
 	p.client.Close()
+
 	if p.tokenSource != nil {
 		p.tokenSource.Stop()
 	}
-	p.cancel()
+
+	p.cancelFunc()
 }
 
 func (p *Plugin) Commit(event *pipeline.Event) {

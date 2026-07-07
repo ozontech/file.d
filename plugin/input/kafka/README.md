@@ -169,8 +169,8 @@ SASL OAUTHBEARER config. It works only if `sasl_mechanism:"OAUTHBEARER"`.
 * **`client_id`** *`string`* - client ID
 * **`client_secret`** *`string`* - client secret
 * **`token_url`** *`string`* - resource server's token endpoint URL
-* **`scopes`** *`string`* - optional requested permissions
-* **`auth_style`** *`string`* - specifies how the endpoint wants the client ID & client secret sent
+* **`scopes`** *`[]string`* - optional requested permissions
+* **`auth_style`** *`string`* *`default=params`* *`options=params|header`* - specifies how the endpoint wants the client ID & client secret sent
 
 <br>
 

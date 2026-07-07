@@ -9,35 +9,6 @@ import (
 	"go.uber.org/atomic"
 )
 
-type AuthStyle int
-
-const (
-	AuthStyleUnknown AuthStyle = iota
-	AuthStyleInParams
-	AuthStyleInHeader
-)
-
-type Config struct {
-	ClientID     string
-	ClientSecret string
-	TokenURL     string
-	Scopes       []string
-	AuthStyle    AuthStyle
-}
-
-func (c *Config) validate() error {
-	if c.ClientID == "" {
-		return fmt.Errorf("client id must be non-empty")
-	}
-	if c.TokenURL == "" {
-		return fmt.Errorf("token url must be non-empty")
-	}
-	if c.AuthStyle == AuthStyleUnknown {
-		return fmt.Errorf("auth style must be specified")
-	}
-	return nil
-}
-
 // tokenIssuer issues token for specific token grant type flow
 type tokenIssuer interface {
 	issueToken(ctx context.Context) (*Token, error)
@@ -67,8 +38,8 @@ func (ts *staticTokenSource) Stop() {}
 // reuseTokenSource implements lifecycle of auth token refreshing.
 //   - Once reuseTokenSource is created, first token issuance happens
 //   - Further Token() calls must be non-blocking
-//   - Token is updated in the background depending on the expidation date
-//   - After Close() reuseTokenSource is irreversibly stops all background work
+//   - Token is updated in the background depending on the expiration date
+//   - After Stop() reuseTokenSource is irreversibly stops all background work
 type reuseTokenSource struct {
 	tokenHolder atomic.Pointer[Token]
 	tokenIssuer tokenIssuer

@@ -78,24 +78,24 @@ func GetKafkaClientOAuthTokenSource(ctx context.Context, cfg KafkaClientConfig) 
 		return nil, errors.New("invalid SASL OAUTHBEARER config")
 	}
 
-	if saslOAuth.isDynamic() {
-		authStyle := xoauth.AuthStyleInParams
-		if saslOAuth.AuthStyle == "header" {
-			authStyle = xoauth.AuthStyleInHeader
-		}
-
-		return xoauth.NewReuseTokenSource(ctx, &xoauth.Config{
-			ClientID:     saslOAuth.ClientID,
-			ClientSecret: saslOAuth.ClientSecret,
-			TokenURL:     saslOAuth.TokenURL,
-			Scopes:       saslOAuth.Scopes,
-			AuthStyle:    authStyle,
-		})
+	if saslOAuth.isStatic() {
+		return xoauth.NewStaticTokenSource(&xoauth.Token{
+			AccessToken: saslOAuth.Token,
+		}), nil
 	}
 
-	return xoauth.NewStaticTokenSource(&xoauth.Token{
-		AccessToken: saslOAuth.Token,
-	}), nil
+	authStyle := xoauth.AuthStyleInParams
+	if saslOAuth.AuthStyle == "header" {
+		authStyle = xoauth.AuthStyleInHeader
+	}
+
+	return xoauth.NewReuseTokenSource(ctx, &xoauth.Config{
+		ClientID:     saslOAuth.ClientID,
+		ClientSecret: saslOAuth.ClientSecret,
+		TokenURL:     saslOAuth.TokenURL,
+		Scopes:       saslOAuth.Scopes,
+		AuthStyle:    authStyle,
+	})
 }
 
 func GetKafkaClientOptions(c KafkaClientConfig, l *zap.Logger, tokenSource xoauth.TokenSource) []kgo.Opt {
