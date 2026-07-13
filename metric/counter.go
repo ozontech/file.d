@@ -17,6 +17,7 @@ func newCounter(c prometheus.Counter) *Counter {
 	}
 }
 
+//nolint:unused
 func (c *Counter) getHeldMetric() *heldMetric[prometheus.Counter] {
 	return c.heldMetric
 }

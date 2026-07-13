@@ -17,6 +17,7 @@ func newGauge(c prometheus.Gauge) *Gauge {
 	}
 }
 
+//nolint:unused
 func (g *Gauge) getHeldMetric() *heldMetric[prometheus.Gauge] {
 	return g.heldMetric
 }

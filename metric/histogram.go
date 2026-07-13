@@ -16,6 +16,7 @@ func newHistogram(c prometheus.Histogram) *Histogram {
 	}
 }
 
+//nolint:unused
 func (h *Histogram) getHeldMetric() *heldMetric[prometheus.Histogram] {
 	return h.heldMetric
 }
