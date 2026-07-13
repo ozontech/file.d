@@ -449,7 +449,7 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	case ffNo:
 		hash = calcHash(fieldData[:hashSize])
 	case ffNormalize:
-		hash = calcHash(p.normalizer.Normalize(p.buf, fieldData[:hashSize]))
+		hash = calcHash(p.normalizer.Normalize(p.buf, fieldData[:hashSize], hashSize != len(fieldData)))
 	}
 
 	pipeline.CreateNestedField(event.Root, p.config.ResultField_).MutateToUint64(hash)
