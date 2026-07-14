@@ -122,7 +122,7 @@ func TestConcurrentOperations(t *testing.T) {
 	for _, key := range keys {
 		go func(k string) {
 			defer wg.Done()
-			for i := 0; i < 100; i++ {
+			for range 100 {
 				cache.Set(prefix, k)
 			}
 		}(key)
@@ -140,15 +140,9 @@ func TestConcurrentOperations(t *testing.T) {
 	for _, key := range keys {
 		go func(k string) {
 			defer wg.Done()
-<<<<<<< HEAD
 			for range 100 {
-				cacheKeyIsExists(cache, k)
-				cache.Set(k + "-new")
-=======
-			for i := 0; i < 100; i++ {
 				cacheKeyIsExists(cache, prefix, k)
 				cache.Set(prefix, k+"-new")
->>>>>>> master
 			}
 		}(key)
 	}
@@ -159,13 +153,8 @@ func TestConcurrentOperations(t *testing.T) {
 	for _, key := range keys {
 		go func(k string) {
 			defer wg.Done()
-<<<<<<< HEAD
 			for range 100 {
-				cache.delete(k)
-=======
-			for i := 0; i < 100; i++ {
 				cache.delete(prefix, k)
->>>>>>> master
 			}
 		}(key)
 	}
@@ -175,28 +164,16 @@ func TestConcurrentOperations(t *testing.T) {
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-<<<<<<< HEAD
 		for range 100 {
-			cache.CountPrefix("key")
-=======
-		for i := 0; i < 100; i++ {
 			cache.CountPrefix(prefix)
->>>>>>> master
 		}
 	}()
 	go func() {
 		defer wg.Done()
-<<<<<<< HEAD
 		for range 100 {
-			cache.Set("key-x")
-			cache.Set("key-y")
-			cache.delete("key-x")
-=======
-		for i := 0; i < 100; i++ {
 			cache.Set(prefix, "prefix-key-x")
 			cache.Set(prefix, "prefix-key-y")
 			cache.delete(prefix, "prefix-key-x")
->>>>>>> master
 		}
 	}()
 	wg.Wait()
@@ -206,7 +183,7 @@ func TestCountPrefixWith10kElements(t *testing.T) {
 	cache := NewCache(time.Minute)
 	n := 10000
 	prefix := randString(64)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		key := fmt.Sprintf("%s-%s", prefix, randString(48))
 		cache.Set(prefix, key)
 		cache.Set(prefix, key)
