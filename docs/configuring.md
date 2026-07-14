@@ -134,7 +134,7 @@ AppRole:
 vault:
   role_id: example_role
   secret_id: example_secret
-  auth_mount_path: some/path # inserted in authorization uri: 'auth/%s/login'
+  auth_mount_path: some/path # used when formatting the authorization uri: 'auth/%s/login'
 ```
 
 ## Env support
