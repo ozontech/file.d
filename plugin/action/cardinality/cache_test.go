@@ -1,6 +1,8 @@
 package cardinality
 
 import (
+	"fmt"
+	"math/rand"
 	"sync"
 	"testing"
 	"time"
@@ -17,17 +19,17 @@ func TestSetAndExists(t *testing.T) {
 	cache := NewCache(time.Minute)
 
 	t.Run("basic set and get", func(t *testing.T) {
-		key := "test-key"
-		assert.False(t, cache.Set(key))
+		prefix, key := "prefix", "prefix-test-key"
+		assert.False(t, cache.Set(prefix, key))
 
-		found := cacheKeyIsExists(cache, key)
+		found := cacheKeyIsExists(cache, prefix, key)
 		assert.True(t, found)
 
-		assert.True(t, cache.Set(key))
+		assert.True(t, cache.Set(prefix, key))
 	})
 
 	t.Run("non-existent key", func(t *testing.T) {
-		found := cacheKeyIsExists(cache, "non-existent")
+		found := cacheKeyIsExists(cache, "prefix", "non-existent")
 		assert.False(t, found)
 	})
 }
@@ -36,41 +38,43 @@ func TestDelete(t *testing.T) {
 	cache := NewCache(time.Minute)
 
 	t.Run("delete existing key", func(t *testing.T) {
-		key := "to-delete-1"
-		cache.Set(key)
+		prefix, key := "prefix", "prefix-to-delete-1"
+		cache.Set(prefix, key)
 
-		cache.delete(key)
+		cache.delete(prefix, key)
 
-		found := cacheKeyIsExists(cache, key)
+		found := cacheKeyIsExists(cache, prefix, key)
 		assert.False(t, found, "Key should be deleted")
 	})
 
 	t.Run("delete non-existent key", func(t *testing.T) {
+		prefix := "prefix"
 		// Should not panic or cause issues
 		assert.NotPanics(t, func() {
-			cache.delete("never-existed-1")
+			cache.delete(prefix, "never-existed-1")
 		})
 
 		// Verify cache is still functional
-		key := "test-after-non-existent"
-		cache.Set(key)
-		found := cacheKeyIsExists(cache, key)
+		key := "prefix-test-after-non-existent"
+		cache.Set(prefix, key)
+		found := cacheKeyIsExists(cache, prefix, key)
 		assert.True(t, found, "Cache should still work after deleting non-existent key")
 	})
 
 	t.Run("delete many existing key", func(t *testing.T) {
-		key1 := "to-delete-1"
-		cache.Set(key1)
+		prefix := "prefix"
+		key1 := "prefix-to-delete-1"
+		cache.Set(prefix, key1)
 
-		key2 := "to-delete-2"
-		cache.Set(key2)
+		key2 := "prefix-to-delete-2"
+		cache.Set(prefix, key2)
 
-		cache.delete(key1, key2)
+		cache.delete(prefix, key1, key2)
 
-		found := cacheKeyIsExists(cache, key1)
+		found := cacheKeyIsExists(cache, prefix, key1)
 		assert.False(t, found, "Key should be deleted")
 
-		found = cacheKeyIsExists(cache, key2)
+		found = cacheKeyIsExists(cache, prefix, key2)
 		assert.False(t, found, "Key should be deleted")
 	})
 }
@@ -78,17 +82,12 @@ func TestDelete(t *testing.T) {
 func TestCountPrefix(t *testing.T) {
 	cache := NewCache(time.Minute)
 
-	keys := []string{
-		"key1_subkey1",
-		"key1_subkey1",
-		"key1_subkey2",
+	prefix1, prefix2 := "key1", "key2"
 
-		"key2_subkey1",
-	}
-
-	for _, key := range keys {
-		cache.Set(key)
-	}
+	cache.Set(prefix1, prefix1+"_subkey1")
+	cache.Set(prefix1, prefix1+"_subkey1")
+	cache.Set(prefix1, prefix1+"_subkey2")
+	cache.Set(prefix2, prefix2+"_subkey1")
 
 	testCases := []struct {
 		prefix string
@@ -106,8 +105,8 @@ func TestCountPrefix(t *testing.T) {
 	}
 
 	t.Run("count after delete", func(t *testing.T) {
-		cache.delete("key1_subkey1")
-		assert.Equal(t, 1, cache.CountPrefix("key1"))
+		cache.delete(prefix1, prefix1+"_subkey1")
+		assert.Equal(t, 1, cache.CountPrefix(prefix1))
 	})
 }
 
@@ -115,15 +114,16 @@ func TestConcurrentOperations(t *testing.T) {
 	cache := NewCache(time.Minute)
 
 	var wg sync.WaitGroup
-	keys := []string{"key1", "key2", "key3"}
+	prefix := "prefix"
+	keys := []string{"prefix-key1", "prefix-key2", "prefix-key3"}
 
 	// Test concurrent sets
 	wg.Add(len(keys))
 	for _, key := range keys {
 		go func(k string) {
 			defer wg.Done()
-			for range 100 {
-				cache.Set(k)
+			for i := 0; i < 100; i++ {
+				cache.Set(prefix, k)
 			}
 		}(key)
 	}
@@ -131,7 +131,7 @@ func TestConcurrentOperations(t *testing.T) {
 
 	// Verify all keys were set
 	for _, key := range keys {
-		found := cacheKeyIsExists(cache, key)
+		found := cacheKeyIsExists(cache, prefix, key)
 		assert.True(t, found)
 	}
 
@@ -140,9 +140,15 @@ func TestConcurrentOperations(t *testing.T) {
 	for _, key := range keys {
 		go func(k string) {
 			defer wg.Done()
+<<<<<<< HEAD
 			for range 100 {
 				cacheKeyIsExists(cache, k)
 				cache.Set(k + "-new")
+=======
+			for i := 0; i < 100; i++ {
+				cacheKeyIsExists(cache, prefix, k)
+				cache.Set(prefix, k+"-new")
+>>>>>>> master
 			}
 		}(key)
 	}
@@ -153,8 +159,13 @@ func TestConcurrentOperations(t *testing.T) {
 	for _, key := range keys {
 		go func(k string) {
 			defer wg.Done()
+<<<<<<< HEAD
 			for range 100 {
 				cache.delete(k)
+=======
+			for i := 0; i < 100; i++ {
+				cache.delete(prefix, k)
+>>>>>>> master
 			}
 		}(key)
 	}
@@ -164,46 +175,83 @@ func TestConcurrentOperations(t *testing.T) {
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
+<<<<<<< HEAD
 		for range 100 {
 			cache.CountPrefix("key")
+=======
+		for i := 0; i < 100; i++ {
+			cache.CountPrefix(prefix)
+>>>>>>> master
 		}
 	}()
 	go func() {
 		defer wg.Done()
+<<<<<<< HEAD
 		for range 100 {
 			cache.Set("key-x")
 			cache.Set("key-y")
 			cache.delete("key-x")
+=======
+		for i := 0; i < 100; i++ {
+			cache.Set(prefix, "prefix-key-x")
+			cache.Set(prefix, "prefix-key-y")
+			cache.delete(prefix, "prefix-key-x")
+>>>>>>> master
 		}
 	}()
 	wg.Wait()
 }
 
+func TestCountPrefixWith10kElements(t *testing.T) {
+	cache := NewCache(time.Minute)
+	n := 10000
+	prefix := randString(64)
+	for i := 0; i < n; i++ {
+		key := fmt.Sprintf("%s-%s", prefix, randString(48))
+		cache.Set(prefix, key)
+		cache.Set(prefix, key)
+		assert.Equal(t, i+1, cache.CountPrefix(prefix))
+	}
+}
+
+func randString(n int) string {
+	const letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	b := make([]byte, n)
+	for i := range b {
+		b[i] = letters[rand.Intn(len(letters))]
+	}
+	return string(b)
+}
+
 func TestTTL(t *testing.T) {
 	cache := NewCache(100 * time.Millisecond)
 
-	key := "ttl-key"
-	cache.Set(key)
+	prefix, key := "ttl-key", "ttl-key-sub"
+	cache.Set(prefix, key)
 
 	t.Run("key exists before TTL", func(t *testing.T) {
-		assert.Equal(t, 1, cache.CountPrefix(key))
-		found := cacheKeyIsExists(cache, key)
+		assert.Equal(t, 1, cache.CountPrefix(prefix))
+		found := cacheKeyIsExists(cache, prefix, key)
 		assert.True(t, found)
 	})
 
 	t.Run("key expires after TTL", func(t *testing.T) {
 		time.Sleep(1 * time.Second)
-		assert.Equal(t, 0, cache.CountPrefix(key))
-		time.Sleep(100 * time.Millisecond) // cause delete in async
-		found := cacheKeyIsExists(cache, key)
+		assert.Equal(t, 0, cache.CountPrefix(prefix))
+		// CountPrefix now cleans expired keys synchronously, so no need to wait.
+		found := cacheKeyIsExists(cache, prefix, key)
 		assert.False(t, found)
 	})
 }
 
-func cacheKeyIsExists(c *Cache, key string) bool {
+func cacheKeyIsExists(c *Cache, prefix, key string) bool {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	_, found := c.tree.Get(key)
+	b := c.tree[prefix]
+	if b == nil {
+		return false
+	}
+	_, found := b.keys[key]
 
 	return found
 }

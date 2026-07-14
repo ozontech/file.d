@@ -163,12 +163,12 @@ func NewTokenNormalizer(params TokenNormalizerParams) (Normalizer, error) {
 	return n, nil
 }
 
-func (n *tokenNormalizer) Normalize(out, data []byte) []byte {
+func (n *tokenNormalizer) Normalize(out, data []byte, cropped bool) []byte {
 	out = out[:0]
 
 	var scanner *lexmachine.Scanner
 	if n.normalizeByBytes {
-		out = n.normalizeByTokenizer(out, newTokenizer(n.builtinPatterns, data))
+		out = n.normalizeByTokenizer(out, newTokenizer(n.builtinPatterns, data, cropped))
 		if n.lexer == nil {
 			return out
 		}
@@ -249,16 +249,18 @@ type token struct {
 
 func newToken(placeholder string) lexmachine.Action {
 	return func(s *lexmachine.Scanner, m *machines.Match) (any, error) {
+		begin, end := m.TC, m.TC+len(m.Bytes)
+
 		// skip `\w<match>\w`
-		if m.TC > 0 && isWord(s.Text[m.TC-1]) ||
-			m.TC+len(m.Bytes) < len(s.Text) && isWord(s.Text[m.TC+len(m.Bytes)]) {
+		if begin > 0 && isWord(s.Text[begin-1]) ||
+			end < len(s.Text) && isWord(s.Text[end]) {
 			return nil, nil
 		}
 
 		return token{
 			placeholder: placeholder,
-			begin:       m.TC,
-			end:         m.TC + len(m.Bytes),
+			begin:       begin,
+			end:         end,
 		}, nil
 	}
 }
@@ -288,6 +290,9 @@ func (n *tokenNormalizer) normalizeByScanner(out []byte, scanner *lexmachine.Sca
 func (n *tokenNormalizer) normalizeByTokenizer(out []byte, tok *tokenizer) []byte {
 	prevEnd := 0
 	for t, end := tok.nextToken(); !end; t, end = tok.nextToken() {
+		if t == nil {
+			continue
+		}
 		out = append(out, tok.data[prevEnd:t.begin]...)
 		out = append(out, t.placeholder...)
 		prevEnd = t.end
@@ -312,61 +317,64 @@ func hasPattern(patterns int, masks ...int) bool {
 type tokenizer struct {
 	patterns int
 	data     []byte
-	pos      int
+	cropped  bool
 
-	curPattern   int
-	counter      int
-	startPattern int
+	pos int
+
+	curPattern      int
+	startPatternPos int
+	counter         int
 }
 
-func newTokenizer(patterns int, data []byte) *tokenizer {
+func newTokenizer(patterns int, data []byte, cropped bool) *tokenizer {
 	return &tokenizer{
 		patterns: patterns,
 		data:     data,
+		cropped:  cropped,
 	}
 }
 
-func (t *tokenizer) nextToken() (token, bool) {
+func (t *tokenizer) nextToken() (*token, bool) {
 	t.curPattern = 0
 	t.counter = 0
-	t.startPattern = 0
+	t.startPatternPos = 0
 
 	for i := t.pos; i < len(t.data); i++ {
 		switch {
 		case t.data[i] == '{' && hasPattern(t.patterns, pCurlyBracketed):
 			t.processOpenBracket(pCurlyBracketed, i)
 		case t.data[i] == '}' && hasPattern(t.patterns, pCurlyBracketed):
-			if t, ok := t.processCloseBracket(pCurlyBracketed, i); ok {
-				return t, false
+			if tok := t.processCloseBracket(pCurlyBracketed, i); tok != nil {
+				return tok, false
 			}
 		case t.data[i] == '[' && hasPattern(t.patterns, pSquareBracketed):
 			t.processOpenBracket(pSquareBracketed, i)
 		case t.data[i] == ']' && hasPattern(t.patterns, pSquareBracketed):
-			if t, ok := t.processCloseBracket(pSquareBracketed, i); ok {
-				return t, false
+			if tok := t.processCloseBracket(pSquareBracketed, i); tok != nil {
+				return tok, false
 			}
 		case t.data[i] == '(' && hasPattern(t.patterns, pParenthesized):
 			t.processOpenBracket(pParenthesized, i)
 		case t.data[i] == ')' && hasPattern(t.patterns, pParenthesized):
-			if t, ok := t.processCloseBracket(pParenthesized, i); ok {
-				return t, false
+			if tok := t.processCloseBracket(pParenthesized, i); tok != nil {
+				return tok, false
 			}
 		case t.data[i] == '"' && hasPattern(t.patterns, pDoubleQuoted):
-			t, shift, ok := t.processQuotes('"', pDoubleQuoted, i)
-			if ok {
-				return t, false
+			tok, shift := t.processQuotes('"', pDoubleQuoted, i)
+			if tok != nil {
+				return tok, false
 			}
 			i += shift
 		case t.data[i] == '\'' && hasPattern(t.patterns, pSingleQuoted):
-			t, shift, ok := t.processQuotes('\'', pSingleQuoted, i)
-			if ok {
-				return t, false
+			tok, shift := t.processQuotes('\'', pSingleQuoted, i)
+			if tok != nil {
+				return tok, false
 			}
 			i += shift
 		case t.data[i] == '`' && hasPattern(t.patterns, pGraveQuoted):
-			t, shift, ok := t.processQuotes('`', pGraveQuoted, i)
-			if ok {
-				return t, false
+			tok, shift := t.processQuotes('`', pGraveQuoted, i)
+			if tok != nil {
+				return tok, false
 			}
 			i += shift
 		}
@@ -374,61 +382,73 @@ func (t *tokenizer) nextToken() (token, bool) {
 
 	// last partial token for possible cropped data
 	if t.curPattern != 0 {
-		t.pos = len(t.data)
-		return token{
-			placeholder: placeholderByPattern[t.curPattern],
-			begin:       t.startPattern,
-			end:         t.pos,
-		}, false
+		var tok *token
+		if t.cropped { // if data was cropped - return partial token
+			t.pos = len(t.data)
+			tok = &token{
+				placeholder: placeholderByPattern[t.curPattern],
+				begin:       t.startPatternPos,
+				end:         t.pos,
+			}
+		} else { // otherwise check again from next pos
+			t.pos = t.startPatternPos + 1
+		}
+		return tok, false
 	}
 
-	return token{}, true
+	return nil, true
 }
 
 func (t *tokenizer) processOpenBracket(pattern int, pos int) {
 	if t.curPattern == 0 {
 		t.curPattern = pattern
 		t.counter = 1
-		t.startPattern = pos
+		t.startPatternPos = pos
 	} else if t.curPattern == pattern {
 		t.counter++
 	}
 }
 
-func (t *tokenizer) processCloseBracket(pattern int, pos int) (token, bool) {
+func (t *tokenizer) processCloseBracket(pattern int, pos int) *token {
 	if t.curPattern != pattern {
-		return token{}, false
+		return nil
 	}
 
 	t.counter--
 	if t.counter > 0 {
-		return token{}, false
+		return nil
 	}
 
 	t.pos = pos + 1
-	return token{
+	return &token{
 		placeholder: placeholderByPattern[pattern],
-		begin:       t.startPattern,
+		begin:       t.startPatternPos,
 		end:         t.pos,
-	}, true
+	}
 }
 
-func (t *tokenizer) processQuotes(c byte, pattern int, pos int) (token, int, bool) {
+func (t *tokenizer) processQuotes(c byte, pattern int, pos int) (*token, int) {
+	// skip `\w<quote>\w`
+	if pos > 0 && isWord(t.data[pos-1]) &&
+		pos+1 < len(t.data) && isWord(t.data[pos+1]) {
+		return nil, 0
+	}
+
 	if t.curPattern == 0 {
 		t.curPattern = pattern
 		t.counter = 1
-		t.startPattern = pos
+		t.startPatternPos = pos
 
 		// multiple quotes in a row
 		for i := pos + 1; i < len(t.data) && t.data[i] == c; i++ {
 			t.counter++
 		}
 
-		return token{}, t.counter - 1, false
+		return nil, t.counter - 1
 	} else if t.curPattern == pattern {
 		// skip escaped
 		if pos > 0 && t.data[pos-1] == '\\' {
-			return token{}, 0, false
+			return nil, 0
 		}
 
 		tmp := t.counter - 1
@@ -437,17 +457,17 @@ func (t *tokenizer) processQuotes(c byte, pattern int, pos int) (token, int, boo
 			tmp--
 		}
 		if tmp > 0 {
-			return token{}, t.counter - tmp - 1, false
+			return nil, t.counter - tmp - 1
 		}
 
 		t.pos = pos + t.counter
-		return token{
+		return &token{
 			placeholder: placeholderByPattern[pattern],
-			begin:       t.startPattern,
+			begin:       t.startPatternPos,
 			end:         t.pos,
-		}, 0, true
+		}, 0
 	}
-	return token{}, 0, false
+	return nil, 0
 }
 
 func isWord(c byte) bool {

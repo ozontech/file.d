@@ -1,0 +1,47 @@
+pipelines:
+  test_pipeline:
+    input:
+      type: file
+      persistence_mode: async
+      watching_dir: ./_mydata
+      filename_pattern: "welcome.json"
+      offsets_file: ./_mydata/offsets.yaml
+    actions:
+      - type: rename
+        override: true
+        systemd\.unit: service
+        syslog\.identifier: service
+        k8s_pod_label_app: service
+      - type: discard
+        do_if:
+          op: equal
+          field: service
+          values: [null, ""]
+    output:
+      type: clickhouse
+      addresses:
+        - addr: 127.0.0.1:9000
+          weight: 1
+        - addr: 127.0.0.1:9001
+          weight: 1
+
+      insert_strategy: in_order
+      database: logs
+      table: events
+
+      user: default
+      password: ""
+
+      columns:
+        - name: message
+          type: String
+
+      retry: 3
+      fatal_on_failed_insert: false
+
+      insert_timeout: 2s
+      reconnect_interval: 2s
+      ban_period: 5s
+
+      batch_size: 1
+      batch_flush_timeout: 100ms

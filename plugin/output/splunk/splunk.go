@@ -96,7 +96,8 @@ type Plugin struct {
 	cancel context.CancelFunc
 
 	// plugin metrics
-	sendErrorMetric *metric.CounterVec
+	sendErrorMetric       *metric.CounterVec
+	bannedEndpointsMetric *metric.Gauge
 
 	router *pipeline.Router
 }
@@ -202,6 +203,19 @@ type Config struct {
 	// > Supports copying whole original event, but does not allow to copy directly to the output root
 	// > or the "event" key with any of its subkeys.
 	CopyFields []CopyField `json:"copy_fields" slice:"true"` // *
+
+	// > @3@4@5@6
+	// >
+	// > Period for which addresses will be banned in case of unavailability.
+	// > If set to 0, circuit breaker is disabled.
+	BanPeriod  cfg.Duration `json:"ban_period" default:"10s" parse:"duration"` // *
+	BanPeriod_ time.Duration
+
+	// > @3@4@5@6
+	// >
+	// > Interval for checking banned endpoints.
+	ReconnectInterval  cfg.Duration `json:"reconnect_interval" default:"5s" parse:"duration"` // *
+	ReconnectInterval_ time.Duration
 }
 
 type KeepAliveConfig struct {
@@ -235,7 +249,18 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.avgEventSize = params.PipelineSettings.AvgEventSize
 	p.config = config.(*Config)
 	p.registerMetrics(params.MetricCtl)
-	p.prepareClient()
+
+	if p.config.ReconnectInterval_ < 1 {
+		p.logger.Fatal("'reconnect_interval' can't be <1")
+	}
+	if p.config.BanPeriod_ < 0 {
+		p.logger.Fatal("'ban_period' cant't be <0")
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	p.cancel = cancel
+
+	p.prepareClient(ctx)
 
 	for _, cf := range p.config.CopyFields {
 		if cf.To == "" {
@@ -296,9 +321,6 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		onError,
 	)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	p.cancel = cancel
-
 	p.batcher.Start(ctx)
 }
 
@@ -317,13 +339,20 @@ func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 		"Total splunk send errors",
 		"status_code",
 	)
+	p.bannedEndpointsMetric = ctl.RegisterGauge(
+		"output_splunk_banned_endpoints_count",
+		"Current number of endpoints banned by circuit breaker",
+	)
+	p.bannedEndpointsMetric.Set(0)
 }
 
-func (p *Plugin) prepareClient() {
+func (p *Plugin) prepareClient(ctx context.Context) {
 	config := &xhttp.ClientConfig{
 		Endpoints:         []string{p.config.Endpoint},
 		ConnectionTimeout: p.config.RequestTimeout_,
 		AuthHeader:        "Splunk " + p.config.Token,
+		BanPeriod:         p.config.BanPeriod_,
+		ReconnectInterval: p.config.ReconnectInterval_,
 		KeepAlive: &xhttp.ClientKeepAliveConfig{
 			MaxConnDuration:     p.config.KeepAlive.MaxConnDuration_,
 			MaxIdleConnDuration: p.config.KeepAlive.MaxIdleConnDuration_,
@@ -332,13 +361,15 @@ func (p *Plugin) prepareClient() {
 			// TODO: make this configuration option and false by default
 			InsecureSkipVerify: true,
 		},
+		Logger:                p.logger.Desugar(),
+		BannedEndpointsMetric: p.bannedEndpointsMetric,
 	}
 	if p.config.UseGzip {
 		config.GzipCompressionLevel = p.config.GzipCompressionLevel
 	}
 
 	var err error
-	p.client, err = xhttp.NewClient(config)
+	p.client, err = xhttp.NewClient(ctx, config)
 	if err != nil {
 		p.logger.Fatal("can't create http client", zap.Error(err))
 	}
