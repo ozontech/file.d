@@ -249,7 +249,7 @@ func TestRootTargetSet(t *testing.T) {
 		assert.Contains(t, err.Error(), "cannot replace event root")
 	})
 
-	t.Run("set_parent_missing_is_silent_noop", func(t *testing.T) {
+	t.Run("set_creates_missing_parents", func(t *testing.T) {
 		t.Parallel()
 
 		target, release := newTestTarget(t, `{}`, nil)
@@ -258,9 +258,23 @@ func TestRootTargetSet(t *testing.T) {
 		err := target.Set(eventPath("user", "name"), core.StringValue{V: "alice"})
 		require.NoError(t, err)
 
-		val, err := target.Get(eventPath("user"))
+		val, err := target.Get(eventPath("user", "name"))
 		require.NoError(t, err)
-		assert.Equal(t, "null", val.String())
+		assert.Equal(t, "alice", val.String())
+	})
+
+	t.Run("set_creates_deeply_nested_parents", func(t *testing.T) {
+		t.Parallel()
+
+		target, release := newTestTarget(t, `{}`, nil)
+		defer release()
+
+		err := target.Set(eventPath("a", "b", "c"), core.IntegerValue{V: 1})
+		require.NoError(t, err)
+
+		val, err := target.Get(eventPath("a", "b", "c"))
+		require.NoError(t, err)
+		assert.Equal(t, "1", val.String())
 	})
 
 	t.Run("set_array_out_of_bounds_error", func(t *testing.T) {

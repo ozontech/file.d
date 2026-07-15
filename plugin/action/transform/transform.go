@@ -3,6 +3,7 @@ package transform
 import (
 	"errors"
 	"fmt"
+	"sync"
 
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/pipeline"
@@ -14,7 +15,8 @@ import (
 )
 
 var (
-	programCache = make(map[string]Program)
+	programCacheMu sync.Mutex
+	programCache   = make(map[string]Program)
 )
 
 type Program struct {
@@ -57,7 +59,11 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 	p.pluginController = params.Controller
 
 	cacheKey := fmt.Sprintf("%s_%d", params.PipelineName, params.Index)
-	_, ok := programCache[cacheKey]
+
+	programCacheMu.Lock()
+	defer programCacheMu.Unlock()
+
+	program, ok := programCache[cacheKey]
 	if !ok {
 		p.logger.Info("create transform compiler")
 		cmp, err := compiler.NewCompiler(p.config.Source)
@@ -74,16 +80,17 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 			p.logger.Fatal("validation error", zap.Error(err))
 		}
 
-		programCache[cacheKey] = Program{exprs}
+		program = Program{exprs}
+		programCache[cacheKey] = program
 	}
 
-	p.program = programCache[cacheKey]
+	p.program = program
 }
 
 func (p *Plugin) Stop() {}
 
 func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
-	target := runtime.NewRootTarget(event.Root, event.SourceName, nil)
+	target := runtime.NewRootTarget(event.Root, event.SourceName, make(map[string]string))
 	ctx := runtime.NewContext(target, stdlib.GetRegistry())
 
 	for _, expr := range p.program.expressions {

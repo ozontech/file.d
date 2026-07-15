@@ -50,11 +50,11 @@ func (c *Context) CallFunc(pos core.Position, name string, positional []core.Val
 	}
 	resolved, err := ResolveFunctionArgs(fn, positional, named)
 	if err != nil {
-		return core.NullValue{}, nil
+		return core.NullValue{}, fmt.Errorf("%s: %w", pos, err)
 	}
 	result, err := fn.Call(resolved)
 	if err != nil {
-		return core.NullValue{}, nil
+		return core.NullValue{}, fmt.Errorf("%s: %s: %w", pos, name, err)
 	}
 	return result, nil
 }

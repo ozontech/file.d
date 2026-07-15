@@ -54,10 +54,9 @@ func (t *RootTarget) Set(path core.Path, value core.Value) error {
 		return fmt.Errorf("set: cannot replace event root")
 	}
 
-	t.pathBuffer = toInsaneJSONPath(path.Segments[:len(path.Segments)-1], t.pathBuffer)
-	parent := t.Root.Dig(t.pathBuffer...)
-	if parent == nil {
-		return nil
+	parent, err := t.digOrCreateParent(path.Segments[:len(path.Segments)-1])
+	if err != nil {
+		return fmt.Errorf("set %s: %w", formatSegments(path.Segments), err)
 	}
 
 	encoded, err := valueToJSON(value)
@@ -84,6 +83,43 @@ func (t *RootTarget) Set(path core.Path, value core.Value) error {
 	}
 
 	return nil
+}
+
+// digOrCreateParent walks the given parent segments, creating missing object
+// nodes along the way so that nested assignments like `.a.b.c = 1` work even
+// when `.a`/`.a.b` do not yet exist. Index segments are not auto-grown: an
+// index into a missing or out-of-bounds array is reported as an error.
+func (t *RootTarget) digOrCreateParent(segments []core.Segment) (*insaneJSON.Node, error) {
+	curr := t.Root.Node
+
+	for _, seg := range segments {
+		if seg.IsIndex() {
+			if !curr.IsArray() {
+				return nil, fmt.Errorf("cannot use index [%d] on a non-array node", seg.Idx)
+			}
+			arr := curr.AsArray()
+			idx := resolveIndex(seg.Idx, len(arr))
+			if idx < 0 || idx >= len(arr) {
+				return nil, fmt.Errorf("index %d out of bounds", seg.Idx)
+			}
+			curr = arr[idx]
+			continue
+		}
+
+		next := curr.Dig(seg.Field)
+		if next == nil {
+			next = curr.AddFieldNoAlloc(t.Root, seg.Field)
+			next.MutateToObject()
+		} else if !next.IsObject() && !next.IsArray() {
+			// A scalar node blocks the path; replace it with an object so the
+			// remaining segments have somewhere to live. Existing arrays/objects
+			// are left intact.
+			next.MutateToObject()
+		}
+		curr = next
+	}
+
+	return curr, nil
 }
 
 func (t *RootTarget) Delete(path core.Path) error {
