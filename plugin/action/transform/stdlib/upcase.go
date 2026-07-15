@@ -14,7 +14,7 @@ func (upcase) Params() []Parameter {
 	return []Parameter{
 		{
 			Name:          "value",
-			Required:      true,
+			Description:   "The string to convert to upper case.",
 			AcceptedKinds: []core.ValueKind{core.KindString},
 		},
 	}

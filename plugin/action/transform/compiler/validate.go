@@ -124,50 +124,66 @@ func validateExpr(expr core.Expr, registry *stdlib.Registry) error {
 // validateArgs statically checks argument structure against the function's
 // parameter list. Only structural issues are checked here — value types
 // are validated at runtime since arguments are arbitrary expressions.
+//
+// Binding is strict: positional arguments fill positional parameters and named
+// arguments fill named parameters (see runtime.ResolveFunctionArgs).
 func validateArgs(e *core.CallExpr, fn stdlib.Function) error {
 	params := fn.Params()
 
+	// Positional parameters always precede named ones (enforced at registration).
+	numPositional := 0
+	for _, p := range params {
+		if p.Named() {
+			break
+		}
+		numPositional++
+	}
+	positionalParams := params[:numPositional]
+	namedParams := params[numPositional:]
+
 	var positionalCount int
-	named := make(map[string]bool)
+	seen := make(map[string]bool)
 
 	for _, arg := range e.Args {
 		if arg.Name == "" {
 			positionalCount++
 			continue
 		}
-		if named[arg.Name] {
+		if seen[arg.Name] {
 			return fmt.Errorf("%s: function %q: duplicate argument %q",
 				e.Pos(), fn.Name(), arg.Name)
 		}
-		named[arg.Name] = true
-		known := false
-		for _, p := range params {
-			if p.Name == arg.Name {
-				known = true
-				break
-			}
+		seen[arg.Name] = true
+
+		if paramByName(namedParams, arg.Name) {
+			continue
 		}
-		if !known {
-			return fmt.Errorf("%s: function %q: unknown argument %q",
+		if paramByName(positionalParams, arg.Name) {
+			return fmt.Errorf("%s: function %q: argument %q is positional and cannot be passed by name",
 				e.Pos(), fn.Name(), arg.Name)
 		}
+		return fmt.Errorf("%s: function %q: unknown argument %q",
+			e.Pos(), fn.Name(), arg.Name)
 	}
 
-	if positionalCount > len(params) {
+	if positionalCount > len(positionalParams) {
 		return fmt.Errorf("%s: function %q: too many arguments: expected at most %d, got %d",
-			e.Pos(), fn.Name(), len(params), positionalCount)
+			e.Pos(), fn.Name(), len(positionalParams), positionalCount)
 	}
-
-	for i, p := range params {
-		if !p.Required {
-			continue
-		}
-		if i < positionalCount || named[p.Name] {
-			continue
-		}
+	// Every positional parameter is required.
+	if positionalCount < len(positionalParams) {
 		return fmt.Errorf("%s: function %q: missing required argument %q",
-			e.Pos(), fn.Name(), p.Name)
+			e.Pos(), fn.Name(), positionalParams[positionalCount].Name)
 	}
 
 	return nil
+}
+
+func paramByName(params []stdlib.Parameter, name string) bool {
+	for _, p := range params {
+		if p.Name == name {
+			return true
+		}
+	}
+	return false
 }
