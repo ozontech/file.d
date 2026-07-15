@@ -69,8 +69,9 @@ func BenchmarkEventPoolSlowestPath(b *testing.B) {
 	bench := func(b *testing.B, p pool) {
 		wg := &sync.WaitGroup{}
 		for range b.N {
-			wg.Add(1000)
-			for range 1000 {
+			const concurrency = 1_000
+			wg.Add(concurrency)
+			for range concurrency {
 				go func() {
 					defer wg.Done()
 					e := p.get(1)
