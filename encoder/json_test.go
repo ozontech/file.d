@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestJSONEncode(t *testing.T) {
@@ -58,7 +59,8 @@ func TestJSONEncode(t *testing.T) {
 			enc := newJSONEncoder(&JSONEncoderParams{})
 			event := newTestEvent(t, tt.input)
 
-			out := enc.Encode(event, nil)
+			out, err := enc.Encode(event, nil)
+			require.NoError(t, err)
 			assert.JSONEq(t, tt.expected, string(out))
 		})
 	}

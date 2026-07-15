@@ -13,7 +13,7 @@ const (
 )
 
 type Encoder interface {
-	Encode(event *pipeline.Event, buf []byte) []byte
+	Encode(event *pipeline.Event, buf []byte) ([]byte, error)
 }
 
 type EncodingConfig struct {

@@ -10,7 +10,7 @@ func newJSONEncoder(_ *JSONEncoderParams) *JSONEncoder {
 	return &JSONEncoder{}
 }
 
-func (e *JSONEncoder) Encode(event *pipeline.Event, buf []byte) []byte {
+func (e *JSONEncoder) Encode(event *pipeline.Event, buf []byte) ([]byte, error) {
 	buf, _ = event.Encode(buf)
-	return buf
+	return buf, nil
 }

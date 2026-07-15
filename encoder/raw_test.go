@@ -51,6 +51,7 @@ func TestRawEncode(t *testing.T) {
 		field    string
 		input    string
 		expected string
+		wantErr  bool
 	}{
 		{
 			name:     "string field returns raw value without quotes",
@@ -65,10 +66,11 @@ func TestRawEncode(t *testing.T) {
 			expected: "line1\nline2",
 		},
 		{
-			name:     "missing field returns empty",
+			name:     "missing field returns empty and ErrFieldNotFound",
 			field:    "message",
 			input:    `{"other":"value"}`,
 			expected: "",
+			wantErr:  true,
 		},
 		{
 			name:     "number field returns encoded representation",
@@ -121,7 +123,59 @@ func TestRawEncode(t *testing.T) {
 			enc := newRawEncoder(&RawEncoderParams{Field: tt.field})
 			event := newTestEvent(t, tt.input)
 
-			out := enc.Encode(event, nil)
+			out, err := enc.Encode(event, nil)
+			if tt.wantErr {
+				require.ErrorIs(t, err, ErrFieldNotFound)
+			} else {
+				require.NoError(t, err)
+			}
+			assert.Equal(t, tt.expected, string(out))
+		})
+	}
+}
+
+func TestRawEncodeAppendsToBuffer(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		input    string
+		field    string
+		expected string
+		wantErr  bool
+	}{
+		{
+			name:     "present field appends after prefix",
+			input:    `{"message":"hi"}`,
+			field:    "message",
+			expected: "PREFIX/hi",
+		},
+		{
+			name:     "missing field keeps prefix intact",
+			input:    `{"other":"x"}`,
+			field:    "message",
+			expected: "PREFIX/",
+			wantErr:  true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			enc := newRawEncoder(&RawEncoderParams{Field: tt.field})
+			event := newTestEvent(t, tt.input)
+
+			buf := []byte("PREFIX/")
+			start := len(buf)
+			out, err := enc.Encode(event, buf)
+			if tt.wantErr {
+				require.ErrorIs(t, err, ErrFieldNotFound)
+			} else {
+				require.NoError(t, err)
+			}
+
+			require.GreaterOrEqual(t, len(out), start)
 			assert.Equal(t, tt.expected, string(out))
 		})
 	}

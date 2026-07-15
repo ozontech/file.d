@@ -131,7 +131,8 @@ func TestEncode(t *testing.T) {
 		require.NoError(t, err)
 
 		event := newTestEvent(t, `{"message":"hi"}`)
-		out := enc.Encode(event, nil)
+		out, err := enc.Encode(event, nil)
+		require.NoError(t, err)
 		assert.JSONEq(t, `{"message":"hi"}`, string(out))
 	})
 
@@ -145,7 +146,8 @@ func TestEncode(t *testing.T) {
 		require.NoError(t, err)
 
 		event := newTestEvent(t, `{"message":"hi"}`)
-		out := enc.Encode(event, nil)
+		out, err := enc.Encode(event, nil)
+		require.NoError(t, err)
 		assert.Equal(t, "hi", string(out))
 	})
 }

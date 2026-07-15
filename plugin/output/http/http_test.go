@@ -30,7 +30,7 @@ func TestEncoding(t *testing.T) {
 	jsonEncoder, _ := encoder.NewEncoder(encoder.EncodingConfig{
 		Type: encoder.EncoderTypeJSON,
 	})
-	data.outBuf = jsonEncoder.Encode(event, data.outBuf)
+	data.outBuf, _ = jsonEncoder.Encode(event, data.outBuf)
 	data.outBuf = append(data.outBuf, '\n')
 
 	expected := fmt.Sprintf("%s\n", `{"message":"[INFO] some event","field_a":"AAAA","field_b":"BBBB"}`)
@@ -40,7 +40,7 @@ func TestEncoding(t *testing.T) {
 		Type: encoder.EncoderTypeRaw,
 	})
 	data.outBuf = data.outBuf[:0]
-	data.outBuf = rawEncoder.Encode(event, data.outBuf)
+	data.outBuf, _ = rawEncoder.Encode(event, data.outBuf)
 	data.outBuf = append(data.outBuf, '\n')
 
 	expected = fmt.Sprintf("%s\n", `[INFO] some event`)
@@ -51,7 +51,7 @@ func TestEncoding(t *testing.T) {
 	event.Root = root2
 
 	data.outBuf = data.outBuf[:0]
-	data.outBuf = rawEncoder.Encode(event, data.outBuf)
+	data.outBuf, _ = rawEncoder.Encode(event, data.outBuf)
 	data.outBuf = append(data.outBuf, '\n')
 
 	expected = fmt.Sprintf("%s\n", `{"log":"[INFO] some event"}`)

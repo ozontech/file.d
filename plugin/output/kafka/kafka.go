@@ -116,11 +116,24 @@ type Config struct {
 	// >
 	// > Configure event serialization before sending.
 	// > Includes:
-	// > 1) Type - codec to use for serializing events:
-	// > * `json` - serializes the full event as a JSON object (default).
-	// > * `raw`  - extracts a single field and sends its value as-is.
-	//  > By default `json` is used.
-	// > 2) Params - Encoder parameters.
+	// > 1) `type` - codec to use for serializing events (`json` by default):
+	// > * `json` - serializes the full event as a JSON object.
+	// > * `raw`  - extracts a single field and sends its value as-is (unquoted
+	// >   for string fields, encoded JSON otherwise). If the field is missing an
+	// >   empty value is sent and a warning is logged.
+	// > 2) `params` - encoder parameters, keyed by encoder type:
+	// > * `json` - none.
+	// > * `raw`:
+	// >   * `field` - event field to extract (default `message`); supports
+	// >     nested paths such as `log.message`.
+	// >
+	// > Example sending only the `message` field as a raw value:
+	// > ```yaml
+	// > encoding:
+	// >   type: raw
+	// >   params:
+	// >     field: message
+	// > ```
 	Encoding encoder.EncodingConfig `json:"encoding" child:"true"` // *
 
 	// > @3@4@5@6
@@ -350,7 +363,11 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 
 	batch.ForEach(func(event *pipeline.Event) {
 		start = len(outBuf)
-		outBuf = p.encoder.Encode(event, outBuf)
+		var err error
+		outBuf, err = p.encoder.Encode(event, outBuf)
+		if err != nil {
+			p.logger.Warnf("can't encode event, sending empty value: %v", err)
+		}
 
 		topic := p.config.DefaultTopic
 		if p.config.UseTopicField {
