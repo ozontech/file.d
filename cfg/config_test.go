@@ -17,7 +17,7 @@ func NewTestConfig(names []string) *Config {
 	for _, name := range names {
 		configFiles = append(configFiles, "../testdata/config/"+name)
 	}
-	return NewConfigFromFile(configFiles)
+	return NewConfigFromFiles(configFiles)
 }
 
 func TestSimple(t *testing.T) {

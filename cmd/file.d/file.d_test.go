@@ -86,7 +86,7 @@ func TestEndToEnd(t *testing.T) {
 	filesDir := t.TempDir()
 	offsetsDir := t.TempDir()
 
-	config := cfg.NewConfigFromFile([]string{configFilename, configOverrideFilename})
+	config := cfg.NewConfigFromFiles([]string{configFilename, configOverrideFilename})
 	input := config.Pipelines["test"].Raw.Get("input")
 	input.Set("watching_dir", filesDir)
 	input.Set("offsets_file", filepath.Join(offsetsDir, "offsets.yaml"))

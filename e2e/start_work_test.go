@@ -214,7 +214,7 @@ func TestE2EStabilityWorkCase(t *testing.T) {
 		test := test
 		num := num
 		t.Run(test.name, func(t *testing.T) {
-			conf := cfg.NewConfigFromFile([]string{test.cfgPath})
+			conf := cfg.NewConfigFromFiles([]string{test.cfgPath})
 			if _, ok := conf.Pipelines[test.name]; !ok {
 				log.Fatalf("pipeline name must be named the same as the name of the test")
 			}

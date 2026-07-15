@@ -23,7 +23,7 @@ import (
 const trueValue = "true"
 
 type Config struct {
-	Vault     VaultConfig
+	Vault     *VaultConfig
 	Pipelines map[string]*PipelineConfig
 }
 
@@ -65,24 +65,23 @@ type PipelineConfig struct {
 }
 
 type VaultConfig struct {
-	Token     string
-	Address   string
-	ShouldUse bool
+	Address string
+
+	Token string
+
+	AuthMountPath string
+	RoleID        string
+	SecretID      string
 }
 
 func NewConfig() *Config {
 	return &Config{
-		Vault: VaultConfig{
-			Token:     "",
-			Address:   "",
-			ShouldUse: false,
-		},
 		Pipelines: make(map[string]*PipelineConfig, 20),
 	}
 }
 
-func NewConfigFromFile(paths []string) *Config {
-	mergedConfig := make(map[any]any)
+func NewConfigFromFiles(paths []string) *Config {
+	mergedConfig := make(map[any]any, len(paths))
 
 	for _, path := range paths {
 		logger.Infof("reading config %q", path)
@@ -123,8 +122,8 @@ func NewConfigFromFile(paths []string) *Config {
 
 	// if vault is used then set value otherwise it is empty variable
 	vault := &vault{}
-	if config.Vault.ShouldUse {
-		vault, err = newVault(config.Vault.Address, config.Vault.Token)
+	if config.Vault != nil {
+		vault, err = newVault(config.Vault)
 		if err != nil {
 			logger.Fatalf("can't create vault client: %s", err.Error())
 		}
@@ -164,26 +163,14 @@ func applyEnvs(object *simplejson.Json) error {
 }
 
 func parseConfig(object *simplejson.Json) *Config {
-	config := NewConfig()
-	vault := object.Get("vault")
 	var err error
 
-	addr := vault.Get("address")
-	if addr.Interface() != nil {
-		config.Vault.Address, err = addr.String()
-		if err != nil {
-			logger.Panicf("can't parse vault address: %s", err.Error())
-		}
-	}
+	config := NewConfig()
 
-	token := vault.Get("token")
-	if token.Interface() != nil {
-		config.Vault.Token, err = token.String()
-		if err != nil {
-			logger.Panicf("can't parse vault token: %s", err.Error())
-		}
+	config.Vault, err = parseVaultConfig(object.Get("vault"))
+	if err != nil {
+		logger.Fatalf("can't parse vault config: %s", err.Error())
 	}
-	config.Vault.ShouldUse = config.Vault.Address != "" && config.Vault.Token != ""
 
 	pipelinesJson := object.Get("pipelines")
 	pipelines := pipelinesJson.MustMap()
@@ -199,6 +186,35 @@ func parseConfig(object *simplejson.Json) *Config {
 	}
 
 	return config
+}
+
+func parseVaultConfig(vault *simplejson.Json) (*VaultConfig, error) {
+	if vault.Interface() == nil {
+		return nil, nil
+	}
+
+	vc := &VaultConfig{
+		Address: vault.Get("address").MustString(),
+
+		Token: vault.Get("token").MustString(),
+
+		AuthMountPath: vault.Get("auth_mount_path").MustString(),
+		RoleID:        vault.Get("role_id").MustString(),
+		SecretID:      vault.Get("secret_id").MustString(),
+	}
+
+	if vc.Address == "" {
+		return nil, errors.New("vault address must be non-empty string")
+	}
+	if vc.Token != "" {
+		return vc, nil
+	}
+
+	if vc.AuthMountPath == "" && vc.RoleID == "" && vc.SecretID == "" {
+		return nil, errors.New("one of auth methods must be specified: token or role&secret")
+	}
+
+	return vc, nil
 }
 
 func validatePipelineName(name string) error {
