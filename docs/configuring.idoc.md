@@ -1,18 +1,15 @@
 # Configuring
-
 You can specify several pipelines with plugins and their parameters in a yaml format.  
 Examples can be found [here](/docs/examples.md).
 
-### Logging
-
+## Logging
 Logging is configured with `LOG_LEVEL` environment variable ('info' by default).
 
 Logging level can be changed in runtime with
 [standard zap handler](https://github.com/uber-go/zap/blob/v1.23.0/http_handler.go#L33-L70)
 exposed at `/log/level`.
 
-### Actions debugging
-
+## Actions debugging
 To debug any working action you must enable http server via '-http' flag
 and visit an endpoint `/pipelines/<pipeline_name>/<plugin_index_in_config>/sample`.
 It will show 1 sample of the in/out events.
@@ -46,8 +43,7 @@ If `-http=':9090'` debug endpoints will be:
 
 > **Note**: by default debug server starts on address `:9000` (can be checked using `--help` flag). If your server uses IPv6, the debug server with address configured as `:<port>` will start on IPv6 port.
 
-### Overriding configurations
-
+## Overriding configurations
 You can use multiple configuration files. This allows you to define a base configuration (e.g., common.yaml) and override or extend it with additional configurations (e.g., local.yaml).
 
 ```
@@ -88,8 +84,7 @@ pipelines:
 
 Arrays (or lists) are usually replaced entirely when merging configurations (e.g., actions). Dictionaries (or maps), on the other hand, are typically merged (e.g., output.type).
 
-### Overriding by environment variables
-
+## Overriding by environment variables
 `file.d` can override config fields if you specify environment variables with `FILED_` prefix.  
 The name of the env will be divided by underscores and the config will set or override the config field by the resulted
 path.
@@ -107,14 +102,12 @@ pipelines:
   pipeline_name: ...
 ```
 
-### Vault support
-
+## Vault support
 Consider this config:
-
 ```yaml
 vault:
-  token: example_token
   address: http://127.0.0.1:8200
+  token: example_token
 pipelines:
   example:
     input:
@@ -124,14 +117,27 @@ pipelines:
       type: devnull
 ```
 
-`file.d` supports getting secrets from Vault as soon as you specify Vault token and an address in a configuration.  
-Then you can write any field-string in both arrays and dictionaries using syntax `vault(path/to/secret, key)`,  
-and `file.d` tries to connect to Vault and get the secret from there.  
-If you need to pass a literal string that begins with `vault(`, you should escape the value with a
-backslash: `\vault(path/to/secret, key)`.
+`file.d` supports getting secrets from Vault as soon as you specify Vault address and one of auth methods in a configuration.
+Then you can write any field-string in both arrays and dictionaries using syntax `vault(path/to/secret, key)`, and `file.d` tries to connect to Vault and get the secret from there.
 
-### Env support
+> If you need to pass a literal string that begins with `vault(`, you should escape the value with a backslash: `\vault(path/to/secret, key)`.
 
+### Auth methods
+Token:
+```yaml
+vault:
+  token: example_token
+```
+
+AppRole:
+```yaml
+vault:
+  role_id: example_role
+  secret_id: example_secret
+  auth_mount_path: some/path # used when formatting the authorization uri: 'auth/%s/login'
+```
+
+## Env support
 Consider this config:
 
 ```yaml
@@ -146,16 +152,14 @@ pipelines:
         field: env(ENV_NAME)
 ```
 
-`file.d` supports getting environment variables. Then you can write any
-field-string in both arrays and dictionaries using syntax `env(ENV_NAME)`,  
-and `file.d` tries to get environment variable value. If you need to pass
-a literal string that begins with `env(`, you should escape the value with a
+`file.d` supports getting environment variables. Then you can write any field-string in both arrays and dictionaries using syntax `env(ENV_NAME)`, and `file.d` tries to get environment variable value.
+
+> If you need to pass a literal string that begins with `env(`, you should escape the value with a
 backslash: `\env(ENV_NAME)`.
 
-### Do action if match
+## Do action if match
 
 ### match_fields
-
 File.d can do any action if it matches by pattern.
 In the `match_fields` you can pass some patterns, for example:
 
@@ -225,8 +229,7 @@ Patterns must have a list ([]) or string type, not a number or null.
 ### Match modes
 @match-modes|header-description
 
-### Decoders
-
+## Decoders
 If you have logs in specific non-json format, you can specify decoder type in pipeline settings. By default `json` decoder is used. More details can be found [here](/decoder/readme.md).
 
 ```yml
