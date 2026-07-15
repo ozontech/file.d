@@ -169,7 +169,7 @@ func parseConfig(object *simplejson.Json) *Config {
 
 	config.Vault, err = parseVaultConfig(object.Get("vault"))
 	if err != nil {
-		logger.Panicf("can't parse vault config: %s", err.Error())
+		logger.Fatalf("can't parse vault config: %s", err.Error())
 	}
 
 	pipelinesJson := object.Get("pipelines")
