@@ -17,6 +17,10 @@ func init() {
 
 	registry.mustRegister(upcase{})
 	registry.mustRegister(capture{})
+	registry.mustRegister(toString{})
+	registry.mustRegister(after{})
+	registry.mustRegister(before{})
+	registry.mustRegister(between{})
 }
 
 func GetRegistry() *Registry {

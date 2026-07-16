@@ -401,6 +401,38 @@ func TestLanguage(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "func_string_template",
+			source: `
+			.note = "code is " + string(.code) + ", ok is " + string(.ok) + ", missing is '" + string(.nope) + "'"
+		`,
+			events: []eventCase{
+				{
+					in: `{"code":500,"ok":false}`,
+					fields: map[string]string{
+						"note": "code is 500, ok is false, missing is ''",
+					},
+				},
+			},
+		},
+		{
+			name: "func_substring",
+			source: `
+			.shard = between(.log, "[", "]")
+			.message = after(.log, " - ")
+			.level = before(.log, " ")
+		`,
+			events: []eventCase{
+				{
+					in: `{"log":"INFO [shard 4] compaction - all done"}`,
+					fields: map[string]string{
+						"shard":   "shard 4",
+						"message": "all done",
+						"level":   "INFO",
+					},
+				},
+			},
+		},
 	}
 
 	for _, tc := range tests {
