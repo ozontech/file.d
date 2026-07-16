@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/pipeline"
@@ -51,7 +52,8 @@ func TestSplunk(t *testing.T) {
 
 			plugin := Plugin{
 				config: &Config{
-					Endpoint: testServer.URL,
+					Endpoint:        testServer.URL,
+					RequestTimeout_: time.Second,
 				},
 				logger: zap.NewExample().Sugar(),
 			}
@@ -181,7 +183,8 @@ func TestCopyFields(t *testing.T) {
 
 			plugin := Plugin{
 				config: &Config{
-					Endpoint: testServer.URL,
+					Endpoint:        testServer.URL,
+					RequestTimeout_: time.Second,
 				},
 				copyFieldsPaths: tt.copyFields,
 				logger:          zap.NewExample().Sugar(),
