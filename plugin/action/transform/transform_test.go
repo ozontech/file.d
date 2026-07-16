@@ -366,6 +366,41 @@ func TestLanguage(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "func_capture",
+			source: `
+			m = capture(.log, r'^(?P<level>\S+)\s+(?P<date>\d{4}-\d{2}-\d{2})\s+(?P<time>[\d:,]+)\s+\[(?P<shard>[^\]]*)\]\s+(?P<operation>\S+)\s+-\s+(?P<message>.*)$')
+			if m != null {
+				.level = m["level"]
+				.date = m["date"]
+				.time = m["time"]
+				.shard = m["shard"]
+				.operation = m["operation"]
+				.message = m["message"]
+			}
+		`,
+			events: []eventCase{
+				{
+					in: `{"log":"INFO 2025-11-20 18:25:44,409 [shard 4:comp] compaction - [Compact abc] done - ok"}`,
+					fields: map[string]string{
+						"level":     "INFO",
+						"date":      "2025-11-20",
+						"time":      "18:25:44,409",
+						"shard":     "shard 4:comp",
+						"operation": "compaction",
+						"message":   "[Compact abc] done - ok",
+					},
+				},
+				{
+					// A line that does not match leaves the event untouched.
+					in: `{"log":"garbage line"}`,
+					fields: map[string]string{
+						"log":   "garbage line",
+						"level": "",
+					},
+				},
+			},
+		},
 	}
 
 	for _, tc := range tests {
