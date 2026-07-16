@@ -381,12 +381,12 @@ func TestLanguage(t *testing.T) {
 		`,
 			events: []eventCase{
 				{
-					in: `{"log":"INFO 2025-11-20 18:25:44,409 [shard 4:comp] compaction - [Compact abc] done - ok"}`,
+					in: `{"log":"INFO 2025-05-25 11:11:11,222 [shard 1] compaction - [Compact abc] done - ok"}`,
 					fields: map[string]string{
 						"level":     "INFO",
-						"date":      "2025-11-20",
-						"time":      "18:25:44,409",
-						"shard":     "shard 4:comp",
+						"date":      "2025-05-25",
+						"time":      "11:11:11,222",
+						"shard":     "shard 1",
 						"operation": "compaction",
 						"message":   "[Compact abc] done - ok",
 					},

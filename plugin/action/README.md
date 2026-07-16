@@ -593,7 +593,7 @@ pipelines:
     actions:
     - type: transform
       source: |
-        # parse lines like "INFO 2025-11-20 18:25:44,409 [shard 4] compaction - done"
+        # parse lines like "INFO 2025-05-25 11:11:11,222 [shard 1] compaction - done"
         m = capture(.log, r'^(?P<level>\S+)\s+(?P<time>\S+ \S+)\s+\[(?P<shard>[^\]]+)\]\s+(?P<operation>\S+)\s+-\s+(?P<message>.+)$')
         if m != null {
           .level = m.level
@@ -606,12 +606,12 @@ pipelines:
     ...
 ```
 
-The event `{"log":"INFO 2025-11-20 18:25:44,409 [shard 4] compaction - done"}` becomes:
+The event `{"log":"INFO 2025-05-25 11:11:11,222 [shard 1] compaction - done"}` becomes:
 ```json
 {
   "level": "INFO",
-  "time": "2025-11-20 18:25:44,409",
-  "shard": "shard 4",
+  "time": "2025-05-25 11:11:11,222",
+  "shard": "shard 1",
   "operation": "compaction",
   "message": "done"
 }
