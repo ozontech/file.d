@@ -150,98 +150,78 @@ func TestEvalIdentExpr(t *testing.T) {
 func TestEvalPathExpr(t *testing.T) {
 	t.Parallel()
 
-	t.Run("single_field", func(t *testing.T) {
-		t.Parallel()
+	tests := []struct {
+		name      string
+		store     map[string]Value // mock target contents, keyed by joined path
+		segments  []PathSegment
+		want      Value
+		wantErr   string
+		wantErrIs error
+	}{
+		{
+			name:     "single_field",
+			store:    map[string]Value{"status": IntegerValue{V: 200}},
+			segments: []PathSegment{{Field: "status"}},
+			want:     IntegerValue{V: 200},
+		},
+		{
+			name:     "nested_fields",
+			store:    map[string]Value{"user.name": StringValue{V: "alice"}},
+			segments: []PathSegment{{Field: "user"}, {Field: "name"}},
+			want:     StringValue{V: "alice"},
+		},
+		{
+			name:     "missing_path_returns_null",
+			segments: []PathSegment{{Field: "gone"}},
+			want:     NullValue{},
+		},
+		{
+			name:     "integer_index_segment",
+			store:    map[string]Value{"2": StringValue{V: "third"}},
+			segments: []PathSegment{{Index: &IntLit{Node: n(), Value: 2}}},
+			want:     StringValue{V: "third"},
+		},
+		{
+			name:     "string_index_becomes_field",
+			store:    map[string]Value{"key": BoolValue{V: true}},
+			segments: []PathSegment{{Index: &StringLit{Node: n(), Value: "key"}}},
+			want:     BoolValue{V: true},
+		},
+		{
+			name:     "invalid_index_type_error",
+			segments: []PathSegment{{Index: &BoolLit{Node: n(), Value: true}}},
+			wantErr:  "path index must be integer or string",
+		},
+		{
+			name:      "index_eval_error_propagates",
+			segments:  []PathSegment{{Index: &AbortExpr{Node: n()}}},
+			wantErrIs: AbortError,
+		},
+	}
 
-		ctx := newMockCtx()
-		ctx.target.store["status"] = IntegerValue{V: 200}
-		expr := &PathExpr{Node: n(), Root: EventRoot, Segments: []PathSegment{{Field: "status"}}}
-		got, err := expr.Eval(ctx)
-		require.NoError(t, err)
-		assert.Equal(t, IntegerValue{V: 200}, got)
-	})
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 
-	t.Run("nested_fields", func(t *testing.T) {
-		t.Parallel()
+			ctx := newMockCtx()
+			for k, v := range tt.store {
+				ctx.target.store[k] = v
+			}
 
-		ctx := newMockCtx()
-		ctx.target.store["user.name"] = StringValue{V: "alice"}
-		expr := &PathExpr{
-			Node:     n(),
-			Root:     EventRoot,
-			Segments: []PathSegment{{Field: "user"}, {Field: "name"}},
-		}
-		got, err := expr.Eval(ctx)
-		require.NoError(t, err)
-		assert.Equal(t, StringValue{V: "alice"}, got)
-	})
-
-	t.Run("missing_path_returns_null", func(t *testing.T) {
-		t.Parallel()
-
-		ctx := newMockCtx()
-		expr := &PathExpr{Node: n(), Root: EventRoot, Segments: []PathSegment{{Field: "gone"}}}
-		got, err := expr.Eval(ctx)
-		require.NoError(t, err)
-		assert.Equal(t, NullValue{}, got)
-	})
-
-	t.Run("integer_index_segment", func(t *testing.T) {
-		t.Parallel()
-
-		ctx := newMockCtx()
-		ctx.target.store["2"] = StringValue{V: "third"}
-		expr := &PathExpr{
-			Node:     n(),
-			Root:     EventRoot,
-			Segments: []PathSegment{{Index: &IntLit{Node: n(), Value: 2}}},
-		}
-		got, err := expr.Eval(ctx)
-		require.NoError(t, err)
-		assert.Equal(t, StringValue{V: "third"}, got)
-	})
-
-	t.Run("string_index_becomes_field", func(t *testing.T) {
-		t.Parallel()
-
-		ctx := newMockCtx()
-		ctx.target.store["key"] = BoolValue{V: true}
-		expr := &PathExpr{
-			Node:     n(),
-			Root:     EventRoot,
-			Segments: []PathSegment{{Index: &StringLit{Node: n(), Value: "key"}}},
-		}
-		got, err := expr.Eval(ctx)
-		require.NoError(t, err)
-		assert.Equal(t, BoolValue{V: true}, got)
-	})
-
-	t.Run("invalid_index_type_error", func(t *testing.T) {
-		t.Parallel()
-
-		ctx := newMockCtx()
-		expr := &PathExpr{
-			Node:     n(),
-			Root:     EventRoot,
-			Segments: []PathSegment{{Index: &BoolLit{Node: n(), Value: true}}},
-		}
-		_, err := expr.Eval(ctx)
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "path index must be integer or string")
-	})
-
-	t.Run("index_eval_error_propagates", func(t *testing.T) {
-		t.Parallel()
-
-		ctx := newMockCtx()
-		expr := &PathExpr{
-			Node:     n(),
-			Root:     EventRoot,
-			Segments: []PathSegment{{Index: &AbortExpr{Node: n()}}},
-		}
-		_, err := expr.Eval(ctx)
-		require.ErrorIs(t, err, AbortError)
-	})
+			expr := &PathExpr{Node: n(), Root: EventRoot, Segments: tt.segments}
+			got, err := expr.Eval(ctx)
+			switch {
+			case tt.wantErrIs != nil:
+				require.ErrorIs(t, err, tt.wantErrIs)
+			case tt.wantErr != "":
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.wantErr)
+			default:
+				require.NoError(t, err)
+				assert.Equal(t, tt.want, got)
+			}
+		})
+	}
 }
 
 func TestEvalArrayExpr(t *testing.T) {
@@ -466,158 +446,112 @@ func TestEvalBinaryShortCircuit(t *testing.T) {
 func TestEvalAssignExpr(t *testing.T) {
 	t.Parallel()
 
-	t.Run("to_ident", func(t *testing.T) {
-		t.Parallel()
+	num := func(v int64) Value { return IntegerValue{V: v} }
+	arr := func(vals ...Value) Value { return ArrayValue{V: vals} }
+	index := func(obj Expr, idx Expr) Expr {
+		return &IndexExpr{Node: n(), Object: obj, Index: idx}
+	}
+	ident := func(name string) Expr { return &IdentExpr{Node: n(), Name: name} }
+	iL := func(v int64) Expr { return &IntLit{Node: n(), Value: v} }
+	sL := func(v string) Expr { return &StringLit{Node: n(), Value: v} }
 
-		ctx := newMockCtx()
-		expr := &AssignExpr{
-			Node:   n(),
-			Target: &IdentExpr{Node: n(), Name: "x"},
-			Value:  &IntLit{Node: n(), Value: 42},
-		}
-		got, err := expr.Eval(ctx)
-		require.NoError(t, err)
-		assert.Equal(t, IntegerValue{V: 42}, got)
-		v, ok := ctx.GetVar("x")
-		require.True(t, ok)
-		assert.Equal(t, IntegerValue{V: 42}, v)
-	})
-
-	t.Run("to_path", func(t *testing.T) {
-		t.Parallel()
-
-		ctx := newMockCtx()
-		expr := &AssignExpr{
-			Node:   n(),
-			Target: &PathExpr{Node: n(), Root: EventRoot, Segments: []PathSegment{{Field: "foo"}}},
-			Value:  &StringLit{Node: n(), Value: "bar"},
-		}
-		got, err := expr.Eval(ctx)
-		require.NoError(t, err)
-		assert.Equal(t, StringValue{V: "bar"}, got)
-		assert.Equal(t, StringValue{V: "bar"}, ctx.target.store["foo"])
-	})
-
-	t.Run("to_array_index", func(t *testing.T) {
-		t.Parallel()
-
-		ctx := newMockCtx()
-		ctx.vars["arr"] = ArrayValue{V: []Value{IntegerValue{V: 1}, IntegerValue{V: 2}, IntegerValue{V: 3}}}
-		expr := &AssignExpr{
-			Node: n(),
-			Target: &IndexExpr{
-				Node:   n(),
-				Object: &IdentExpr{Node: n(), Name: "arr"},
-				Index:  &IntLit{Node: n(), Value: 0},
+	tests := []struct {
+		name      string
+		vars      map[string]Value // initial ctx variables
+		target    Expr
+		value     Expr
+		want      Value            // expected result of the assignment expression
+		wantErr   string
+		wantVars  map[string]Value // exact ctx variables afterwards; nil skips the check
+		wantStore map[string]Value // exact mock target contents afterwards; nil skips the check
+	}{
+		{
+			name:     "to_ident",
+			target:   ident("x"),
+			value:    iL(42),
+			want:     num(42),
+			wantVars: map[string]Value{"x": num(42)},
+		},
+		{
+			name:      "to_path",
+			target:    &PathExpr{Node: n(), Root: EventRoot, Segments: []PathSegment{{Field: "foo"}}},
+			value:     sL("bar"),
+			want:      StringValue{V: "bar"},
+			wantStore: map[string]Value{"foo": StringValue{V: "bar"}},
+		},
+		{
+			name:     "to_array_index",
+			vars:     map[string]Value{"arr": arr(num(1), num(2), num(3))},
+			target:   index(ident("arr"), iL(0)),
+			value:    iL(99),
+			want:     num(99),
+			wantVars: map[string]Value{"arr": arr(num(99), num(2), num(3))},
+		},
+		{
+			name:     "to_array_negative_index",
+			vars:     map[string]Value{"arr": arr(num(1), num(2), num(3))},
+			target:   index(ident("arr"), iL(-1)),
+			value:    iL(77),
+			want:     num(77),
+			wantVars: map[string]Value{"arr": arr(num(1), num(2), num(77))},
+		},
+		{
+			name:     "to_array_grow_with_nulls",
+			vars:     map[string]Value{"arr": arr(num(1))},
+			target:   index(ident("arr"), iL(3)),
+			value:    iL(9),
+			want:     num(9),
+			wantVars: map[string]Value{"arr": arr(num(1), NullValue{}, NullValue{}, num(9))},
+		},
+		{
+			name:    "to_array_out_of_bounds_err",
+			vars:    map[string]Value{"arr": arr(num(1))},
+			target:  index(ident("arr"), iL(-5)),
+			value:   iL(99),
+			wantErr: "out of bounds",
+		},
+		{
+			name:   "to_object_key",
+			vars:   map[string]Value{"obj": ObjectValue{V: map[string]Value{"a": num(1)}}},
+			target: index(ident("obj"), sL("b")),
+			value:  iL(2),
+			want:   num(2),
+			wantVars: map[string]Value{
+				"obj": ObjectValue{V: map[string]Value{"a": num(1), "b": num(2)}},
 			},
-			Value: &IntLit{Node: n(), Value: 99},
-		}
-		got, err := expr.Eval(ctx)
-		require.NoError(t, err)
-		assert.Equal(t, IntegerValue{V: 99}, got)
-		arr := ctx.vars["arr"].(ArrayValue)
-		assert.Equal(t, IntegerValue{V: 99}, arr.V[0])
-		assert.Equal(t, IntegerValue{V: 2}, arr.V[1])
-	})
+		},
+		{
+			name:    "to_index_on_non_ident_err",
+			target:  index(iL(42), iL(0)),
+			value:   iL(1),
+			wantErr: "must be a local variable",
+		},
+	}
 
-	t.Run("to_array_negative_index", func(t *testing.T) {
-		t.Parallel()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 
-		ctx := newMockCtx()
-		ctx.vars["arr"] = ArrayValue{V: []Value{IntegerValue{V: 1}, IntegerValue{V: 2}, IntegerValue{V: 3}}}
-		expr := &AssignExpr{
-			Node: n(),
-			Target: &IndexExpr{
-				Node:   n(),
-				Object: &IdentExpr{Node: n(), Name: "arr"},
-				Index:  &IntLit{Node: n(), Value: -1},
-			},
-			Value: &IntLit{Node: n(), Value: 77},
-		}
-		_, err := expr.Eval(ctx)
-		require.NoError(t, err)
-		arr := ctx.vars["arr"].(ArrayValue)
-		assert.Equal(t, IntegerValue{V: 77}, arr.V[2])
-	})
+			ctx := newMockCtx()
+			for k, v := range tt.vars {
+				ctx.vars[k] = v
+			}
 
-	t.Run("to_array_grow_with_nulls", func(t *testing.T) {
-		t.Parallel()
-
-		ctx := newMockCtx()
-		ctx.vars["arr"] = ArrayValue{V: []Value{IntegerValue{V: 1}}}
-		expr := &AssignExpr{
-			Node: n(),
-			Target: &IndexExpr{
-				Node:   n(),
-				Object: &IdentExpr{Node: n(), Name: "arr"},
-				Index:  &IntLit{Node: n(), Value: 3},
-			},
-			Value: &IntLit{Node: n(), Value: 9},
-		}
-		_, err := expr.Eval(ctx)
-		require.NoError(t, err)
-		arr := ctx.vars["arr"].(ArrayValue)
-		require.Len(t, arr.V, 4)
-		assert.Equal(t, IntegerValue{V: 1}, arr.V[0])
-		assert.Equal(t, NullValue{}, arr.V[1])
-		assert.Equal(t, NullValue{}, arr.V[2])
-		assert.Equal(t, IntegerValue{V: 9}, arr.V[3])
-	})
-
-	t.Run("to_array_out_of_bounds_err", func(t *testing.T) {
-		t.Parallel()
-
-		ctx := newMockCtx()
-		ctx.vars["arr"] = ArrayValue{V: []Value{IntegerValue{V: 1}}}
-		expr := &AssignExpr{
-			Node: n(),
-			Target: &IndexExpr{
-				Node:   n(),
-				Object: &IdentExpr{Node: n(), Name: "arr"},
-				Index:  &IntLit{Node: n(), Value: -5},
-			},
-			Value: &IntLit{Node: n(), Value: 99},
-		}
-		_, err := expr.Eval(ctx)
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "out of bounds")
-	})
-
-	t.Run("to_object_key", func(t *testing.T) {
-		t.Parallel()
-
-		ctx := newMockCtx()
-		ctx.vars["obj"] = ObjectValue{V: map[string]Value{"a": IntegerValue{V: 1}}}
-		expr := &AssignExpr{
-			Node: n(),
-			Target: &IndexExpr{
-				Node:   n(),
-				Object: &IdentExpr{Node: n(), Name: "obj"},
-				Index:  &StringLit{Node: n(), Value: "b"},
-			},
-			Value: &IntLit{Node: n(), Value: 2},
-		}
-		_, err := expr.Eval(ctx)
-		require.NoError(t, err)
-		obj := ctx.vars["obj"].(ObjectValue)
-		assert.Equal(t, IntegerValue{V: 1}, obj.V["a"])
-		assert.Equal(t, IntegerValue{V: 2}, obj.V["b"])
-	})
-
-	t.Run("to_index_on_non_ident_err", func(t *testing.T) {
-		t.Parallel()
-
-		ctx := newMockCtx()
-		expr := &AssignExpr{
-			Node: n(),
-			Target: &IndexExpr{
-				Node:   n(),
-				Object: &IntLit{Node: n(), Value: 42},
-				Index:  &IntLit{Node: n(), Value: 0},
-			},
-			Value: &IntLit{Node: n(), Value: 1},
-		}
-		_, err := expr.Eval(ctx)
-		require.Error(t, err)
-	})
+			expr := &AssignExpr{Node: n(), Target: tt.target, Value: tt.value}
+			got, err := expr.Eval(ctx)
+			if tt.wantErr != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.wantErr)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got)
+			if tt.wantVars != nil {
+				assert.Equal(t, tt.wantVars, ctx.vars)
+			}
+			if tt.wantStore != nil {
+				assert.Equal(t, tt.wantStore, ctx.target.store)
+			}
+		})
+	}
 }

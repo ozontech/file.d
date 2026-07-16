@@ -276,6 +276,20 @@ func DumpAST(expr Expr, depth int) string {
 		return fmt.Sprintf("%sAbort", pad)
 	case *DelExpr:
 		return fmt.Sprintf("%sDel\n%s", pad, DumpAST(e.Target, p))
+
+	case *ForExpr:
+		lines := []string{
+			fmt.Sprintf("%sFor(index=%q, item=%q)", pad, e.Index, e.Item),
+			fmt.Sprintf("%s  iter:", pad),
+			DumpAST(e.Iter, p+1),
+		}
+		if len(e.Body) > 0 {
+			lines = append(lines, fmt.Sprintf("%s  body:", pad))
+			for _, b := range e.Body {
+				lines = append(lines, DumpAST(b, p+1))
+			}
+		}
+		return strings.Join(lines, "\n")
 	}
 
 	return fmt.Sprintf("%s<unknown Node %T>", pad, expr)

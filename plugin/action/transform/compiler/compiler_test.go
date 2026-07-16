@@ -126,9 +126,7 @@ func TestLiterals(t *testing.T) {
 func TestCompileIdent(t *testing.T) {
 	t.Parallel()
 
-	tests := []string{"foo", "_bar", "baz123", "x"}
-	for _, name := range tests {
-		name := name
+	for _, name := range []string{"foo", "_bar", "baz123", "x"} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
@@ -138,106 +136,6 @@ func TestCompileIdent(t *testing.T) {
 			assert.Equal(t, name, ident.Name)
 		})
 	}
-}
-
-func TestCompileEventPath(t *testing.T) {
-	t.Parallel()
-
-	t.Run("root_only", func(t *testing.T) {
-		t.Parallel()
-
-		expr := compile(t, ".")
-		p, ok := expr.(*core.PathExpr)
-		require.True(t, ok)
-		assert.Equal(t, core.EventRoot, p.Root)
-		assert.Empty(t, p.Segments)
-	})
-
-	t.Run("single_field", func(t *testing.T) {
-		t.Parallel()
-
-		expr := compile(t, ".status")
-		p, ok := expr.(*core.PathExpr)
-		require.True(t, ok)
-		assert.Equal(t, core.EventRoot, p.Root)
-		require.Len(t, p.Segments, 1)
-		assert.Equal(t, "status", p.Segments[0].Field)
-	})
-
-	t.Run("nested_fields", func(t *testing.T) {
-		t.Parallel()
-
-		expr := compile(t, ".user.name")
-		p, ok := expr.(*core.PathExpr)
-		require.True(t, ok)
-		require.Len(t, p.Segments, 2)
-		assert.Equal(t, "user", p.Segments[0].Field)
-		assert.Equal(t, "name", p.Segments[1].Field)
-	})
-
-	t.Run("field_with_integer_index", func(t *testing.T) {
-		t.Parallel()
-
-		expr := compile(t, ".items[0]")
-		p, ok := expr.(*core.PathExpr)
-		require.True(t, ok)
-		require.Len(t, p.Segments, 2)
-		assert.Equal(t, "items", p.Segments[0].Field)
-		assert.NotNil(t, p.Segments[1].Index)
-		idxLit, ok := p.Segments[1].Index.(*core.IntLit)
-		require.True(t, ok)
-		assert.Equal(t, int64(0), idxLit.Value)
-	})
-
-	t.Run("field_with_dynamic_index", func(t *testing.T) {
-		t.Parallel()
-
-		expr := compile(t, ".items[idx]")
-		p, ok := expr.(*core.PathExpr)
-		require.True(t, ok)
-		require.Len(t, p.Segments, 2)
-		idxExpr, ok := p.Segments[1].Index.(*core.IdentExpr)
-		require.True(t, ok)
-		assert.Equal(t, "idx", idxExpr.Name)
-	})
-
-	t.Run("field_with_negative_index", func(t *testing.T) {
-		t.Parallel()
-
-		expr := compile(t, ".items[-1]")
-		p, ok := expr.(*core.PathExpr)
-		require.True(t, ok)
-		require.Len(t, p.Segments, 2)
-		_, ok = p.Segments[1].Index.(*core.UnaryExpr)
-		require.True(t, ok, "expected unary expression for negative index")
-	})
-}
-
-func TestCompileMetadataPath(t *testing.T) {
-	t.Parallel()
-
-	t.Run("simple_field", func(t *testing.T) {
-		t.Parallel()
-
-		expr := compile(t, "%ts")
-		p, ok := expr.(*core.PathExpr)
-		require.True(t, ok)
-		assert.Equal(t, core.MetadataRoot, p.Root)
-		require.Len(t, p.Segments, 1)
-		assert.Equal(t, "ts", p.Segments[0].Field)
-	})
-
-	t.Run("nested", func(t *testing.T) {
-		t.Parallel()
-
-		expr := compile(t, "%meta.key")
-		p, ok := expr.(*core.PathExpr)
-		require.True(t, ok)
-		assert.Equal(t, core.MetadataRoot, p.Root)
-		require.Len(t, p.Segments, 2)
-		assert.Equal(t, "meta", p.Segments[0].Field)
-		assert.Equal(t, "key", p.Segments[1].Field)
-	})
 }
 
 func TestCompileUnaryExpr(t *testing.T) {
@@ -296,540 +194,500 @@ func TestCompileBinaryExpr(t *testing.T) {
 	}
 }
 
-func TestCompileOperatorPrecedence(t *testing.T) {
+func TestCompilePaths(t *testing.T) {
 	t.Parallel()
 
-	t.Run("mul_over_add", func(t *testing.T) {
-		t.Parallel()
-
-		bin := compile(t, "1 + 2 * 3").(*core.BinaryExpr)
-		assert.Equal(t, "+", bin.Op)
-		rightBin, ok := bin.Right.(*core.BinaryExpr)
-		require.True(t, ok)
-		assert.Equal(t, "*", rightBin.Op)
+	runGolden(t, []goldenCase{
+		{name: "root_only", src: `.`, want: `Path(.)`},
+		{name: "single_field", src: `.status`, want: `Path(.status)`},
+		{name: "nested_fields", src: `.user.name`, want: `Path(.user.name)`},
+		{name: "integer_index", src: `.items[0]`, want: `Path(.items.[IntLit(0)])`},
+		{name: "dynamic_index", src: `.items[idx]`, want: `Path(.items.[Ident(idx)])`},
+		{
+			name: "negative_index",
+			src:  `.items[-1]`,
+			want: `
+Path(.items.[Unary(-)
+  IntLit(1)])`,
+		},
+		{name: "metadata_field", src: `%ts`, want: `Path(%ts)`},
+		{name: "metadata_nested", src: `%meta.key`, want: `Path(%meta.key)`},
 	})
+}
 
-	t.Run("left_associative_add", func(t *testing.T) {
-		t.Parallel()
+func TestCompilePrecedence(t *testing.T) {
+	t.Parallel()
 
-		bin := compile(t, "1 * 2 + 3").(*core.BinaryExpr)
-		assert.Equal(t, "+", bin.Op)
-		leftBin, ok := bin.Left.(*core.BinaryExpr)
-		require.True(t, ok)
-		assert.Equal(t, "*", leftBin.Op)
-	})
-
-	t.Run("and_over_or", func(t *testing.T) {
-		t.Parallel()
-
-		bin := compile(t, "a || b && c").(*core.BinaryExpr)
-		assert.Equal(t, "||", bin.Op)
-		rightBin, ok := bin.Right.(*core.BinaryExpr)
-		require.True(t, ok)
-		assert.Equal(t, "&&", rightBin.Op)
-	})
-
-	t.Run("eq_over_and", func(t *testing.T) {
-		t.Parallel()
-
-		bin := compile(t, "a == b && c != d").(*core.BinaryExpr)
-		assert.Equal(t, "&&", bin.Op)
-		_, ok := bin.Left.(*core.BinaryExpr)
-		require.True(t, ok, "left should be == expr")
-		_, ok = bin.Right.(*core.BinaryExpr)
-		require.True(t, ok, "right should be != expr")
-	})
-
-	t.Run("unary_over_binary", func(t *testing.T) {
-		t.Parallel()
-
-		bin := compile(t, "!a && b").(*core.BinaryExpr)
-		assert.Equal(t, "&&", bin.Op)
-		_, ok := bin.Left.(*core.UnaryExpr)
-		require.True(t, ok, "left should be unary ! expression")
-	})
-
-	t.Run("grouping_overrides_precedence", func(t *testing.T) {
-		t.Parallel()
-
-		bin := compile(t, "(1 + 2) * 3").(*core.BinaryExpr)
-		assert.Equal(t, "*", bin.Op)
-		_, ok := bin.Left.(*core.BinaryExpr)
-		require.True(t, ok, "left should be grouped + expression")
+	runGolden(t, []goldenCase{
+		{
+			name: "mul_over_add",
+			src:  `1 + 2 * 3`,
+			want: `
+Binary(+)
+  IntLit(1)
+  Binary(*)
+    IntLit(2)
+    IntLit(3)`,
+		},
+		{
+			name: "left_associative_add",
+			src:  `1 * 2 + 3`,
+			want: `
+Binary(+)
+  Binary(*)
+    IntLit(1)
+    IntLit(2)
+  IntLit(3)`,
+		},
+		{
+			name: "and_over_or",
+			src:  `a || b && c`,
+			want: `
+Binary(||)
+  Ident(a)
+  Binary(&&)
+    Ident(b)
+    Ident(c)`,
+		},
+		{
+			name: "eq_over_and",
+			src:  `a == b && c != d`,
+			want: `
+Binary(&&)
+  Binary(==)
+    Ident(a)
+    Ident(b)
+  Binary(!=)
+    Ident(c)
+    Ident(d)`,
+		},
+		{
+			name: "unary_over_binary",
+			src:  `!a && b`,
+			want: `
+Binary(&&)
+  Unary(!)
+    Ident(a)
+  Ident(b)`,
+		},
+		{
+			name: "grouping_overrides_precedence",
+			src:  `(1 + 2) * 3`,
+			want: `
+Binary(*)
+  Binary(+)
+    IntLit(1)
+    IntLit(2)
+  IntLit(3)`,
+		},
+		{name: "grouped_literal_unwraps", src: `(42)`, want: `IntLit(42)`},
 	})
 }
 
 func TestCompileAssignExpr(t *testing.T) {
 	t.Parallel()
 
-	t.Run("to_ident", func(t *testing.T) {
-		t.Parallel()
-
-		expr := compile(t, `x = "hello"`)
-		a, ok := expr.(*core.AssignExpr)
-		require.True(t, ok)
-		_, ok = a.Target.(*core.IdentExpr)
-		require.True(t, ok, "target should be IdentExpr")
-	})
-
-	t.Run("to_event_path", func(t *testing.T) {
-		t.Parallel()
-
-		expr := compile(t, `.foo = 42`)
-		a, ok := expr.(*core.AssignExpr)
-		require.True(t, ok)
-		p, ok := a.Target.(*core.PathExpr)
-		require.True(t, ok)
-		assert.Equal(t, core.EventRoot, p.Root)
-		require.Len(t, p.Segments, 1)
-		assert.Equal(t, "foo", p.Segments[0].Field)
-		lit, ok := a.Value.(*core.IntLit)
-		require.True(t, ok)
-		assert.Equal(t, int64(42), lit.Value)
-	})
-
-	t.Run("to_index_expr", func(t *testing.T) {
-		t.Parallel()
-
-		expr := compile(t, `arr[0] = 99`)
-		a, ok := expr.(*core.AssignExpr)
-		require.True(t, ok)
-		_, ok = a.Target.(*core.IndexExpr)
-		require.True(t, ok, "target should be IndexExpr")
-	})
-
-	t.Run("right_associative", func(t *testing.T) {
-		t.Parallel()
-
-		expr := compile(t, `x = y = 1`)
-		outer, ok := expr.(*core.AssignExpr)
-		require.True(t, ok)
-		_, ok = outer.Value.(*core.AssignExpr)
-		require.True(t, ok, "right side should also be AssignExpr (right-assoc)")
+	runGolden(t, []goldenCase{
+		{
+			name: "to_ident",
+			src:  `x = "hello"`,
+			want: `
+Assign
+  Ident(x)
+  StringLit("hello")`,
+		},
+		{
+			name: "to_event_path",
+			src:  `.foo = 42`,
+			want: `
+Assign
+  Path(.foo)
+  IntLit(42)`,
+		},
+		{
+			name: "to_index_expr",
+			src:  `arr[0] = 99`,
+			want: `
+Assign
+  Index
+    Ident(arr)
+    IntLit(0)
+  IntLit(99)`,
+		},
+		{
+			name: "right_associative",
+			src:  `x = y = 1`,
+			want: `
+Assign
+  Ident(x)
+  Assign
+    Ident(y)
+    IntLit(1)`,
+		},
 	})
 }
 
 func TestCompileIfExpr(t *testing.T) {
 	t.Parallel()
 
-	t.Run("no_else", func(t *testing.T) {
-		t.Parallel()
-
-		expr := compile(t, `if .x > 0 { .y = 1 }`)
-		ifExpr, ok := expr.(*core.IfExpr)
-		require.True(t, ok)
-		assert.NotNil(t, ifExpr.Condition)
-		assert.Len(t, ifExpr.Then, 1)
-		assert.Empty(t, ifExpr.Else)
-	})
-
-	t.Run("with_else", func(t *testing.T) {
-		t.Parallel()
-
-		expr := compile(t, `if .ok { .r = "yes" } else { .r = "no" }`)
-		ifExpr, ok := expr.(*core.IfExpr)
-		require.True(t, ok)
-		assert.Len(t, ifExpr.Then, 1)
-		assert.Len(t, ifExpr.Else, 1)
-	})
-
-	t.Run("else_if_chain", func(t *testing.T) {
-		t.Parallel()
-
-		src := `if .s >= 500 { .sev = "crit" } else if .s >= 400 { .sev = "warn" } else { .sev = "ok" }`
-		expr := compile(t, src)
-		ifExpr, ok := expr.(*core.IfExpr)
-		require.True(t, ok)
-		require.Len(t, ifExpr.Else, 1)
-		_, ok = ifExpr.Else[0].(*core.IfExpr)
-		require.True(t, ok, "else branch should be another IfExpr")
-	})
-
-	t.Run("multi_statement_then_block", func(t *testing.T) {
-		t.Parallel()
-
-		src := `if true { .a = 1; .b = 2 }`
-		expr := compile(t, src)
-		ifExpr, ok := expr.(*core.IfExpr)
-		require.True(t, ok)
-		assert.Len(t, ifExpr.Then, 2)
+	runGolden(t, []goldenCase{
+		{
+			name: "no_else",
+			src:  `if .x > 0 { .y = 1 }`,
+			want: `
+If
+  condition:
+    Binary(>)
+      Path(.x)
+      IntLit(0)
+  then:
+    Assign
+      Path(.y)
+      IntLit(1)`,
+		},
+		{
+			name: "with_else",
+			src:  `if .ok { .r = "yes" } else { .r = "no" }`,
+			want: `
+If
+  condition:
+    Path(.ok)
+  then:
+    Assign
+      Path(.r)
+      StringLit("yes")
+  else:
+    Assign
+      Path(.r)
+      StringLit("no")`,
+		},
+		{
+			name: "else_if_chain",
+			src:  `if .s >= 500 { .sev = "crit" } else if .s >= 400 { .sev = "warn" } else { .sev = "ok" }`,
+			want: `
+If
+  condition:
+    Binary(>=)
+      Path(.s)
+      IntLit(500)
+  then:
+    Assign
+      Path(.sev)
+      StringLit("crit")
+  else:
+    If
+      condition:
+        Binary(>=)
+          Path(.s)
+          IntLit(400)
+      then:
+        Assign
+          Path(.sev)
+          StringLit("warn")
+      else:
+        Assign
+          Path(.sev)
+          StringLit("ok")`,
+		},
+		{
+			name: "multi_statement_then_block",
+			src:  `if true { .a = 1; .b = 2 }`,
+			want: `
+If
+  condition:
+    BoolLit(true)
+  then:
+    Assign
+      Path(.a)
+      IntLit(1)
+    Assign
+      Path(.b)
+      IntLit(2)`,
+		},
 	})
 }
 
 func TestCompileForExpr(t *testing.T) {
 	t.Parallel()
 
-	t.Run("index_only", func(t *testing.T) {
-		t.Parallel()
-
-		expr := compile(t, `for i in .arr {}`)
-		f, ok := expr.(*core.ForExpr)
-		require.True(t, ok)
-		assert.Equal(t, "i", f.Index)
-		assert.Equal(t, "", f.Item)
-	})
-
-	t.Run("index_and_item", func(t *testing.T) {
-		t.Parallel()
-
-		expr := compile(t, `for i, v in .arr {}`)
-		f, ok := expr.(*core.ForExpr)
-		require.True(t, ok)
-		assert.Equal(t, "i", f.Index)
-		assert.Equal(t, "v", f.Item)
-	})
-
-	t.Run("blank_index", func(t *testing.T) {
-		t.Parallel()
-
-		expr := compile(t, `for _, v in .arr {}`)
-		f, ok := expr.(*core.ForExpr)
-		require.True(t, ok)
-		assert.Equal(t, "", f.Index)
-		assert.Equal(t, "v", f.Item)
-	})
-
-	t.Run("blank_item", func(t *testing.T) {
-		t.Parallel()
-
-		expr := compile(t, `for i, _ in .arr {}`)
-		f, ok := expr.(*core.ForExpr)
-		require.True(t, ok)
-		assert.Equal(t, "i", f.Index)
-		assert.Equal(t, "", f.Item)
-	})
-
-	t.Run("body_statements", func(t *testing.T) {
-		t.Parallel()
-
-		expr := compile(t, `for i in .items { .items[i] = .items[i] + 1 }`)
-		f, ok := expr.(*core.ForExpr)
-		require.True(t, ok)
-		assert.Len(t, f.Body, 1)
-	})
-
-	t.Run("iter_is_ident", func(t *testing.T) {
-		t.Parallel()
-
-		expr := compile(t, `for i in myArr {}`)
-		f, ok := expr.(*core.ForExpr)
-		require.True(t, ok)
-		ident, ok := f.Iter.(*core.IdentExpr)
-		require.True(t, ok)
-		assert.Equal(t, "myArr", ident.Name)
+	runGolden(t, []goldenCase{
+		{
+			name: "index_only",
+			src:  `for i in .arr {}`,
+			want: `
+For(index="i", item="")
+  iter:
+    Path(.arr)`,
+		},
+		{
+			name: "index_and_item",
+			src:  `for i, v in .arr {}`,
+			want: `
+For(index="i", item="v")
+  iter:
+    Path(.arr)`,
+		},
+		{
+			name: "blank_index",
+			src:  `for _, v in .arr {}`,
+			want: `
+For(index="", item="v")
+  iter:
+    Path(.arr)`,
+		},
+		{
+			name: "blank_item",
+			src:  `for i, _ in .arr {}`,
+			want: `
+For(index="i", item="")
+  iter:
+    Path(.arr)`,
+		},
+		{
+			name: "body_statements",
+			src:  `for i in .items { .items[i] = .items[i] + 1 }`,
+			want: `
+For(index="i", item="")
+  iter:
+    Path(.items)
+  body:
+    Assign
+      Path(.items.[Ident(i)])
+      Binary(+)
+        Path(.items.[Ident(i)])
+        IntLit(1)`,
+		},
+		{
+			name: "iter_is_ident",
+			src:  `for i in myArr {}`,
+			want: `
+For(index="i", item="")
+  iter:
+    Ident(myArr)`,
+		},
 	})
 }
 
 func TestCompileDelExpr(t *testing.T) {
 	t.Parallel()
 
-	t.Run("event_path", func(t *testing.T) {
-		t.Parallel()
-
-		expr := compile(t, `del .secret`)
-		d, ok := expr.(*core.DelExpr)
-		require.True(t, ok)
-		assert.Equal(t, core.EventRoot, d.Target.Root)
-		require.Len(t, d.Target.Segments, 1)
-		assert.Equal(t, "secret", d.Target.Segments[0].Field)
-	})
-
-	t.Run("nested_event_path", func(t *testing.T) {
-		t.Parallel()
-
-		expr := compile(t, `del .user.password`)
-		d, ok := expr.(*core.DelExpr)
-		require.True(t, ok)
-		require.Len(t, d.Target.Segments, 2)
-	})
-
-	t.Run("metadata_path", func(t *testing.T) {
-		t.Parallel()
-
-		expr := compile(t, `del %meta`)
-		d, ok := expr.(*core.DelExpr)
-		require.True(t, ok)
-		assert.Equal(t, core.MetadataRoot, d.Target.Root)
+	runGolden(t, []goldenCase{
+		{
+			name: "event_path",
+			src:  `del .secret`,
+			want: `
+Del
+  Path(.secret)`,
+		},
+		{
+			name: "nested_event_path",
+			src:  `del .user.password`,
+			want: `
+Del
+  Path(.user.password)`,
+		},
+		{
+			name: "metadata_path",
+			src:  `del %meta`,
+			want: `
+Del
+  Path(%meta)`,
+		},
 	})
 }
 
 func TestCompileArrayExpr(t *testing.T) {
 	t.Parallel()
 
-	t.Run("empty", func(t *testing.T) {
-		t.Parallel()
-
-		expr := compile(t, `[]`)
-		arr, ok := expr.(*core.ArrayExpr)
-		require.True(t, ok)
-		assert.Empty(t, arr.Elements)
+	runGolden(t, []goldenCase{
+		{name: "empty", src: `[]`, want: `Array`},
+		{
+			name: "integers",
+			src:  `[1, 2, 3]`,
+			want: `
+Array
+  IntLit(1)
+  IntLit(2)
+  IntLit(3)`,
+		},
+		{
+			name: "mixed_types",
+			src:  `[1, "two", true]`,
+			want: `
+Array
+  IntLit(1)
+  StringLit("two")
+  BoolLit(true)`,
+		},
 	})
-
-	t.Run("integers", func(t *testing.T) {
-		t.Parallel()
-
-		expr := compile(t, `[1, 2, 3]`)
-		arr, ok := expr.(*core.ArrayExpr)
-		require.True(t, ok)
-		assert.Len(t, arr.Elements, 3)
-	})
-
-	t.Run("mixed_types", func(t *testing.T) {
-		t.Parallel()
-
-		expr := compile(t, `[1, "two", true]`)
-		arr, ok := expr.(*core.ArrayExpr)
-		require.True(t, ok)
-		assert.Len(t, arr.Elements, 3)
-		_, ok = arr.Elements[0].(*core.IntLit)
-		require.True(t, ok, "first element should be IntLit")
-		_, ok = arr.Elements[1].(*core.StringLit)
-		require.True(t, ok, "second element should be StringLit")
-		_, ok = arr.Elements[2].(*core.BoolLit)
-		require.True(t, ok, "third element should be BoolLit")
-	})
-
-	t.Run("trailing_comma_not_required", func(t *testing.T) {
-		t.Parallel()
-
-		expr := compile(t, `[1, 2]`)
-		arr, ok := expr.(*core.ArrayExpr)
-		require.True(t, ok)
-		assert.Len(t, arr.Elements, 2)
-	})
-}
-
-func compileObj(t *testing.T, src string) *core.ObjectExpr {
-	t.Helper()
-	expr := compile(t, src)
-	obj, ok := expr.(*core.ObjectExpr)
-	require.True(t, ok, "expected *core.ObjectExpr, got %T", expr)
-	return obj
-}
-
-type kvExpect struct {
-	key string
-	val func(t *testing.T, expr core.Expr)
-}
-
-func litVal[L any, V any](want V, get func(*L) V) func(*testing.T, core.Expr) {
-	return func(t *testing.T, expr core.Expr) {
-		t.Helper()
-		lit, ok := any(expr).(*L)
-		require.True(t, ok, "expected %T, got %T", (*L)(nil), expr)
-		assert.Equal(t, want, get(lit))
-	}
-}
-
-func nullVal() func(*testing.T, core.Expr) {
-	return func(t *testing.T, expr core.Expr) {
-		t.Helper()
-		_, ok := any(expr).(*core.NullLit)
-		require.True(t, ok, "expected *core.NullLit, got %T", expr)
-	}
 }
 
 func TestCompileObjectExpr(t *testing.T) {
 	t.Parallel()
 
-	tests := []struct {
-		name  string
-		src   string
-		pairs []kvExpect
-	}{
-		{
-			name:  "empty",
-			src:   `{}`,
-			pairs: nil,
-		},
+	runGolden(t, []goldenCase{
+		{name: "empty", src: `{}`, want: `Object`},
 		{
 			name: "string_key",
 			src:  `{"name": "alice"}`,
-			pairs: []kvExpect{
-				{"name", litVal("alice", func(l *core.StringLit) string { return l.Value })},
-			},
+			want: `
+Object
+  key("name"):
+    StringLit("alice")`,
 		},
 		{
 			name: "ident_key",
 			src:  `{level: "info"}`,
-			pairs: []kvExpect{
-				{"level", litVal("info", func(l *core.StringLit) string { return l.Value })},
-			},
+			want: `
+Object
+  key("level"):
+    StringLit("info")`,
 		},
 		{
 			name: "raw_string_key",
 			src:  `{s'raw\key': 1}`,
-			pairs: []kvExpect{
-				{`raw\key`, litVal(1, func(l *core.IntLit) int64 { return l.Value })},
-			},
+			want: `
+Object
+  key("raw\\key"):
+    IntLit(1)`,
 		},
 		{
 			name: "multiple_pairs_all_scalar_types",
 			src:  `{"n": 42, "s": "hi", "b": true, "f": 3.14, "z": null}`,
-			pairs: []kvExpect{
-				{"n", litVal(42, func(l *core.IntLit) int64 { return l.Value })},
-				{"s", litVal("hi", func(l *core.StringLit) string { return l.Value })},
-				{"b", litVal(true, func(l *core.BoolLit) bool { return l.Value })},
-				{"f", litVal(3.14, func(l *core.FloatLit) float64 { return l.Value })},
-				{"z", nullVal()},
-			},
+			want: `
+Object
+  key("n"):
+    IntLit(42)
+  key("s"):
+    StringLit("hi")
+  key("b"):
+    BoolLit(true)
+  key("f"):
+    FloatLit(3.14)
+  key("z"):
+    NullLit`,
 		},
 		{
 			name: "bool_false_value",
 			src:  `{"ok": false}`,
-			pairs: []kvExpect{
-				{"ok", litVal(false, func(l *core.BoolLit) bool { return l.Value })},
-			},
+			want: `
+Object
+  key("ok"):
+    BoolLit(false)`,
 		},
 		{
 			name: "integer_zero",
 			src:  `{"count": 0}`,
-			pairs: []kvExpect{
-				{"count", litVal(0, func(l *core.IntLit) int64 { return l.Value })},
-			},
+			want: `
+Object
+  key("count"):
+    IntLit(0)`,
 		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-			obj := compileObj(t, tc.src)
-			require.Len(t, obj.Pairs, len(tc.pairs), "wrong number of pairs")
-			for i, kv := range tc.pairs {
-				assert.Equal(t, kv.key, obj.Pairs[i].Key, "pair[%d] key", i)
-				kv.val(t, obj.Pairs[i].Value)
-			}
-		})
-	}
+	})
 }
 
 func TestCompileCallExpr(t *testing.T) {
 	t.Parallel()
 
-	t.Run("no_args", func(t *testing.T) {
-		t.Parallel()
-
-		expr := compile(t, `now()`)
-		call, ok := expr.(*core.CallExpr)
-		require.True(t, ok)
-		assert.Equal(t, "now", call.Name)
-		assert.Empty(t, call.Args)
-	})
-
-	t.Run("positional_args", func(t *testing.T) {
-		t.Parallel()
-
-		expr := compile(t, `upcase(.level)`)
-		call, ok := expr.(*core.CallExpr)
-		require.True(t, ok)
-		assert.Equal(t, "upcase", call.Name)
-		require.Len(t, call.Args, 1)
-		assert.Equal(t, "", call.Args[0].Name, "should be positional (no name)")
-	})
-
-	t.Run("named_arg", func(t *testing.T) {
-		t.Parallel()
-
-		expr := compile(t, `fn(key: "value")`)
-		call, ok := expr.(*core.CallExpr)
-		require.True(t, ok)
-		require.Len(t, call.Args, 1)
-		assert.Equal(t, "key", call.Args[0].Name)
-		_, ok = call.Args[0].Value.(*core.StringLit)
-		require.True(t, ok)
-	})
-
-	t.Run("mixed_positional_and_named", func(t *testing.T) {
-		t.Parallel()
-
-		expr := compile(t, `fn(.x, sep: ",")`)
-		call, ok := expr.(*core.CallExpr)
-		require.True(t, ok)
-		require.Len(t, call.Args, 2)
-		assert.Equal(t, "", call.Args[0].Name, "first arg is positional")
-		assert.Equal(t, "sep", call.Args[1].Name)
+	runGolden(t, []goldenCase{
+		{name: "no_args", src: `now()`, want: `Call(now)`},
+		{
+			name: "positional_args",
+			src:  `upcase(.level)`,
+			want: `
+Call(upcase)
+  Path(.level)`,
+		},
+		{
+			name: "named_arg",
+			src:  `fn(key: "value")`,
+			want: `
+Call(fn)
+  named(key:)
+    StringLit("value")`,
+		},
+		{
+			name: "mixed_positional_and_named",
+			src:  `fn(.x, sep: ",")`,
+			want: `
+Call(fn)
+  Path(.x)
+  named(sep:)
+    StringLit(",")`,
+		},
 	})
 }
 
 func TestCompileIndexExpr(t *testing.T) {
 	t.Parallel()
 
-	t.Run("array_index", func(t *testing.T) {
-		t.Parallel()
-
-		expr := compile(t, `arr[0]`)
-		idx, ok := expr.(*core.IndexExpr)
-		require.True(t, ok)
-		_, ok = idx.Object.(*core.IdentExpr)
-		require.True(t, ok)
-		lit, ok := idx.Index.(*core.IntLit)
-		require.True(t, ok)
-		assert.Equal(t, int64(0), lit.Value)
-	})
-
-	t.Run("object_string_index", func(t *testing.T) {
-		t.Parallel()
-
-		expr := compile(t, `obj["key"]`)
-		idx, ok := expr.(*core.IndexExpr)
-		require.True(t, ok)
-		lit, ok := idx.Index.(*core.StringLit)
-		require.True(t, ok)
-		assert.Equal(t, "key", lit.Value)
-	})
-
-	t.Run("dynamic_index", func(t *testing.T) {
-		t.Parallel()
-
-		expr := compile(t, `arr[i]`)
-		idx, ok := expr.(*core.IndexExpr)
-		require.True(t, ok)
-		ident, ok := idx.Index.(*core.IdentExpr)
-		require.True(t, ok)
-		assert.Equal(t, "i", ident.Name)
+	runGolden(t, []goldenCase{
+		{
+			name: "array_index",
+			src:  `arr[0]`,
+			want: `
+Index
+  Ident(arr)
+  IntLit(0)`,
+		},
+		{
+			name: "object_string_index",
+			src:  `obj["key"]`,
+			want: `
+Index
+  Ident(obj)
+  StringLit("key")`,
+		},
+		{
+			name: "dynamic_index",
+			src:  `arr[i]`,
+			want: `
+Index
+  Ident(arr)
+  Ident(i)`,
+		},
 	})
 }
 
-func TestCompileGrouped(t *testing.T) {
+func TestCompileStatements(t *testing.T) {
 	t.Parallel()
 
-	expr := compile(t, `(42)`)
-	_, ok := expr.(*core.IntLit)
-	require.True(t, ok, "grouped literal should unwrap to the literal itself")
-
-	bin := compile(t, `(a + b) * c`).(*core.BinaryExpr)
-	assert.Equal(t, "*", bin.Op)
-	_, ok = bin.Left.(*core.BinaryExpr)
-	require.True(t, ok)
-}
-
-func TestCompileMultipleStatements(t *testing.T) {
-	t.Parallel()
-
-	exprs := compileN(t, `.a = 1; .b = 2; .c = 3`)
-	assert.Len(t, exprs, 3)
-	for _, e := range exprs {
-		_, ok := e.(*core.AssignExpr)
-		require.True(t, ok)
-	}
-}
-
-func TestCompileMultipleStatementsNewline(t *testing.T) {
-	t.Parallel()
-
-	src := `
-	.x = 1
-	.y = 2
-	`
-	exprs := compileN(t, src)
-	assert.Len(t, exprs, 2)
-}
-
-func TestCompileSemicolonOnlyLines(t *testing.T) {
-	t.Parallel()
-
-	exprs := compileN(t, `;; .x = 1 ;;`)
-	assert.Len(t, exprs, 1)
+	runGolden(t, []goldenCase{
+		{
+			name: "semicolon_separated",
+			src:  `.a = 1; .b = 2; .c = 3`,
+			want: `
+Assign
+  Path(.a)
+  IntLit(1)
+Assign
+  Path(.b)
+  IntLit(2)
+Assign
+  Path(.c)
+  IntLit(3)`,
+		},
+		{
+			name: "newline_separated",
+			src:  "\t.x = 1\n\t.y = 2\n",
+			want: `
+Assign
+  Path(.x)
+  IntLit(1)
+Assign
+  Path(.y)
+  IntLit(2)`,
+		},
+		{
+			name: "extra_semicolons_ignored",
+			src:  `;; .x = 1 ;;`,
+			want: `
+Assign
+  Path(.x)
+  IntLit(1)`,
+		},
+		{name: "abort", src: `abort`, want: `Abort`},
+	})
 }
 
 func TestCompileErrors(t *testing.T) {

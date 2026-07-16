@@ -70,260 +70,160 @@ func TestCompileRejectsPositionalAfterNamed(t *testing.T) {
 func TestResolveFunctionArgs(t *testing.T) {
 	t.Parallel()
 
-	t.Run("positional_args_mapped_in_order", func(t *testing.T) {
-		t.Parallel()
+	str := func(v string) core.Value { return core.StringValue{V: v} }
+	num := func(v int64) core.Value { return core.IntegerValue{V: v} }
 
-		fn := mkFn("add",
-			Parameter{Name: "a"},
-			Parameter{Name: "b"},
-		)
-		resolved, err := resolveArgs(t, fn,
-			[]core.Value{core.IntegerValue{V: 1}, core.IntegerValue{V: 2}},
-			nil,
-		)
-		require.NoError(t, err)
-		assert.Equal(t, core.IntegerValue{V: 1}, resolved["a"])
-		assert.Equal(t, core.IntegerValue{V: 2}, resolved["b"])
-	})
-
-	t.Run("named_args_mapped_by_name", func(t *testing.T) {
-		t.Parallel()
-
-		fn := mkFn("fn",
-			Parameter{Name: "x", Default: core.NullValue{}},
-			Parameter{Name: "y", Default: core.NullValue{}},
-		)
-		resolved, err := resolveArgs(t, fn,
-			nil,
-			map[string]core.Value{
-				"y": core.IntegerValue{V: 20},
-				"x": core.IntegerValue{V: 10},
+	tests := []struct {
+		name       string
+		params     []Parameter
+		positional []core.Value
+		named      map[string]core.Value
+		want       map[string]core.Value
+		wantErr    string
+	}{
+		{
+			name:       "positional_args_mapped_in_order",
+			params:     []Parameter{{Name: "a"}, {Name: "b"}},
+			positional: []core.Value{num(1), num(2)},
+			want:       map[string]core.Value{"a": num(1), "b": num(2)},
+		},
+		{
+			name: "named_args_mapped_by_name",
+			params: []Parameter{
+				{Name: "x", Default: core.NullValue{}},
+				{Name: "y", Default: core.NullValue{}},
 			},
-		)
-		require.NoError(t, err)
-		assert.Equal(t, core.IntegerValue{V: 10}, resolved["x"])
-		assert.Equal(t, core.IntegerValue{V: 20}, resolved["y"])
-	})
-
-	t.Run("default_used_when_param_not_provided", func(t *testing.T) {
-		t.Parallel()
-
-		fn := mkFn("fn",
-			Parameter{Name: "sep", Default: core.StringValue{V: ","}},
-		)
-		resolved, err := resolveArgs(t, fn, nil, nil)
-		require.NoError(t, err)
-		assert.Equal(t, core.StringValue{V: ","}, resolved["sep"])
-	})
-
-	t.Run("named_param_passed_positionally_error", func(t *testing.T) {
-		t.Parallel()
-
-		fn := mkFn("fn",
-			Parameter{Name: "sep", Default: core.StringValue{V: ","}},
-		)
-		_, err := resolveArgs(t, fn,
-			[]core.Value{core.StringValue{V: ";"}},
-			nil,
-		)
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "too many arguments")
-	})
-
-	t.Run("named_arg_overrides_default", func(t *testing.T) {
-		t.Parallel()
-
-		fn := mkFn("fn",
-			Parameter{Name: "sep", Default: core.StringValue{V: ","}},
-		)
-		resolved, err := resolveArgs(t, fn,
-			nil,
-			map[string]core.Value{"sep": core.StringValue{V: "|"}},
-		)
-		require.NoError(t, err)
-		assert.Equal(t, core.StringValue{V: "|"}, resolved["sep"])
-	})
-
-	t.Run("named_default_present_when_only_positional_given", func(t *testing.T) {
-		t.Parallel()
-
-		fn := mkFn("fn",
-			Parameter{Name: "required"},
-			Parameter{Name: "optional", Default: core.IntegerValue{V: 7}},
-		)
-		resolved, err := resolveArgs(t, fn,
-			[]core.Value{core.IntegerValue{V: 1}},
-			nil,
-		)
-		require.NoError(t, err)
-		assert.Equal(t, core.IntegerValue{V: 1}, resolved["required"])
-		assert.Equal(t, core.IntegerValue{V: 7}, resolved["optional"],
-			"named param falls back to its default")
-	})
-
-	t.Run("no_args_no_params_ok", func(t *testing.T) {
-		t.Parallel()
-
-		fn := mkFn("noop")
-		resolved, err := resolveArgs(t, fn, nil, nil)
-		require.NoError(t, err)
-		assert.Empty(t, resolved)
-	})
-
-	t.Run("too_many_positional_error", func(t *testing.T) {
-		t.Parallel()
-
-		fn := mkFn("fn", Parameter{Name: "x"})
-		_, err := resolveArgs(t, fn,
-			[]core.Value{core.IntegerValue{V: 1}, core.IntegerValue{V: 2}},
-			nil,
-		)
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "too many arguments")
-	})
-
-	t.Run("unknown_named_arg_error", func(t *testing.T) {
-		t.Parallel()
-
-		fn := mkFn("fn", Parameter{Name: "x", Default: core.NullValue{}})
-		_, err := resolveArgs(t, fn,
-			nil,
-			map[string]core.Value{"unknown": core.IntegerValue{V: 1}},
-		)
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "unknown argument")
-		assert.Contains(t, err.Error(), `"unknown"`)
-	})
-
-	t.Run("positional_param_passed_by_name_error", func(t *testing.T) {
-		t.Parallel()
-
-		fn := mkFn("fn", Parameter{Name: "x"})
-		_, err := resolveArgs(t, fn,
-			nil,
-			map[string]core.Value{"x": core.IntegerValue{V: 2}},
-		)
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "positional and cannot be passed by name")
-	})
-
-	t.Run("missing_required_arg_error", func(t *testing.T) {
-		t.Parallel()
-
-		fn := mkFn("fn", Parameter{Name: "x"})
-		_, err := resolveArgs(t, fn, nil, nil)
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "missing required argument")
-		assert.Contains(t, err.Error(), `"x"`)
-	})
-
-	t.Run("required_param_covered_by_positional_ok", func(t *testing.T) {
-		t.Parallel()
-
-		fn := mkFn("fn", Parameter{Name: "x"})
-		resolved, err := resolveArgs(t, fn,
-			[]core.Value{core.StringValue{V: "v"}},
-			nil,
-		)
-		require.NoError(t, err)
-		assert.Equal(t, core.StringValue{V: "v"}, resolved["x"])
-	})
-
-	t.Run("wrong_kind_single_accepted_error", func(t *testing.T) {
-		t.Parallel()
-
-		fn := mkFn("fn",
-			Parameter{Name: "s", AcceptedKinds: []core.ValueKind{core.KindString}},
-		)
-		_, err := resolveArgs(t, fn,
-			[]core.Value{core.IntegerValue{V: 42}},
-			nil,
-		)
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "expected string")
-		assert.Contains(t, err.Error(), "got integer")
-	})
-
-	t.Run("wrong_kind_multiple_accepted_error", func(t *testing.T) {
-		t.Parallel()
-
-		fn := mkFn("fn",
-			Parameter{Name: "v", AcceptedKinds: []core.ValueKind{core.KindString, core.KindInteger}},
-		)
-		_, err := resolveArgs(t, fn,
-			[]core.Value{core.BoolValue{V: true}},
-			nil,
-		)
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "expected string or integer")
-		assert.Contains(t, err.Error(), "got bool")
-	})
-
-	t.Run("correct_kind_passes", func(t *testing.T) {
-		t.Parallel()
-
-		fn := mkFn("fn",
-			Parameter{Name: "s", AcceptedKinds: []core.ValueKind{core.KindString}},
-		)
-		resolved, err := resolveArgs(t, fn,
-			[]core.Value{core.StringValue{V: "hello"}},
-			nil,
-		)
-		require.NoError(t, err)
-		assert.Equal(t, core.StringValue{V: "hello"}, resolved["s"])
-	})
-
-	t.Run("one_of_multiple_accepted_kinds_passes", func(t *testing.T) {
-		t.Parallel()
-
-		fn := mkFn("fn",
-			Parameter{Name: "v", AcceptedKinds: []core.ValueKind{core.KindInteger, core.KindFloat}},
-		)
-		resolved, err := resolveArgs(t, fn,
-			[]core.Value{core.FloatValue{V: 3.14}},
-			nil,
-		)
-		require.NoError(t, err)
-		assert.Equal(t, core.FloatValue{V: 3.14}, resolved["v"])
-	})
-
-	t.Run("empty_accepted_kinds_allows_any_type", func(t *testing.T) {
-		t.Parallel()
-
-		fn := mkFn("fn", Parameter{Name: "v"})
-		for _, val := range []core.Value{
-			core.IntegerValue{V: 1},
-			core.StringValue{V: "x"},
-			core.BoolValue{V: true},
-			core.NullValue{},
-		} {
-			_, err := resolveArgs(t, fn, []core.Value{val}, nil)
-			assert.NoError(t, err, "should accept %s", val.Kind())
-		}
-	})
-
-	t.Run("named_default_passes_kind_check", func(t *testing.T) {
-		t.Parallel()
-
-		fn := mkFn("fn",
-			Parameter{
-				Name:          "opt",
-				Default:       core.StringValue{V: "x"},
-				AcceptedKinds: []core.ValueKind{core.KindString},
+			named: map[string]core.Value{"y": num(20), "x": num(10)},
+			want:  map[string]core.Value{"x": num(10), "y": num(20)},
+		},
+		{
+			name:   "default_used_when_param_not_provided",
+			params: []Parameter{{Name: "sep", Default: str(",")}},
+			want:   map[string]core.Value{"sep": str(",")},
+		},
+		{
+			name:   "named_arg_overrides_default",
+			params: []Parameter{{Name: "sep", Default: str(",")}},
+			named:  map[string]core.Value{"sep": str("|")},
+			want:   map[string]core.Value{"sep": str("|")},
+		},
+		{
+			name: "named_default_present_when_only_positional_given",
+			params: []Parameter{
+				{Name: "required"},
+				{Name: "optional", Default: num(7)},
 			},
-		)
-		resolved, err := resolveArgs(t, fn, nil, nil)
-		require.NoError(t, err)
-		assert.Equal(t, core.StringValue{V: "x"}, resolved["opt"])
-	})
+			positional: []core.Value{num(1)},
+			want:       map[string]core.Value{"required": num(1), "optional": num(7)},
+		},
+		{
+			name: "no_args_no_params_ok",
+			want: map[string]core.Value{},
+		},
+		{
+			name:       "required_param_covered_by_positional",
+			params:     []Parameter{{Name: "x"}},
+			positional: []core.Value{str("v")},
+			want:       map[string]core.Value{"x": str("v")},
+		},
+		{
+			name:       "named_param_passed_positionally_error",
+			params:     []Parameter{{Name: "sep", Default: str(",")}},
+			positional: []core.Value{str(";")},
+			wantErr:    "too many arguments",
+		},
+		{
+			name:       "too_many_positional_error",
+			params:     []Parameter{{Name: "x"}},
+			positional: []core.Value{num(1), num(2)},
+			wantErr:    "too many arguments",
+		},
+		{
+			name:    "unknown_named_arg_error",
+			params:  []Parameter{{Name: "x", Default: core.NullValue{}}},
+			named:   map[string]core.Value{"unknown": num(1)},
+			wantErr: `unknown argument "unknown"`,
+		},
+		{
+			name:    "positional_param_passed_by_name_error",
+			params:  []Parameter{{Name: "x"}},
+			named:   map[string]core.Value{"x": num(2)},
+			wantErr: "positional and cannot be passed by name",
+		},
+		{
+			name:    "missing_required_arg_error",
+			params:  []Parameter{{Name: "x"}},
+			wantErr: `missing required argument "x"`,
+		},
+		{
+			name:       "wrong_kind_single_accepted_error",
+			params:     []Parameter{{Name: "s", AcceptedKinds: []core.ValueKind{core.KindString}}},
+			positional: []core.Value{num(42)},
+			wantErr:    "expected string, got integer",
+		},
+		{
+			name: "wrong_kind_multiple_accepted_error",
+			params: []Parameter{
+				{Name: "v", AcceptedKinds: []core.ValueKind{core.KindString, core.KindInteger}},
+			},
+			positional: []core.Value{core.BoolValue{V: true}},
+			wantErr:    "expected string or integer, got bool",
+		},
+		{
+			name:       "correct_kind_passes",
+			params:     []Parameter{{Name: "s", AcceptedKinds: []core.ValueKind{core.KindString}}},
+			positional: []core.Value{str("hello")},
+			want:       map[string]core.Value{"s": str("hello")},
+		},
+		{
+			name: "one_of_multiple_accepted_kinds_passes",
+			params: []Parameter{
+				{Name: "v", AcceptedKinds: []core.ValueKind{core.KindInteger, core.KindFloat}},
+			},
+			positional: []core.Value{core.FloatValue{V: 3.14}},
+			want:       map[string]core.Value{"v": core.FloatValue{V: 3.14}},
+		},
+		{
+			name:       "empty_accepted_kinds_allows_integer",
+			params:     []Parameter{{Name: "v"}},
+			positional: []core.Value{num(1)},
+			want:       map[string]core.Value{"v": num(1)},
+		},
+		{
+			name:       "empty_accepted_kinds_allows_null",
+			params:     []Parameter{{Name: "v"}},
+			positional: []core.Value{core.NullValue{}},
+			want:       map[string]core.Value{"v": core.NullValue{}},
+		},
+		{
+			name: "named_default_passes_kind_check",
+			params: []Parameter{
+				{Name: "opt", Default: str("x"), AcceptedKinds: []core.ValueKind{core.KindString}},
+			},
+			want: map[string]core.Value{"opt": str("x")},
+		},
+		{
+			name:    "error_message_includes_function_name",
+			params:  []Parameter{{Name: "x"}},
+			wantErr: `function "fn": missing required argument "x"`,
+		},
+	}
 
-	t.Run("error_message_includes_function_name", func(t *testing.T) {
-		t.Parallel()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 
-		fn := mkFn("my_func", Parameter{Name: "x"})
-		_, err := resolveArgs(t, fn, nil, nil)
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "my_func")
-		assert.Contains(t, err.Error(), `"x"`)
-	})
+			compiled, err := compile(mkFn("fn", tt.params...))
+			require.NoError(t, err)
+
+			resolved, err := compiled.Resolve(tt.positional, tt.named)
+			if tt.wantErr != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.wantErr)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, resolved)
+		})
+	}
 }

@@ -1,33 +1,15 @@
 package compiler
 
 import (
-	"strings"
 	"testing"
 
-	"github.com/ozontech/file.d/plugin/action/transform/core"
 	"github.com/stretchr/testify/assert"
 )
-
-// dumpExprs compiles src and renders every statement in core.DumpAST format.
-func dumpExprs(t *testing.T, src string) string {
-	t.Helper()
-
-	exprs := compileN(t, src)
-	dumps := make([]string, len(exprs))
-	for i, e := range exprs {
-		dumps[i] = core.DumpAST(e, 0)
-	}
-	return strings.Join(dumps, "\n")
-}
 
 func TestMemberAccess(t *testing.T) {
 	t.Parallel()
 
-	tests := []struct {
-		name string
-		src  string
-		want string
-	}{
+	runGolden(t, []goldenCase{
 		{
 			name: "ident_dot_field",
 			src:  `m.level`,
@@ -101,15 +83,7 @@ Assign
 			want: `
 Path(.a.b.c)`,
 		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			assert.Equal(t, strings.TrimSpace(tt.want), dumpExprs(t, tt.src))
-		})
-	}
+	})
 }
 
 func TestMemberAccessErrors(t *testing.T) {

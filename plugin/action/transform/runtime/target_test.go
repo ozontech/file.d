@@ -135,343 +135,336 @@ func TestRootTargetGetEmptyPath(t *testing.T) {
 func TestRootTargetSet(t *testing.T) {
 	t.Parallel()
 
-	t.Run("update_existing_field", func(t *testing.T) {
-		t.Parallel()
+	tests := []struct {
+		name     string
+		json     string
+		path     core.Path
+		value    core.Value
+		wantJSON string // full event JSON after the Set
+		wantErr  string
+	}{
+		{
+			name:     "update_existing_field",
+			json:     `{"a":1}`,
+			path:     eventPath("a"),
+			value:    core.IntegerValue{V: 99},
+			wantJSON: `{"a":99}`,
+		},
+		{
+			name:     "create_new_field",
+			json:     `{"a":1}`,
+			path:     eventPath("b"),
+			value:    core.StringValue{V: "new"},
+			wantJSON: `{"a":1,"b":"new"}`,
+		},
+		{
+			name:     "set_nested_field",
+			json:     `{"user":{"name":"bob","age":30}}`,
+			path:     eventPath("user", "name"),
+			value:    core.StringValue{V: "alice"},
+			wantJSON: `{"user":{"name":"alice","age":30}}`,
+		},
+		{
+			name:     "array_element_positive_index",
+			json:     `{"arr":[1,2,3]}`,
+			path:     indexedPath("arr", 1),
+			value:    core.IntegerValue{V: 99},
+			wantJSON: `{"arr":[1,99,3]}`,
+		},
+		{
+			name:     "array_element_negative_index",
+			json:     `{"arr":[1,2,3]}`,
+			path:     indexedPath("arr", -1),
+			value:    core.IntegerValue{V: 77},
+			wantJSON: `{"arr":[1,2,77]}`,
+		},
+		{
+			name:     "null_value",
+			json:     `{"x":0}`,
+			path:     eventPath("x"),
+			value:    core.NullValue{},
+			wantJSON: `{"x":null}`,
+		},
+		{
+			name:     "bool_value",
+			json:     `{"x":0}`,
+			path:     eventPath("x"),
+			value:    core.BoolValue{V: false},
+			wantJSON: `{"x":false}`,
+		},
+		{
+			name:     "string_value",
+			json:     `{"x":0}`,
+			path:     eventPath("x"),
+			value:    core.StringValue{V: "hello"},
+			wantJSON: `{"x":"hello"}`,
+		},
+		{
+			name:     "float_value",
+			json:     `{"x":0}`,
+			path:     eventPath("x"),
+			value:    core.FloatValue{V: 1.5},
+			wantJSON: `{"x":1.5}`,
+		},
+		{
+			name:     "creates_missing_parents",
+			json:     `{}`,
+			path:     eventPath("user", "name"),
+			value:    core.StringValue{V: "alice"},
+			wantJSON: `{"user":{"name":"alice"}}`,
+		},
+		{
+			name:     "creates_deeply_nested_parents",
+			json:     `{}`,
+			path:     eventPath("a", "b", "c"),
+			value:    core.IntegerValue{V: 1},
+			wantJSON: `{"a":{"b":{"c":1}}}`,
+		},
+		{
+			name:    "root_error",
+			json:    `{}`,
+			path:    core.Path{Root: core.EventRoot},
+			value:   core.IntegerValue{V: 1},
+			wantErr: "cannot replace event root",
+		},
+		{
+			name:    "array_out_of_bounds_error",
+			json:    `{"arr":[1]}`,
+			path:    indexedPath("arr", 5),
+			value:   core.IntegerValue{V: 9},
+			wantErr: "out of bounds",
+		},
+		{
+			name:    "array_negative_out_of_bounds_error",
+			json:    `{"arr":[1]}`,
+			path:    indexedPath("arr", -5),
+			value:   core.IntegerValue{V: 9},
+			wantErr: "out of bounds",
+		},
+	}
 
-		target, release := newTestTarget(t, `{"a": 1}`, nil)
-		defer release()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 
-		require.NoError(t, target.Set(eventPath("a"), core.IntegerValue{V: 99}))
-		val, err := target.Get(eventPath("a"))
-		require.NoError(t, err)
-		assert.Equal(t, "99", val.String())
-	})
+			target, release := newTestTarget(t, tt.json, nil)
+			defer release()
 
-	t.Run("create_new_field", func(t *testing.T) {
-		t.Parallel()
-
-		target, release := newTestTarget(t, `{"a": 1}`, nil)
-		defer release()
-
-		require.NoError(t, target.Set(eventPath("b"), core.StringValue{V: "new"}))
-		val, err := target.Get(eventPath("b"))
-		require.NoError(t, err)
-		assert.Equal(t, "new", val.String())
-	})
-
-	t.Run("set_nested_field", func(t *testing.T) {
-		t.Parallel()
-
-		target, release := newTestTarget(t, `{"user": {"name": "bob", "age": 30}}`, nil)
-		defer release()
-
-		require.NoError(t, target.Set(eventPath("user", "name"), core.StringValue{V: "alice"}))
-
-		val, err := target.Get(eventPath("user", "name"))
-		require.NoError(t, err)
-		assert.Equal(t, "alice", val.String())
-
-		val, err = target.Get(eventPath("user", "age"))
-		require.NoError(t, err)
-		assert.Equal(t, "30", val.String())
-	})
-
-	t.Run("set_array_element_positive_index", func(t *testing.T) {
-		t.Parallel()
-
-		target, release := newTestTarget(t, `{"arr": [1, 2, 3]}`, nil)
-		defer release()
-
-		require.NoError(t, target.Set(indexedPath("arr", 1), core.IntegerValue{V: 99}))
-
-		val, err := target.Get(indexedPath("arr", 1))
-		require.NoError(t, err)
-		assert.Equal(t, "99", val.String())
-
-		val, err = target.Get(indexedPath("arr", 0))
-		require.NoError(t, err)
-		assert.Equal(t, "1", val.String())
-
-		val, err = target.Get(indexedPath("arr", 2))
-		require.NoError(t, err)
-		assert.Equal(t, "3", val.String())
-	})
-
-	t.Run("set_array_element_negative_index", func(t *testing.T) {
-		t.Parallel()
-
-		target, release := newTestTarget(t, `{"arr": [1, 2, 3]}`, nil)
-		defer release()
-
-		require.NoError(t, target.Set(indexedPath("arr", -1), core.IntegerValue{V: 77}))
-
-		val, err := target.Get(indexedPath("arr", 2))
-		require.NoError(t, err)
-		assert.Equal(t, "77", val.String())
-	})
-
-	t.Run("set_various_value_types", func(t *testing.T) {
-		t.Parallel()
-
-		vals := []struct {
-			name    string
-			value   core.Value
-			wantStr string
-		}{
-			{"null", core.NullValue{}, "null"},
-			{"bool", core.BoolValue{V: false}, "false"},
-			{"string", core.StringValue{V: "hello"}, "hello"},
-			{"float", core.FloatValue{V: 1.5}, "1.5"},
-		}
-		for _, v := range vals {
-			v := v
-			t.Run(v.name, func(t *testing.T) {
-				target, release := newTestTarget(t, `{"x": 0}`, nil)
-				defer release()
-
-				require.NoError(t, target.Set(eventPath("x"), v.value))
-
-				val, err := target.Get(eventPath("x"))
-				require.NoError(t, err)
-				assert.Equal(t, v.wantStr, val.String())
-			})
-		}
-	})
-
-	t.Run("set_root_error", func(t *testing.T) {
-		t.Parallel()
-
-		target, release := newTestTarget(t, `{}`, nil)
-		defer release()
-
-		err := target.Set(core.Path{Root: core.EventRoot}, core.IntegerValue{V: 1})
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "cannot replace event root")
-	})
-
-	t.Run("set_creates_missing_parents", func(t *testing.T) {
-		t.Parallel()
-
-		target, release := newTestTarget(t, `{}`, nil)
-		defer release()
-
-		err := target.Set(eventPath("user", "name"), core.StringValue{V: "alice"})
-		require.NoError(t, err)
-
-		val, err := target.Get(eventPath("user", "name"))
-		require.NoError(t, err)
-		assert.Equal(t, "alice", val.String())
-	})
-
-	t.Run("set_creates_deeply_nested_parents", func(t *testing.T) {
-		t.Parallel()
-
-		target, release := newTestTarget(t, `{}`, nil)
-		defer release()
-
-		err := target.Set(eventPath("a", "b", "c"), core.IntegerValue{V: 1})
-		require.NoError(t, err)
-
-		val, err := target.Get(eventPath("a", "b", "c"))
-		require.NoError(t, err)
-		assert.Equal(t, "1", val.String())
-	})
-
-	t.Run("set_array_out_of_bounds_error", func(t *testing.T) {
-		t.Parallel()
-
-		target, release := newTestTarget(t, `{"arr": [1]}`, nil)
-		defer release()
-
-		err := target.Set(indexedPath("arr", 5), core.IntegerValue{V: 9})
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "out of bounds")
-	})
-
-	t.Run("set_array_negative_out_of_bounds_error", func(t *testing.T) {
-		t.Parallel()
-
-		target, release := newTestTarget(t, `{"arr": [1]}`, nil)
-		defer release()
-
-		err := target.Set(indexedPath("arr", -5), core.IntegerValue{V: 9})
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "out of bounds")
-	})
+			err := target.Set(tt.path, tt.value)
+			if tt.wantErr != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.wantErr)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantJSON, target.Root.EncodeToString())
+		})
+	}
 }
 
 func TestRootTargetDelete(t *testing.T) {
 	t.Parallel()
 
-	t.Run("delete_existing_field", func(t *testing.T) {
-		t.Parallel()
+	tests := []struct {
+		name     string
+		json     string
+		path     core.Path
+		wantJSON string // full event JSON after the Delete
+		wantErr  string
+	}{
+		{
+			name:     "existing_field",
+			json:     `{"a":1,"b":2}`,
+			path:     eventPath("a"),
+			wantJSON: `{"b":2}`,
+		},
+		{
+			name:     "nested_field",
+			json:     `{"user":{"name":"alice","age":30}}`,
+			path:     eventPath("user", "age"),
+			wantJSON: `{"user":{"name":"alice"}}`,
+		},
+		{
+			name:     "missing_field_is_noop",
+			json:     `{"a":1}`,
+			path:     eventPath("gone"),
+			wantJSON: `{"a":1}`,
+		},
+		{
+			name:    "root_error",
+			json:    `{}`,
+			path:    core.Path{Root: core.EventRoot},
+			wantErr: "cannot delete event root",
+		},
+	}
 
-		target, release := newTestTarget(t, `{"a": 1, "b": 2}`, nil)
-		defer release()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 
-		require.NoError(t, target.Delete(eventPath("a")))
+			target, release := newTestTarget(t, tt.json, nil)
+			defer release()
 
-		val, err := target.Get(eventPath("a"))
-		require.NoError(t, err)
-		assert.Equal(t, "null", val.String())
-
-		val, err = target.Get(eventPath("b"))
-		require.NoError(t, err)
-		assert.Equal(t, "2", val.String())
-	})
-
-	t.Run("delete_nested_field", func(t *testing.T) {
-		t.Parallel()
-
-		target, release := newTestTarget(t, `{"user": {"name": "alice", "age": 30}}`, nil)
-		defer release()
-
-		require.NoError(t, target.Delete(eventPath("user", "age")))
-
-		val, err := target.Get(eventPath("user", "age"))
-		require.NoError(t, err)
-		assert.Equal(t, "null", val.String())
-
-		val, err = target.Get(eventPath("user", "name"))
-		require.NoError(t, err)
-		assert.Equal(t, "alice", val.String())
-	})
-
-	t.Run("delete_missing_field_is_noop", func(t *testing.T) {
-		t.Parallel()
-
-		target, release := newTestTarget(t, `{"a": 1}`, nil)
-		defer release()
-
-		require.NoError(t, target.Delete(eventPath("gone")))
-
-		val, err := target.Get(eventPath("a"))
-		require.NoError(t, err)
-		assert.Equal(t, "1", val.String())
-	})
-
-	t.Run("delete_root_error", func(t *testing.T) {
-		t.Parallel()
-
-		target, release := newTestTarget(t, `{}`, nil)
-		defer release()
-
-		err := target.Delete(core.Path{Root: core.EventRoot})
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "cannot delete event root")
-	})
+			err := target.Delete(tt.path)
+			if tt.wantErr != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.wantErr)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantJSON, target.Root.EncodeToString())
+		})
+	}
 }
 
-func TestRootTargetMetadata(t *testing.T) {
+func TestRootTargetMetadataGet(t *testing.T) {
 	t.Parallel()
 
-	t.Run("get_single_field", func(t *testing.T) {
-		t.Parallel()
+	tests := []struct {
+		name    string
+		meta    map[string]string
+		path    core.Path
+		want    core.Value
+		wantErr string
+	}{
+		{
+			name: "single_field",
+			meta: map[string]string{"source": "kafka"},
+			path: metaPath("source"),
+			want: core.StringValue{V: "kafka"},
+		},
+		{
+			name: "missing_field_returns_null",
+			meta: map[string]string{},
+			path: metaPath("missing"),
+			want: core.NullValue{},
+		},
+		{
+			name: "empty_segments_return_all_metadata",
+			meta: map[string]string{"k1": "v1", "k2": "v2"},
+			path: core.Path{Root: core.MetadataRoot},
+			want: core.ObjectValue{V: map[string]core.Value{
+				"k1": core.StringValue{V: "v1"},
+				"k2": core.StringValue{V: "v2"},
+			}},
+		},
+		{
+			name: "multi_segment_error",
+			meta: map[string]string{"a": "b"},
+			path: core.Path{
+				Root:     core.MetadataRoot,
+				Segments: []core.Segment{core.FieldSeg("a"), core.FieldSeg("b")},
+			},
+			wantErr: "metadata path must be a single field name",
+		},
+	}
 
-		meta := map[string]string{"source": "kafka"}
-		target, release := newTestTarget(t, `{}`, meta)
-		defer release()
-		val, err := target.Get(metaPath("source"))
-		require.NoError(t, err)
-		assert.Equal(t, "kafka", val.String())
-	})
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 
-	t.Run("get_missing_metadata_returns_null", func(t *testing.T) {
-		t.Parallel()
+			target, release := newTestTarget(t, `{}`, tt.meta)
+			defer release()
 
-		target, release := newTestTarget(t, `{}`, map[string]string{})
-		defer release()
+			got, err := target.Get(tt.path)
+			if tt.wantErr != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.wantErr)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
 
-		val, err := target.Get(metaPath("missing"))
-		require.NoError(t, err)
-		assert.Equal(t, core.KindNull, val.Kind())
-	})
+func TestRootTargetMetadataSet(t *testing.T) {
+	t.Parallel()
 
-	t.Run("get_all_metadata_with_empty_segments", func(t *testing.T) {
-		t.Parallel()
+	tests := []struct {
+		name     string
+		meta     map[string]string
+		field    string
+		value    core.Value
+		wantMeta map[string]string
+		wantErr  string
+	}{
+		{
+			name:     "set_new_field",
+			meta:     map[string]string{},
+			field:    "env",
+			value:    core.StringValue{V: "prod"},
+			wantMeta: map[string]string{"env": "prod"},
+		},
+		{
+			name:     "overwrite_existing_field",
+			meta:     map[string]string{"env": "dev"},
+			field:    "env",
+			value:    core.StringValue{V: "prod"},
+			wantMeta: map[string]string{"env": "prod"},
+		},
+		{
+			name:    "non_string_value_error",
+			meta:    map[string]string{},
+			field:   "n",
+			value:   core.IntegerValue{V: 42},
+			wantErr: "metadata values must be strings",
+		},
+	}
 
-		meta := map[string]string{"k1": "v1", "k2": "v2"}
-		target, release := newTestTarget(t, `{}`, meta)
-		defer release()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 
-		path := core.Path{Root: core.MetadataRoot}
-		val, err := target.Get(path)
-		require.NoError(t, err)
-		require.Equal(t, core.KindObject, val.Kind())
-		obj := val.(core.ObjectValue)
-		require.Len(t, obj.V, 2)
-		assert.Equal(t, core.StringValue{V: "v1"}, obj.V["k1"])
-		assert.Equal(t, core.StringValue{V: "v2"}, obj.V["k2"])
-	})
+			target, release := newTestTarget(t, `{}`, tt.meta)
+			defer release()
 
-	t.Run("get_multi_segment_metadata_error", func(t *testing.T) {
-		t.Parallel()
+			err := target.Set(metaPath(tt.field), tt.value)
+			if tt.wantErr != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.wantErr)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantMeta, tt.meta)
+		})
+	}
+}
 
-		target, release := newTestTarget(t, `{}`, map[string]string{"a": "b"})
-		defer release()
+func TestRootTargetMetadataDelete(t *testing.T) {
+	t.Parallel()
 
-		path := core.Path{Root: core.MetadataRoot, Segments: []core.Segment{core.FieldSeg("a"), core.FieldSeg("b")}}
-		_, err := target.Get(path)
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "metadata path must be a single field name")
-	})
+	tests := []struct {
+		name     string
+		meta     map[string]string
+		field    string
+		wantMeta map[string]string
+	}{
+		{
+			name:     "existing_field",
+			meta:     map[string]string{"key": "value", "other": "stays"},
+			field:    "key",
+			wantMeta: map[string]string{"other": "stays"},
+		},
+		{
+			name:     "missing_field_is_noop",
+			meta:     map[string]string{"k": "v"},
+			field:    "missing",
+			wantMeta: map[string]string{"k": "v"},
+		},
+	}
 
-	t.Run("set_metadata_string", func(t *testing.T) {
-		t.Parallel()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 
-		meta := map[string]string{}
-		target, release := newTestTarget(t, `{}`, meta)
-		defer release()
+			target, release := newTestTarget(t, `{}`, tt.meta)
+			defer release()
 
-		require.NoError(t, target.Set(metaPath("env"), core.StringValue{V: "prod"}))
-		assert.Equal(t, "prod", meta["env"])
-	})
-
-	t.Run("overwrite_existing_metadata", func(t *testing.T) {
-		t.Parallel()
-
-		meta := map[string]string{"env": "dev"}
-		target, release := newTestTarget(t, `{}`, meta)
-		defer release()
-
-		require.NoError(t, target.Set(metaPath("env"), core.StringValue{V: "prod"}))
-		assert.Equal(t, "prod", meta["env"])
-	})
-
-	t.Run("set_metadata_non_string_error", func(t *testing.T) {
-		t.Parallel()
-
-		target, release := newTestTarget(t, `{}`, map[string]string{})
-		defer release()
-
-		err := target.Set(metaPath("n"), core.IntegerValue{V: 42})
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "metadata values must be strings")
-	})
-
-	t.Run("delete_metadata_field", func(t *testing.T) {
-		t.Parallel()
-
-		meta := map[string]string{"key": "value", "other": "stays"}
-		target, release := newTestTarget(t, `{}`, meta)
-		defer release()
-
-		require.NoError(t, target.Delete(metaPath("key")))
-		_, ok := meta["key"]
-		assert.False(t, ok)
-		assert.Equal(t, "stays", meta["other"])
-	})
-
-	t.Run("delete_missing_metadata_is_noop", func(t *testing.T) {
-		t.Parallel()
-
-		meta := map[string]string{"k": "v"}
-		target, release := newTestTarget(t, `{}`, meta)
-		defer release()
-
-		require.NoError(t, target.Delete(metaPath("missing")))
-		assert.Equal(t, "v", meta["k"])
-	})
+			require.NoError(t, target.Delete(metaPath(tt.field)))
+			assert.Equal(t, tt.wantMeta, tt.meta)
+		})
+	}
 }
 
 func TestToInsaneJSONPath(t *testing.T) {
@@ -652,30 +645,23 @@ func TestResolveIndexRuntime(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
+		name   string
 		idx    int
 		length int
 		want   int
 	}{
-		{0, 5, 0},
-		{1, 5, 1},
-		{4, 5, 4},
-		{5, 5, 5},
-		{-1, 5, 4},
-		{-5, 5, 0},
-		{-6, 5, -1},
+		{"first", 0, 5, 0},
+		{"second", 1, 5, 1},
+		{"last", 4, 5, 4},
+		{"one_past_end", 5, 5, 5},
+		{"negative_last", -1, 5, 4},
+		{"negative_first", -5, 5, 0},
+		{"negative_out_of_bounds", -6, 5, -1},
 	}
 	for _, tc := range tests {
-		t.Run(
-			func() string {
-				if tc.idx < 0 {
-					return "idx_neg_" + string(rune('0'-tc.idx)) + "_len_" + string(rune('0'+tc.length))
-				}
-				return "idx_" + string(rune('0'+tc.idx)) + "_len_" + string(rune('0'+tc.length))
-			}(),
-			func(t *testing.T) {
-				t.Parallel()
-				assert.Equal(t, tc.want, resolveIndex(tc.idx, tc.length))
-			},
-		)
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			assert.Equal(t, tc.want, resolveIndex(tc.idx, tc.length))
+		})
 	}
 }
