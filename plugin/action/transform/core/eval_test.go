@@ -457,13 +457,13 @@ func TestEvalAssignExpr(t *testing.T) {
 
 	tests := []struct {
 		name      string
-		vars      map[string]Value // initial ctx variables
+		vars      map[string]Value
 		target    Expr
 		value     Expr
-		want      Value            // expected result of the assignment expression
+		want      Value
 		wantErr   string
-		wantVars  map[string]Value // exact ctx variables afterwards; nil skips the check
-		wantStore map[string]Value // exact mock target contents afterwards; nil skips the check
+		wantVars  map[string]Value // exact ctx variables afterwards
+		wantStore map[string]Value // exact mock target contents afterwards
 	}{
 		{
 			name:     "to_ident",
