@@ -46,6 +46,10 @@ func (c *Compiler) Compile() ([]core.Expr, error) {
 			return nil, err
 		}
 		exprs = append(exprs, expr)
+
+		if err := c.expectExprSeparator(); err != nil {
+			return nil, err
+		}
 	}
 
 	return exprs, nil
@@ -132,9 +136,11 @@ func (c *Compiler) parseExpr(minBP int) (core.Expr, error) {
 		if next.Type.BindingPower() <= minBP {
 			break
 		}
-		// A dot on a new line starts a new event-path expression
-		// instead of continuing the current one as member access.
-		if next.Type == parser.DOT && c.dotStartsNewLine() {
+		// A dot continues the expression as member access only when it
+		// is written tightly (m.level). A spaced dot ends the
+		// expression: on the same line it is a missing-separator error,
+		// on a new line it starts a new event-path statement.
+		if next.Type == parser.DOT && !c.adjacentToPrev() {
 			break
 		}
 		op := c.advance()
@@ -147,14 +153,31 @@ func (c *Compiler) parseExpr(minBP int) (core.Expr, error) {
 	return left, nil
 }
 
-// dotStartsNewLine reports whether the DOT at the current position sits on a
-// later line than the previous token. Such a dot begins a new event path
-// rather than continuing the expression to its left.
-func (c *Compiler) dotStartsNewLine() bool {
+// adjacentToPrev reports whether the token at the current position
+// immediately follows the previous token, with no whitespace in between.
+// Member access and path dots must be written tightly: m.level, .a.b.
+func (c *Compiler) adjacentToPrev() bool {
 	if c.pos == 0 || c.pos >= len(c.tokens) {
 		return false
 	}
-	return c.tokens[c.pos].StartLine > c.tokens[c.pos-1].EndLine
+	cur := c.tokens[c.pos]
+	prev := c.tokens[c.pos-1]
+	return cur.StartLine == prev.EndLine && cur.StartColumn == prev.EndColumn+1
+}
+
+// expectExprSeparator verifies that the just-parsed expression is followed by
+// a valid statement boundary: a new line, a semicolon, the end of a block, or
+// the end of input. Multiple expressions on one line must be separated by ';'.
+func (c *Compiler) expectExprSeparator() error {
+	tok := c.peek()
+	switch tok.Type {
+	case parser.EOF, parser.SEMICOLON, parser.RBRACE:
+		return nil
+	}
+	if c.pos > 0 && tok.StartLine > c.tokens[c.pos-1].EndLine {
+		return nil
+	}
+	return c.errorf(tok, "expressions must be separated by a newline or ';'")
 }
 
 // Called when a token appears at the start of an expression.
@@ -289,12 +312,22 @@ func (c *Compiler) parseInfix(left core.Expr, op parser.Token) (core.Expr, error
 	// Event paths (.field at expression start) are handled in parsePrefix;
 	// a dot on a new line never reaches here (see parseExpr).
 	case parser.DOT:
+		switch left.(type) {
+		case *core.IdentExpr, *core.IndexExpr, *core.CallExpr:
+		default:
+			return nil, c.errorf(op,
+				"member access is only allowed on variables, index expressions and function calls; separate expressions with a newline or ';'")
+		}
+		fieldAdjacent := c.adjacentToPrev()
 		seg, ok, err := c.tryFieldSegment()
 		if err != nil {
 			return nil, err
 		}
 		if !ok {
 			return nil, c.errorf(c.peek(), "expected field name after '.', got %s", c.peek().Type)
+		}
+		if !fieldAdjacent {
+			return nil, c.errorf(op, "field name must immediately follow '.' without spaces")
 		}
 		return &core.IndexExpr{
 			Node:   core.NewNode(left.Pos()),
@@ -445,10 +478,15 @@ func (c *Compiler) parseEventPath() (core.Expr, error) {
 	// consume .
 	start := c.advance()
 
+	fieldAdjacent := c.adjacentToPrev()
+
 	var segments []core.PathSegment
 	if seg, ok, err := c.tryFieldSegment(); err != nil {
 		return nil, err
 	} else if ok {
+		if !fieldAdjacent {
+			return nil, c.errorf(start, "field name must immediately follow '.' without spaces")
+		}
 		segments = append(segments, seg)
 		var err error
 		segments, err = c.continueSegments(segments)
@@ -467,6 +505,9 @@ func (c *Compiler) parseMetadataPath() (core.Expr, error) {
 	tok := c.peek()
 	if tok.Type != parser.IDENT {
 		return nil, c.errorf(tok, "expected metadata field name after %%, got %s", tok.Type)
+	}
+	if !c.adjacentToPrev() {
+		return nil, c.errorf(start, "metadata field name must immediately follow '%%' without spaces")
 	}
 
 	segments := []core.PathSegment{{Field: c.advance().Lexeme}}
@@ -504,17 +545,23 @@ func (c *Compiler) continueSegments(segments []core.PathSegment) ([]core.PathSeg
 	for {
 		switch c.peek().Type {
 		case parser.DOT:
-			if c.dotStartsNewLine() {
+			// A spaced dot never continues the path: the statement
+			// boundary logic decides what happens next.
+			if !c.adjacentToPrev() {
 				return segments, nil
 			}
 
-			c.advance()
+			dot := c.advance()
+			fieldAdjacent := c.adjacentToPrev()
 			seg, ok, err := c.tryFieldSegment()
 			if err != nil {
 				return nil, err
 			}
 			if !ok {
 				return nil, c.errorf(c.peek(), "expected field name after '.', got %s", c.peek().Type)
+			}
+			if !fieldAdjacent {
+				return nil, c.errorf(dot, "field name must immediately follow '.' without spaces")
 			}
 			segments = append(segments, seg)
 
@@ -588,6 +635,10 @@ func (c *Compiler) parseBlock() ([]core.Expr, error) {
 			return nil, err
 		}
 		exprs = append(exprs, e)
+
+		if err := c.expectExprSeparator(); err != nil {
+			return nil, err
+		}
 		for c.match(parser.SEMICOLON) {
 		}
 	}

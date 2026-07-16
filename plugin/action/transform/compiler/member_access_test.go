@@ -1,108 +1,143 @@
 package compiler
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/ozontech/file.d/plugin/action/transform/core"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
+
+// dumpExprs compiles src and renders every statement in core.DumpAST format.
+func dumpExprs(t *testing.T, src string) string {
+	t.Helper()
+
+	exprs := compileN(t, src)
+	dumps := make([]string, len(exprs))
+	for i, e := range exprs {
+		dumps[i] = core.DumpAST(e, 0)
+	}
+	return strings.Join(dumps, "\n")
+}
 
 func TestMemberAccess(t *testing.T) {
 	t.Parallel()
 
-	t.Run("ident_dot_field_is_index_expr", func(t *testing.T) {
-		t.Parallel()
+	tests := []struct {
+		name string
+		src  string
+		want string
+	}{
+		{
+			name: "ident_dot_field",
+			src:  `m.level`,
+			want: `
+Index
+  Ident(m)
+  StringLit("level")`,
+		},
+		{
+			name: "chained",
+			src:  `m.a.b`,
+			want: `
+Index
+  Index
+    Ident(m)
+    StringLit("a")
+  StringLit("b")`,
+		},
+		{
+			name: "on_call_result",
+			src:  `upcase("x").len`,
+			want: `
+Index
+  Call(upcase)
+    StringLit("x")
+  StringLit("len")`,
+		},
+		{
+			name: "string_key",
+			src:  `m."key with spaces"`,
+			want: `
+Index
+  Ident(m)
+  StringLit("key with spaces")`,
+		},
+		{
+			name: "assignable",
+			src:  `m.level = "INFO"`,
+			want: `
+Assign
+  Index
+    Ident(m)
+    StringLit("level")
+  StringLit("INFO")`,
+		},
+		{
+			name: "dot_on_new_line_starts_event_path",
+			src:  "x = m\n.level = 1",
+			want: `
+Assign
+  Ident(x)
+  Ident(m)
+Assign
+  Path(.level)
+  IntLit(1)`,
+		},
+		{
+			name: "semicolon_separates_statements",
+			src:  `x = 1; .y = 2`,
+			want: `
+Assign
+  Ident(x)
+  IntLit(1)
+Assign
+  Path(.y)
+  IntLit(2)`,
+		},
+		{
+			name: "event_path_unaffected",
+			src:  `.a.b.c`,
+			want: `
+Path(.a.b.c)`,
+		},
+	}
 
-		expr := compile(t, `m.level`)
-		idx, ok := expr.(*core.IndexExpr)
-		require.True(t, ok, "expected IndexExpr, got %T", expr)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 
-		obj, ok := idx.Object.(*core.IdentExpr)
-		require.True(t, ok)
-		assert.Equal(t, "m", obj.Name)
+			assert.Equal(t, strings.TrimSpace(tt.want), dumpExprs(t, tt.src))
+		})
+	}
+}
 
-		key, ok := idx.Index.(*core.StringLit)
-		require.True(t, ok)
-		assert.Equal(t, "level", key.Value)
-	})
+func TestMemberAccessErrors(t *testing.T) {
+	t.Parallel()
 
-	t.Run("chained_member_access", func(t *testing.T) {
-		t.Parallel()
+	tests := []struct {
+		name        string
+		src         string
+		errContains string
+	}{
+		{"space_before_dot", `x = m .y = 1`, "newline or ';'"},
+		{"space_after_dot", `x = m. y`, "immediately follow '.'"},
+		{"one_line_statements", `.a = 1 .b = 2`, "newline or ';'"},
+		{"on_literal", `x = 1.b`, "member access is only allowed"},
+		{"spaced_path_dot", `.a .b = 1`, "newline or ';'"},
+		{"space_inside_path", `.a. b = 1`, "immediately follow '.'"},
+		{"space_after_leading_path_dot", `. a = 1`, "immediately follow '.'"},
+		{"missing_field_after_dot", `m.`, "expected field name after '.'"},
+		{"unseparated_expressions", `x = 1 y = 2`, "newline or ';'"},
+		{"unseparated_expressions_in_block", `if c { x = 1 y = 2 }`, "newline or ';'"},
+	}
 
-		expr := compile(t, `m.a.b`)
-		outer, ok := expr.(*core.IndexExpr)
-		require.True(t, ok)
-		key, ok := outer.Index.(*core.StringLit)
-		require.True(t, ok)
-		assert.Equal(t, "b", key.Value)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 
-		inner, ok := outer.Object.(*core.IndexExpr)
-		require.True(t, ok)
-		innerKey, ok := inner.Index.(*core.StringLit)
-		require.True(t, ok)
-		assert.Equal(t, "a", innerKey.Value)
-	})
-
-	t.Run("member_access_on_call_result", func(t *testing.T) {
-		t.Parallel()
-
-		expr := compile(t, `upcase("x").len`)
-		idx, ok := expr.(*core.IndexExpr)
-		require.True(t, ok)
-		_, ok = idx.Object.(*core.CallExpr)
-		require.True(t, ok)
-	})
-
-	t.Run("member_access_string_key", func(t *testing.T) {
-		t.Parallel()
-
-		expr := compile(t, `m."key with spaces"`)
-		idx, ok := expr.(*core.IndexExpr)
-		require.True(t, ok)
-		key, ok := idx.Index.(*core.StringLit)
-		require.True(t, ok)
-		assert.Equal(t, "key with spaces", key.Value)
-	})
-
-	t.Run("member_access_is_assignable", func(t *testing.T) {
-		t.Parallel()
-
-		expr := compile(t, `m.level = "INFO"`)
-		asg, ok := expr.(*core.AssignExpr)
-		require.True(t, ok)
-		_, ok = asg.Target.(*core.IndexExpr)
-		require.True(t, ok)
-	})
-
-	t.Run("dot_on_new_line_starts_event_path", func(t *testing.T) {
-		t.Parallel()
-
-		exprs := compileN(t, "x = m\n.level = 1")
-		require.Len(t, exprs, 2, "newline dot must start a new statement")
-
-		_, ok := exprs[0].(*core.AssignExpr)
-		require.True(t, ok)
-
-		second, ok := exprs[1].(*core.AssignExpr)
-		require.True(t, ok)
-		_, ok = second.Target.(*core.PathExpr)
-		require.True(t, ok, "second statement must target an event path")
-	})
-
-	t.Run("event_path_unaffected", func(t *testing.T) {
-		t.Parallel()
-
-		expr := compile(t, `.a.b.c`)
-		path, ok := expr.(*core.PathExpr)
-		require.True(t, ok, "expected PathExpr, got %T", expr)
-		require.Len(t, path.Segments, 3)
-	})
-
-	t.Run("missing_field_after_dot_error", func(t *testing.T) {
-		t.Parallel()
-
-		err := mustFail(t, `m.`)
-		assert.Contains(t, err.Error(), "expected field name after '.'")
-	})
+			err := mustFail(t, tt.src)
+			assert.Contains(t, err.Error(), tt.errContains)
+		})
+	}
 }
