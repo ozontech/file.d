@@ -462,7 +462,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		pool, err := p.createConnection(addr)
 		if err != nil {
 			var netError net.Error
-			if errors.As(err, &netError) || errors.Is(err, context.DeadlineExceeded) {
+			if errors.As(err, &netError) {
 				p.pendingHosts[addr] = struct{}{}
 			}
 			p.logger.Error("create clickhouse connection pool", zap.Error(err), zap.String("addr", addr.Addr))
