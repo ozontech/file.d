@@ -143,7 +143,7 @@ func (t TokenType) BindingPower() int {
 		return BpAdd
 	case STAR, SLASH, PERCENT:
 		return BpMul
-	case LPAREN, LBRACKET: // fn(args) or expr[index]
+	case LPAREN, LBRACKET, DOT: // fn(args), expr[index] or expr.field
 		return BpCall
 	}
 	return BpLowest

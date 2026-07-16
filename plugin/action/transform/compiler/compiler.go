@@ -132,6 +132,11 @@ func (c *Compiler) parseExpr(minBP int) (core.Expr, error) {
 		if next.Type.BindingPower() <= minBP {
 			break
 		}
+		// A dot on a new line starts a new event-path expression
+		// instead of continuing the current one as member access.
+		if next.Type == parser.DOT && c.dotStartsNewLine() {
+			break
+		}
 		op := c.advance()
 		left, err = c.parseInfix(left, op)
 		if err != nil {
@@ -140,6 +145,16 @@ func (c *Compiler) parseExpr(minBP int) (core.Expr, error) {
 	}
 
 	return left, nil
+}
+
+// dotStartsNewLine reports whether the DOT at the current position sits on a
+// later line than the previous token. Such a dot begins a new event path
+// rather than continuing the expression to its left.
+func (c *Compiler) dotStartsNewLine() bool {
+	if c.pos == 0 || c.pos >= len(c.tokens) {
+		return false
+	}
+	return c.tokens[c.pos].StartLine > c.tokens[c.pos-1].EndLine
 }
 
 // Called when a token appears at the start of an expression.
@@ -268,6 +283,23 @@ func (c *Compiler) parseInfix(left core.Expr, op parser.Token) (core.Expr, error
 			Node:   core.NewNode(left.Pos()),
 			Object: left,
 			Index:  index,
+		}, nil
+
+	// member access: expr.field is sugar for expr["field"].
+	// Event paths (.field at expression start) are handled in parsePrefix;
+	// a dot on a new line never reaches here (see parseExpr).
+	case parser.DOT:
+		seg, ok, err := c.tryFieldSegment()
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			return nil, c.errorf(c.peek(), "expected field name after '.', got %s", c.peek().Type)
+		}
+		return &core.IndexExpr{
+			Node:   core.NewNode(left.Pos()),
+			Object: left,
+			Index:  &core.StringLit{Node: nodeAt(op), Value: seg.Field},
 		}, nil
 	}
 
@@ -472,12 +504,8 @@ func (c *Compiler) continueSegments(segments []core.PathSegment) ([]core.PathSeg
 	for {
 		switch c.peek().Type {
 		case parser.DOT:
-			if c.pos-1 >= 0 && c.pos-1 < len(c.tokens) {
-				dot := c.peek()
-				prev := c.tokens[c.pos-1]
-				if dot.StartLine > prev.EndLine {
-					return segments, nil
-				}
+			if c.dotStartsNewLine() {
+				return segments, nil
 			}
 
 			c.advance()
