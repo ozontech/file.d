@@ -3,6 +3,7 @@ package pipeline
 import (
 	"context"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -10,7 +11,6 @@ import (
 	"github.com/ozontech/file.d/metric"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
-	"go.uber.org/atomic"
 )
 
 type batcherTail struct {
@@ -41,7 +41,7 @@ func TestBatcher(t *testing.T) {
 			*workerData = batchCount
 		}
 		counter := (*workerData).(*atomic.Int32)
-		counter.Inc()
+		counter.Add(1)
 	}
 
 	seqIDs := make(map[SourceID]uint64)
@@ -55,7 +55,7 @@ func TestBatcher(t *testing.T) {
 		}
 		seqIDs[event.SourceID] = event.SeqID
 
-		commitsCount.Inc()
+		commitsCount.Add(1)
 		wg.Done()
 	}}
 
@@ -75,13 +75,13 @@ func TestBatcher(t *testing.T) {
 
 	eventsCh := make(chan *Event, 1024)
 	go func() {
-		for i := 0; i < eventCount; i++ {
+		for i := range eventCount {
 			eventsCh <- &Event{SeqID: uint64(i)}
 		}
 		close(eventsCh)
 	}()
 
-	for p := 0; p < processors; p++ {
+	for p := range processors {
 		go func(x int) {
 			for event := range eventsCh {
 				event.SourceID = SourceID(x)
@@ -112,7 +112,7 @@ func TestBatcherMaxSize(t *testing.T) {
 			*workerData = batchCount
 		}
 		counter := (*workerData).(*atomic.Int32)
-		counter.Inc()
+		counter.Add(1)
 	}
 
 	seqIDs := make(map[SourceID]uint64)
@@ -126,7 +126,7 @@ func TestBatcherMaxSize(t *testing.T) {
 		}
 		seqIDs[event.SourceID] = event.SeqID
 
-		commitsCount.Inc()
+		commitsCount.Add(1)
 		wg.Done()
 	}}
 
@@ -145,13 +145,13 @@ func TestBatcherMaxSize(t *testing.T) {
 
 	eventsCh := make(chan *Event, 1024)
 	go func() {
-		for i := 0; i < eventCount; i++ {
+		for i := range eventCount {
 			eventsCh <- &Event{SeqID: uint64(i), Size: eventSize}
 		}
 		close(eventsCh)
 	}()
 
-	for p := 0; p < processors; p++ {
+	for p := range processors {
 		go func(x int) {
 			for event := range eventsCh {
 				event.SourceID = SourceID(x)

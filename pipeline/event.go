@@ -7,9 +7,10 @@ import (
 	"sync"
 	"time"
 
+	"sync/atomic"
+
 	"github.com/ozontech/file.d/logger"
 	insaneJSON "github.com/ozontech/insane-json"
-	"go.uber.org/atomic"
 )
 
 type Event struct {
@@ -225,19 +226,23 @@ func newEventPool(capacity, avgEventSize int) *eventPool {
 		avgEventSize:     avgEventSize,
 		capacity:         capacity,
 		getMu:            &sync.Mutex{},
-		backCounter:      *atomic.NewInt64(int64(capacity)),
 		runHeartbeatOnce: &sync.Once{},
-		stopped:          atomic.NewBool(false),
-		slowWaiters:      atomic.NewInt64(0),
+		stopped:          &atomic.Bool{},
+		slowWaiters:      &atomic.Int64{},
 		wakeupInterval:   time.Second * 5,
 	}
 
+	eventPool.backCounter.Store(int64(capacity))
 	eventPool.getCond = sync.NewCond(eventPool.getMu)
 
+	eventPool.free1 = make([]atomic.Bool, capacity)
+	eventPool.free2 = make([]atomic.Bool, capacity)
+	eventPool.events = make([]*Event, capacity)
+
 	for i := 0; i < capacity; i++ {
-		eventPool.free1 = append(eventPool.free1, *atomic.NewBool(true))
-		eventPool.free2 = append(eventPool.free2, *atomic.NewBool(true))
-		eventPool.events = append(eventPool.events, newEvent())
+		eventPool.free1[i].Store(true)
+		eventPool.free2[i].Store(true)
+		eventPool.events[i] = newEvent()
 	}
 
 	return eventPool
@@ -246,18 +251,18 @@ func newEventPool(capacity, avgEventSize int) *eventPool {
 const maxTries = 3
 
 func (p *eventPool) get(size int) *Event {
-	x := (p.getCounter.Inc() - 1) % int64(p.capacity)
+	x := (p.getCounter.Add(1) - 1) % int64(p.capacity)
 	var tries int
 	for {
 		if x < p.backCounter.Load() {
 			// fast path
-			if p.free1[x].CAS(true, false) {
+			if p.free1[x].CompareAndSwap(true, false) {
 				break
 			}
-			if p.free1[x].CAS(true, false) {
+			if p.free1[x].CompareAndSwap(true, false) {
 				break
 			}
-			if p.free1[x].CAS(true, false) {
+			if p.free1[x].CompareAndSwap(true, false) {
 				break
 			}
 		}
@@ -272,18 +277,18 @@ func (p *eventPool) get(size int) *Event {
 			})
 
 			// slowest path
-			p.slowWaiters.Inc()
+			p.slowWaiters.Add(1)
 			p.getMu.Lock()
 			p.getCond.Wait()
 			p.getMu.Unlock()
-			p.slowWaiters.Dec()
+			p.slowWaiters.Add(-1)
 			tries = 0
 		}
 	}
 	event := p.events[x]
 	p.events[x] = nil
 	p.free2[x].Store(false)
-	p.inUseEvents.Inc()
+	p.inUseEvents.Add(1)
 	event.stage = eventStageInput
 	event.Size = size
 	return event
@@ -291,17 +296,17 @@ func (p *eventPool) get(size int) *Event {
 
 func (p *eventPool) back(event *Event) {
 	event.stage = eventStagePool
-	x := (p.backCounter.Inc() - 1) % int64(p.capacity)
+	x := (p.backCounter.Add(1) - 1) % int64(p.capacity)
 	var tries int
 	for {
 		// fast path
-		if p.free2[x].CAS(false, true) {
+		if p.free2[x].CompareAndSwap(false, true) {
 			break
 		}
-		if p.free2[x].CAS(false, true) {
+		if p.free2[x].CompareAndSwap(false, true) {
 			break
 		}
-		if p.free2[x].CAS(false, true) {
+		if p.free2[x].CompareAndSwap(false, true) {
 			break
 		}
 		tries++
@@ -317,7 +322,7 @@ func (p *eventPool) back(event *Event) {
 	p.resetEvent(event)
 	p.events[x] = event
 	p.free1[x].Store(true)
-	p.inUseEvents.Dec()
+	p.inUseEvents.Add(-1)
 	p.getCond.Broadcast()
 }
 
@@ -433,7 +438,7 @@ func (p *lowMemoryEventPool) get(size int) *Event {
 	getPool := p.pools[index]
 
 again:
-	inUse := int(p.inUseEvents.Inc())
+	inUse := int(p.inUseEvents.Add(1))
 	// Fast path: we're not over the capacity.
 	if inUse <= p.capacity {
 		e := getPool.Get().(*Event)
@@ -442,7 +447,7 @@ again:
 	}
 
 	// Slow path: wait until we fit in the capacity.
-	p.inUseEvents.Dec()
+	p.inUseEvents.Add(-1)
 
 	// Run heartbeat to periodically wake up goroutines that are waiting.
 	p.runHeartbeatOnce.Do(func() {
@@ -450,13 +455,13 @@ again:
 	})
 
 	// Wait until we fit in the capacity.
-	p.slowWaiters.Inc()
+	p.slowWaiters.Add(1)
 	p.getCond.L.Lock()
 	if !p.eventsAvailable() {
 		p.getCond.Wait()
 	}
 	p.getCond.L.Unlock()
-	p.slowWaiters.Dec()
+	p.slowWaiters.Add(-1)
 	goto again
 }
 
@@ -466,7 +471,7 @@ func (p *lowMemoryEventPool) back(event *Event) {
 
 	event.reset()
 	backPool.Put(event)
-	p.inUseEvents.Dec()
+	p.inUseEvents.Add(-1)
 	p.getCond.Broadcast()
 }
 

@@ -3,12 +3,12 @@ package join
 import (
 	"fmt"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/atomic"
 
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/pipeline"
@@ -157,13 +157,13 @@ func TestSimpleJoin(t *testing.T) {
 
 			inEvents := atomic.Int32{}
 			input.SetInFn(func() {
-				inEvents.Inc()
+				inEvents.Add(1)
 			})
 
 			outEvents := atomic.Int32{}
 			lastID := atomic.Uint64{}
 			output.SetOutFn(func(e *pipeline.Event) {
-				outEvents.Inc()
+				outEvents.Add(1)
 				id := lastID.Swap(e.SeqID)
 				if id != 0 && id >= e.SeqID {
 					panic("wrong id")
@@ -256,13 +256,13 @@ func TestJoinAfterNilNode(t *testing.T) {
 
 			inEvents := atomic.Int32{}
 			input.SetInFn(func() {
-				inEvents.Inc()
+				inEvents.Add(1)
 			})
 
 			outEvents := atomic.Int32{}
 			lastID := atomic.Uint64{}
 			output.SetOutFn(func(e *pipeline.Event) {
-				outEvents.Inc()
+				outEvents.Add(1)
 				id := lastID.Swap(e.SeqID)
 				if id != 0 && id >= e.SeqID {
 					panic("wrong id")

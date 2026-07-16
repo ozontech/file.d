@@ -10,6 +10,7 @@ import (
 	"net"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ClickHouse/ch-go"
@@ -21,7 +22,6 @@ import (
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/xtime"
 	"github.com/ozontech/file.d/xtls"
-	"go.uber.org/atomic"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -693,7 +693,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 	}
 
 	for i := 0; i < attempts; i++ {
-		requestID := p.requestID.Inc()
+		requestID := p.requestID.Add(1)
 
 		p.mu.RLock()
 		if len(p.instances) == 0 {

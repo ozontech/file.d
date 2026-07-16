@@ -2,11 +2,11 @@ package pipeline
 
 import (
 	"errors"
+	"sync/atomic"
 
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/pipeline/doif"
 	insaneJSON "github.com/ozontech/insane-json"
-	"go.uber.org/atomic"
 	"go.uber.org/zap"
 )
 
@@ -125,9 +125,9 @@ func (p *processor) process() {
 			return
 		}
 
-		p.activeCounter.Inc()
+		p.activeCounter.Add(1)
 		p.dischargeStream(st)
-		p.activeCounter.Dec()
+		p.activeCounter.Add(-1)
 	}
 }
 
@@ -323,7 +323,7 @@ func (p *processor) countEvent(event *Event, actionIndex int, status eventStatus
 		p.metricsValues = append(p.metricsValues, val)
 	}
 
-	am.totalCounter[string(status)].Inc()
+	am.totalCounter[string(status)].Add(1)
 	am.count.WithLabelValues(p.metricsValues...).Inc()
 	am.size.WithLabelValues(p.metricsValues...).Add(float64(event.Size))
 }

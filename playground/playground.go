@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"runtime"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/bitly/go-simplejson"
@@ -40,7 +41,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/common/expfmt"
-	"go.uber.org/atomic"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -75,7 +75,7 @@ func (h *playground) Play(ctx context.Context, req PlayRequest) (PlayResponse, e
 		fatalErr = fmt.Errorf("fatal: %s: %s", entry.Message, fatalPayload.String())
 	}))
 
-	pipelineName := fmt.Sprintf("playground_%d", h.nextPipelineID.Inc())
+	pipelineName := fmt.Sprintf("playground_%d", h.nextPipelineID.Add(1))
 	settings := &pipeline.Settings{
 		Decoder:             "json",
 		DecoderParams:       nil,

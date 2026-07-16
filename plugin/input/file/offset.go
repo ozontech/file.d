@@ -8,10 +8,11 @@ import (
 	"strings"
 	"sync"
 
+	"sync/atomic"
+
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/xtime"
-	"go.uber.org/atomic"
 )
 
 type offsetDB struct {
@@ -231,7 +232,7 @@ func safeSubstring(s string, length int) string {
 }
 
 func (o *offsetDB) save(jobs map[pipeline.SourceID]*Job, mu *sync.RWMutex) {
-	o.savesTotal.Inc()
+	o.savesTotal.Add(1)
 
 	o.mu.Lock()
 	defer o.mu.Unlock()

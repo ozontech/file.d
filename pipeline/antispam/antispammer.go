@@ -3,12 +3,12 @@ package antispam
 import (
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ozontech/file.d/cfg/matchrule"
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/metric"
-	"go.uber.org/atomic"
 	"go.uber.org/zap"
 )
 
@@ -172,7 +172,7 @@ func (a *Antispammer) IsSpam(id string, name string, isNewSource bool, event []b
 	x := src.counter.Load()
 	diff := timeEventSeconds - src.timestamp.Swap(timeEventSeconds)
 	if diff < a.maintenanceInterval.Nanoseconds() {
-		x = src.counter.Inc()
+		x = src.counter.Add(1)
 	}
 	if x == int32(threshold) {
 		src.counter.Swap(int32(a.unbanIterations * threshold))

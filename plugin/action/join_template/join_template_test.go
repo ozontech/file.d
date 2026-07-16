@@ -3,6 +3,7 @@ package join_template
 import (
 	"fmt"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -11,7 +12,6 @@ import (
 	"github.com/ozontech/file.d/test"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/atomic"
 )
 
 func TestSimpleJoin(t *testing.T) {
@@ -85,13 +85,13 @@ func TestSimpleJoin(t *testing.T) {
 
 			inEvents := atomic.Int32{}
 			input.SetInFn(func() {
-				inEvents.Inc()
+				inEvents.Add(1)
 			})
 
 			outEvents := atomic.Int32{}
 			lastID := atomic.Uint64{}
 			output.SetOutFn(func(e *pipeline.Event) {
-				outEvents.Inc()
+				outEvents.Add(1)
 				id := lastID.Swap(e.SeqID)
 				require.False(t, id != 0 && id >= e.SeqID)
 			})
@@ -173,13 +173,13 @@ func TestJoinAfterNilNode(t *testing.T) {
 
 			inEvents := atomic.Int32{}
 			input.SetInFn(func() {
-				inEvents.Inc()
+				inEvents.Add(1)
 			})
 
 			outEvents := atomic.Int32{}
 			lastID := atomic.Uint64{}
 			output.SetOutFn(func(e *pipeline.Event) {
-				outEvents.Inc()
+				outEvents.Add(1)
 				id := lastID.Swap(e.SeqID)
 				require.False(t, id != 0 && id >= e.SeqID)
 			})

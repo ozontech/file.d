@@ -2,13 +2,13 @@ package pipeline
 
 import (
 	"errors"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/ozontech/file.d/metric"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
-	"go.uber.org/atomic"
 )
 
 func TestBackoff(t *testing.T) {
@@ -19,7 +19,7 @@ func TestBackoff(t *testing.T) {
 	eventCountBefore := eventCount.Load()
 
 	errorFn := func(err error, events []*Event) {
-		errorCount.Inc()
+		errorCount.Add(1)
 	}
 
 	batcherBackoff := NewRetriableBatcher(
@@ -27,7 +27,7 @@ func TestBackoff(t *testing.T) {
 			MetricCtl: metric.NewCtl("", prometheus.NewRegistry(), time.Minute, 0),
 		},
 		func(workerData *WorkerData, batch *Batch) error {
-			eventCount.Inc()
+			eventCount.Add(1)
 			return nil
 		},
 		BackoffOpts{
@@ -49,7 +49,7 @@ func TestBackoffWithError(t *testing.T) {
 	errorCount := &atomic.Int32{}
 	prevValue := errorCount.Load()
 	errorFn := func(err error, events []*Event) {
-		errorCount.Inc()
+		errorCount.Add(1)
 	}
 
 	batcherBackoff := NewRetriableBatcher(
@@ -79,7 +79,7 @@ func TestBackoffWithErrorWithDeadQueue(t *testing.T) {
 	errorCount := &atomic.Int32{}
 	prevValue := errorCount.Load()
 	errorFn := func(err error, events []*Event) {
-		errorCount.Inc()
+		errorCount.Add(1)
 	}
 
 	batcherBackoff := NewRetriableBatcher(

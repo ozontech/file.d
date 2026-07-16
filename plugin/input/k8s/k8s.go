@@ -2,6 +2,7 @@ package k8s
 
 import (
 	"net/http"
+	"sync/atomic"
 
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/decoder"
@@ -10,7 +11,6 @@ import (
 	"github.com/ozontech/file.d/plugin/input/file"
 	"github.com/ozontech/file.d/plugin/input/k8s/meta"
 
-	"go.uber.org/atomic"
 	"go.uber.org/zap"
 )
 
@@ -190,7 +190,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	p.params = params
 	p.config = config.(*Config)
 
-	startCounter := startCounter.Inc()
+	startCounter := startCounter.Add(1)
 
 	if startCounter == 1 {
 		meta.DeletedPodsCacheSize = p.config.DeletedPodsCacheSize

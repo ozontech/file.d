@@ -9,6 +9,7 @@ import (
 	"runtime"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ozontech/file.d/decoder"
@@ -18,7 +19,6 @@ import (
 	"github.com/ozontech/file.d/pipeline/metadata"
 	insaneJSON "github.com/ozontech/insane-json"
 	"github.com/prometheus/client_golang/prometheus"
-	"go.uber.org/atomic"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -248,7 +248,7 @@ func New(name string, settings *Settings, registry *prometheus.Registry, lg *zap
 }
 
 func (p *Pipeline) IncReadOps() {
-	p.readOps.Inc()
+	p.readOps.Add(1)
 }
 
 func (p *Pipeline) IncMaxEventSizeExceeded(lvs ...string) {
@@ -482,7 +482,7 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offsets Offsets, byt
 		}
 	}
 
-	p.inputEvents.Inc()
+	p.inputEvents.Add(1)
 	p.inputSize.Add(int64(length))
 
 	now := time.Now()
@@ -628,7 +628,7 @@ func (p *Pipeline) finalize(event *Event, notifyInput bool, backEvent bool) {
 
 	if notifyInput {
 		p.input.Commit(event)
-		p.outputEvents.Inc()
+		p.outputEvents.Add(1)
 		p.outputSize.Add(int64(event.Size))
 	}
 
@@ -710,7 +710,7 @@ func (p *Pipeline) AddAction(info *ActionPluginStaticInfo) {
 
 	totalCounter := make(map[string]*atomic.Uint64)
 	for _, st := range allEventStatuses() {
-		totalCounter[string(st)] = atomic.NewUint64(0)
+		totalCounter[string(st)] = &atomic.Uint64{}
 	}
 
 	p.actionMetrics.set(info.MetricName, &actionMetric{
@@ -728,8 +728,9 @@ func (p *Pipeline) initProcs() {
 	}
 	p.logger.Info("starting pipeline", zap.Int("procs", procCount))
 
-	p.procCount = atomic.NewInt32(int32(procCount))
-	p.activeProcs = atomic.NewInt32(0)
+	p.procCount = &atomic.Int32{}
+	p.procCount.Store(int32(procCount))
+	p.activeProcs = &atomic.Int32{}
 
 	p.Procs = make([]*processor, 0, procCount)
 	for i := 0; i < procCount; i++ {
@@ -989,7 +990,7 @@ func (p *Pipeline) serveActionInfo(info *ActionPluginStaticInfo) func(http.Respo
 		} {
 			c := am.totalCounter[string(status)]
 			if c == nil {
-				c = atomic.NewUint64(0)
+				c = &atomic.Uint64{}
 			}
 			events = append(events, Event{
 				Status: string(status),

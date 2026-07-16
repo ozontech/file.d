@@ -3,10 +3,10 @@ package pipeline
 import (
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ozontech/file.d/logger"
-	"go.uber.org/atomic"
 )
 
 type StreamID uint64

@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"testing"
 	"time"
@@ -19,7 +20,6 @@ import (
 	uuid "github.com/satori/go.uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/atomic"
 
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/pipeline"
@@ -1049,7 +1049,8 @@ func TestRotationRenameWhileNotWorking(t *testing.T) {
 
 func TestTruncation(t *testing.T) {
 	file := ""
-	x := atomic.NewInt32(3)
+	x := &atomic.Int32{}
+	x.Store(3)
 	run(&test.Case{
 		Prepare: func() {},
 		Act: func(p *pipeline.Pipeline) {
@@ -1070,7 +1071,7 @@ func TestTruncation(t *testing.T) {
 		},
 		Out: func(event *pipeline.Event) {
 			logger.Errorf("event=%v", event)
-			x.Dec()
+			x.Add(-1)
 		},
 	}, 5)
 }
@@ -1131,7 +1132,7 @@ func TestTruncationSeq(t *testing.T) {
 					if size.Load() > int32(truncationSize) {
 						size.Swap(0)
 						_ = file.Truncate(0)
-						if int(truncations.Inc()) > truncationCount {
+						if int(truncations.Add(1)) > truncationCount {
 							break
 						}
 					}
