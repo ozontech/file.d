@@ -414,14 +414,17 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	}
 
 	p.cbEnabled = p.config.BanPeriod_ > 0 && len(p.config.Addresses) > 1
-	if p.cbEnabled {
-		p.logger.Info(
-			"circuit breaker enabled",
-			zap.Duration("ban_period", p.config.BanPeriod_),
-			zap.Duration("reconnect_interval", p.config.ReconnectInterval_),
-			zap.Int("addresses_count", len(p.config.Addresses)),
-		)
+	logFields := []zap.Field{
+		zap.Duration("ban_period", p.config.BanPeriod_),
+		zap.Duration("reconnect_interval", p.config.ReconnectInterval_),
+		zap.Int("addresses_count", len(p.config.Addresses)),
 	}
+
+	logMsg := "circuit breaker disabled"
+	if p.cbEnabled {
+		logMsg = "circuit breaker enabled"
+	}
+	p.logger.Info(logMsg, logFields...)
 
 	schema, err := inferInsaneColInputs(p.config.Columns)
 	if err != nil {
