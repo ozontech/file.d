@@ -1,10 +1,11 @@
 package http_request
 
 import (
+	"bytes"
 	"fmt"
-	"log"
 	"net/url"
-	"strings"
+	"slices"
+	"text/template"
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
@@ -13,6 +14,7 @@ import (
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/xtls"
 	"github.com/valyala/fasthttp"
 
 	"go.uber.org/zap"
@@ -25,15 +27,14 @@ Sends HTTP requests with event data as body. Writes response body to the configu
 /*{ examples
 ```yaml
 pipelines:
-  - name: http_pipeline
-    actions:
-    	...
-      - type: http_request
-        address: "http://example.com/api/{tenant_id}"
-        method: POST
+  - actions:
+       	...
+       - type: http_request
+        address: "http://example.com/api/{{ .id | default "unknown" }}"
+        method: GET
         content_type: "application/json"
         params:
-          tenant_id: "field.tenant"
+          id: "field.id"
           user_id: "user"
         response_field: "http_response"
         retry: 3
@@ -41,6 +42,9 @@ pipelines:
         timeout: 5s
     ...
 ```
+
+# example of request to server:
+# GET http://example.com/api/id_value?user_id=user
 
 }*/
 
@@ -52,16 +56,27 @@ type Plugin struct {
 	latencyMetric   *metric.Histogram
 	backoffStrategy backoff.BackOff
 	paramFields     map[string][]string // pre-parsed field selectors for params
+	addressTmpl     *template.Template  // compiled URL template
 }
 
 // ! config-params
 // ^ config-params
 type Config struct {
+	// > @3@4@5@6
+	// >
+	// > Query parameters to add to the request.
 	Params map[string]string `json:"params"` // *
 
+	// > @3@4@5@6
+	// >
+	// > HTTP method to use.
 	Method string `json:"method" default:"POST" options:"POST|GET|PATCH"` // *
 
-	Address string `json:"address" default:"" required:"true"` // *
+	// > @3@4@5@6
+	// >
+	// > URL address to send requests to.
+	// > Example: `http://localhost:8080/api`.com/v1/events`
+	Address string `json:"address" required:"true"` // *
 
 	// > @3@4@5@6
 	// >
@@ -111,7 +126,12 @@ type Config struct {
 	// > @3@4@5@6
 	// >
 	// > List of HTTP status codes that are considered successful.
-	SuccessCodes []int `json:"success_codes"` // *
+	SuccessCodes []int `json:"success_codes" default:"200"` // *
+
+	// > @3@4@5@6
+	// >
+	// > Path or content of a PEM-encoded CA file.
+	CACert string `json:"ca_cert"` // *
 
 	// > @3@4@5@6
 	// >
@@ -136,22 +156,29 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 	p.config = config.(*Config)
 	p.logger = params.Logger.Desugar()
 
-	// Default success codes to 200 if not specified
-	if len(p.config.SuccessCodes) == 0 {
-		p.config.SuccessCodes = []int{200}
-	}
-
+	addr, isTLS := getAddrFromURL(p.config.Address)
 	p.client = &fasthttp.HostClient{
-		Addr:         getAddrFromURL(p.config.Address),
+		Addr:         addr,
 		ReadTimeout:  p.config.Timeout_,
 		WriteTimeout: p.config.Timeout_,
-		IsTLS:        isURLTLS(p.config.Address),
+		IsTLS:        isTLS,
 	}
 
 	if p.config.ForceHTTP2 {
 		if err := http2.ConfigureClient(p.client, http2.ClientOpts{}); err != nil {
-			log.Printf("Server %s does not support HTTP/2: %v\n", p.client.Addr, err)
+			p.logger.Warn("Server does not support HTTP/2",
+				zap.String("address", p.client.Addr),
+				zap.Error(err),
+			)
 		}
+	}
+
+	if p.config.CACert != "" {
+		tlsBuilder := xtls.NewConfigBuilder()
+		if err := tlsBuilder.AppendCARoot(p.config.CACert); err != nil {
+			p.logger.Fatal("can't append CA root", zap.Error(err))
+		}
+		p.client.TLSConfig = tlsBuilder.Build()
 	}
 
 	p.registerMetrics(params.MetricCtl, p.config.MetricPrefix)
@@ -163,43 +190,39 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 	for name, fieldSelector := range p.config.Params {
 		p.paramFields[name] = cfg.ParseFieldSelector(fieldSelector)
 	}
+
+	// Compile URL template
+	tmpl := template.Must(template.New("").Funcs(template.FuncMap{
+		"default": func(defaultValue string, value interface{}) interface{} {
+			if value == nil || value == "" {
+				return defaultValue
+			}
+			return value
+		},
+	}).Parse(p.config.Address))
+	p.addressTmpl = tmpl
 }
 
-func isURLTLS(rawURL string) bool {
+func getAddrFromURL(rawURL string) (string, bool) {
 	u, err := url.Parse(rawURL)
 	if err != nil {
-		return false
-	}
-	return u.Scheme == "https"
-}
-
-func getAddrFromURL(rawURL string) string {
-	u, err := url.Parse(rawURL)
-	if err != nil {
-		return ""
+		return "", false
 	}
 
 	host := u.Hostname()
 	port := u.Port()
 
+	isTLS := u.Scheme == "https"
+
 	if port == "" {
-		if u.Scheme == "https" {
+		if isTLS {
 			port = "443"
 		} else {
 			port = "80"
 		}
 	}
 
-	return host + ":" + port
-}
-
-func isSuccessStatusCode(statusCode int, successCodes []int) bool {
-	for _, code := range successCodes {
-		if statusCode == code {
-			return true
-		}
-	}
-	return false
+	return host + ":" + port, isTLS
 }
 
 func (p *Plugin) Stop() {
@@ -238,19 +261,15 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 		params[name] = value
 	}
 
-	// Build the address by replacing {param_name} placeholders.
-	address := p.config.Address
-	usedParams := make(map[string]bool)
-	for name, value := range params {
-		// Check if param is used in URL before replacing
-		if strings.Contains(p.config.Address, "{"+name+"}") {
-			usedParams[name] = true
-		}
-		address = strings.ReplaceAll(address, "{"+name+"}", value)
+	// Build the address using template execution
+	var buf bytes.Buffer
+	if err := p.addressTmpl.Execute(&buf, params); err != nil {
+		p.logger.Fatal("failed to execute URL template",
+			zap.String("address", p.config.Address),
+			zap.Error(err),
+		)
 	}
-
-	// Encode the event as the request body.
-	body := []byte(event.Root.EncodeToString())
+	address := buf.String()
 
 	// Measure total request time including retries
 	startTime := time.Now()
@@ -262,11 +281,9 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 
 		req.SetRequestURI(address)
 
-		// Add unused params as query string parameters.
+		// Add all params as query string parameters.
 		for name, value := range params {
-			if !usedParams[name] {
-				req.URI().QueryArgs().Add(name, value)
-			}
+			req.URI().QueryArgs().Add(name, value)
 		}
 		req.Header.SetMethod(p.config.Method)
 		req.Header.SetContentType(p.config.ContentType)
@@ -275,7 +292,6 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 		for key, value := range p.config.Headers {
 			req.Header.Set(key, value)
 		}
-		req.SetBodyRaw(body)
 
 		resp := fasthttp.AcquireResponse()
 		defer fasthttp.ReleaseResponse(resp)
@@ -291,15 +307,20 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 		}
 
 		statusCode := resp.Header.StatusCode()
-		if !isSuccessStatusCode(statusCode, p.config.SuccessCodes) {
-			err := fmt.Errorf("non-success status code: %d", statusCode)
+		if !slices.Contains(p.config.SuccessCodes, statusCode) {
 			p.logger.Error("http request returned non-success status code",
 				zap.String("address", address),
 				zap.String("method", p.config.Method),
 				zap.Int("status_code", statusCode),
+			)
+			p.logger.Debug("error response body",
+				zap.Any("request", params),
 				zap.ByteString("response", resp.Body()),
 			)
+
 			p.requestsMetric.WithLabelValues("not_success").Inc()
+
+			err := fmt.Errorf("non-success status code: %d", statusCode)
 			return err
 		}
 

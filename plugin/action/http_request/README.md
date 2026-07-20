@@ -4,15 +4,14 @@ Sends HTTP requests with event data as body. Writes response body to the configu
 ## Example
 ```yaml
 pipelines:
-  - name: http_pipeline
-    actions:
-    	...
-      - type: http_request
-        address: "http://example.com/api/{tenant_id}"
-        method: POST
+  - actions:
+       	...
+       - type: http_request
+        address: "http://example.com/api/{{ .id | default "unknown" }}"
+        method: GET
         content_type: "application/json"
         params:
-          tenant_id: "field.tenant"
+          id: "field.id"
           user_id: "user"
         response_field: "http_response"
         retry: 3
@@ -21,15 +20,28 @@ pipelines:
     ...
 ```
 
+# example of request to server:
+# GET http://example.com/api/id_value?user_id=user
+
 
 ## Config params
-**`params`** 
+**`params`** *`map[string]string`* 
+
+Query parameters to add to the request.
+
 <br>
 
-**`method`** 
+**`method`** *`string`* *`default=POST`* *`options=POST|GET|PATCH`* 
+
+HTTP method to use.
+
 <br>
 
-**`address`** 
+**`address`** *`string`* *`required`* 
+
+URL address to send requests to.
+Example: `http://localhost:8080/api`.com/v1/events`
+
 <br>
 
 **`timeout`** *`cfg.Duration`* *`default=5s`* 
@@ -77,9 +89,15 @@ Each retry interval will be multiplied by this value.
 
 <br>
 
-**`success_codes`** *`[]int`* 
+**`success_codes`** *`[]int`* *`default=200`* 
 
 List of HTTP status codes that are considered successful.
+
+<br>
+
+**`ca_cert`** *`string`* 
+
+Path or content of a PEM-encoded CA file.
 
 <br>
 
