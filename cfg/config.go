@@ -692,8 +692,22 @@ func SetDefaultValues(data interface{}) error {
 				if vField.Len() == 0 {
 					val := strings.Fields(defaultValue)
 					vField.Set(reflect.MakeSlice(vField.Type(), len(val), len(val)))
+
+					elemType := vField.Type().Elem()
 					for i, v := range val {
-						vField.Index(i).SetString(v)
+						vElem := vField.Index(i)
+						switch elemType.Kind() {
+						case reflect.String:
+							vElem.SetString(v)
+						case reflect.Int:
+							intVal, err := strconv.Atoi(v)
+							if err != nil {
+								return fmt.Errorf("default value for field %s should be int, got=%s: %w", tField.Name, v, err)
+							}
+							vElem.SetInt(int64(intVal))
+						default:
+							return fmt.Errorf("unsupported slice element type %v for field %s", elemType.Kind(), tField.Name)
+						}
 					}
 				}
 			}
