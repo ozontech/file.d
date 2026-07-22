@@ -187,7 +187,7 @@ func (l *limitersMap) runSync(ctx context.Context, workerCount int, syncInterval
 	wg := sync.WaitGroup{}
 
 	jobs := make(chan limiter, workerCount)
-	for i := 0; i < workerCount; i++ {
+	for range workerCount {
 		go l.syncWorker(jobs, &wg)
 	}
 

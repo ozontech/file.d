@@ -508,7 +508,6 @@ func TestApplyEnvs(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			object, err := simplejson.NewJson([]byte(tt.json))
 			require.NoError(t, err)
@@ -744,21 +743,21 @@ func TestExpression_UnmarshalJSON(t *testing.T) {
 func TestMergeYAMLs(t *testing.T) {
 	tests := []struct {
 		name     string
-		a        map[interface{}]interface{}
-		b        map[interface{}]interface{}
-		expected map[interface{}]interface{}
+		a        map[any]any
+		b        map[any]any
+		expected map[any]any
 	}{
 		{
 			name: "simple merge",
-			a: map[interface{}]interface{}{
+			a: map[any]any{
 				"key1": "value1",
 				"key2": "value2",
 			},
-			b: map[interface{}]interface{}{
+			b: map[any]any{
 				"key2": "newValue2",
 				"key3": "value3",
 			},
-			expected: map[interface{}]interface{}{
+			expected: map[any]any{
 				"key1": "value1",
 				"key2": "newValue2",
 				"key3": "value3",
@@ -766,19 +765,19 @@ func TestMergeYAMLs(t *testing.T) {
 		},
 		{
 			name: "nested maps",
-			a: map[interface{}]interface{}{
-				"key1": map[interface{}]interface{}{
+			a: map[any]any{
+				"key1": map[any]any{
 					"subkey1": "subvalue1",
 				},
 			},
-			b: map[interface{}]interface{}{
-				"key1": map[interface{}]interface{}{
+			b: map[any]any{
+				"key1": map[any]any{
 					"subkey2": "subvalue2",
 				},
 				"key2": "value2",
 			},
-			expected: map[interface{}]interface{}{
-				"key1": map[interface{}]interface{}{
+			expected: map[any]any{
+				"key1": map[any]any{
 					"subkey1": "subvalue1",
 					"subkey2": "subvalue2",
 				},
@@ -787,19 +786,19 @@ func TestMergeYAMLs(t *testing.T) {
 		},
 		{
 			name: "overwriting nested maps",
-			a: map[interface{}]interface{}{
-				"key1": map[interface{}]interface{}{
+			a: map[any]any{
+				"key1": map[any]any{
 					"subkey1": "subvalue1",
 				},
 			},
-			b: map[interface{}]interface{}{
-				"key1": map[interface{}]interface{}{
+			b: map[any]any{
+				"key1": map[any]any{
 					"subkey1": "newSubvalue1",
 					"subkey2": "subvalue2",
 				},
 			},
-			expected: map[interface{}]interface{}{
-				"key1": map[interface{}]interface{}{
+			expected: map[any]any{
+				"key1": map[any]any{
 					"subkey1": "newSubvalue1",
 					"subkey2": "subvalue2",
 				},
@@ -807,56 +806,56 @@ func TestMergeYAMLs(t *testing.T) {
 		},
 		{
 			name:     "empty maps",
-			a:        map[interface{}]interface{}{},
-			b:        map[interface{}]interface{}{},
-			expected: map[interface{}]interface{}{
+			a:        map[any]any{},
+			b:        map[any]any{},
+			expected: map[any]any{
 				// Expecting an empty map
 			},
 		},
 		{
 			name: "a is empty",
-			a:    map[interface{}]interface{}{},
-			b: map[interface{}]interface{}{
+			a:    map[any]any{},
+			b: map[any]any{
 				"key1": "value1",
 			},
-			expected: map[interface{}]interface{}{
+			expected: map[any]any{
 				"key1": "value1",
 			},
 		},
 		{
 			name: "b is empty",
-			a: map[interface{}]interface{}{
+			a: map[any]any{
 				"key1": "value1",
 			},
-			b: map[interface{}]interface{}{},
-			expected: map[interface{}]interface{}{
+			b: map[any]any{},
+			expected: map[any]any{
 				"key1": "value1",
 			},
 		},
 		{
 			name: "override slice",
-			a: map[interface{}]interface{}{
-				"key1": []interface{}{"value1", "value2"},
+			a: map[any]any{
+				"key1": []any{"value1", "value2"},
 			},
-			b: map[interface{}]interface{}{
-				"key1": []interface{}{"newValue1", "newValue2"},
+			b: map[any]any{
+				"key1": []any{"newValue1", "newValue2"},
 			},
-			expected: map[interface{}]interface{}{
-				"key1": []interface{}{"newValue1", "newValue2"},
+			expected: map[any]any{
+				"key1": []any{"newValue1", "newValue2"},
 			},
 		},
 		{
 			name: "merge slice with map",
-			a: map[interface{}]interface{}{
-				"key1": []interface{}{"value1", "value2"},
+			a: map[any]any{
+				"key1": []any{"value1", "value2"},
 			},
-			b: map[interface{}]interface{}{
-				"key1": map[interface{}]interface{}{
+			b: map[any]any{
+				"key1": map[any]any{
 					"subkey1": "subvalue1",
 				},
 			},
-			expected: map[interface{}]interface{}{
-				"key1": map[interface{}]interface{}{
+			expected: map[any]any{
+				"key1": map[any]any{
 					"subkey1": "subvalue1",
 				},
 			},
@@ -917,7 +916,6 @@ func TestBuildFieldSelector(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 

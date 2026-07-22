@@ -650,7 +650,7 @@ func ParseNestedFields(fields []string) ([][]string, error) {
 	return result, nil
 }
 
-func SetDefaultValues(data interface{}) error {
+func SetDefaultValues(data any) error {
 	t := reflect.TypeOf(data).Elem()
 	v := reflect.ValueOf(data).Elem()
 
@@ -689,9 +689,10 @@ func SetDefaultValues(data interface{}) error {
 			case reflect.Bool:
 				currentValue := vField.Bool()
 				if !currentValue {
-					if defaultValue == "true" {
+					switch defaultValue {
+					case "true":
 						vField.SetBool(true)
-					} else if defaultValue == "false" {
+					case "false":
 						vField.SetBool(false)
 					}
 				}
@@ -750,8 +751,8 @@ func mergeYAMLs(a, b map[interface{}]interface{}) map[interface{}]interface{} {
 	}
 	for k, v := range b {
 		if existingValue, exists := merged[k]; exists {
-			if existingMap, ok := existingValue.(map[interface{}]interface{}); ok {
-				if newMap, ok := v.(map[interface{}]interface{}); ok {
+			if existingMap, ok := existingValue.(map[any]any); ok {
+				if newMap, ok := v.(map[any]any); ok {
 					merged[k] = mergeYAMLs(existingMap, newMap)
 					continue
 				}

@@ -200,7 +200,6 @@ func TestCheckType(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			var eventRoot *insaneJSON.Root
@@ -354,7 +353,6 @@ func TestCheckTypeDuplicateValues(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			node, err := NewCheckTypeOpNode(tt.node.field, tt.node.values)

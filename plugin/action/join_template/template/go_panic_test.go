@@ -10,8 +10,7 @@ import (
 func BenchmarkPanicStartMixedRes(b *testing.B) {
 	lines := getLines(sample.Panics)
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		for _, line := range lines {
 			goPanicStartCheck(line)
 		}
@@ -21,8 +20,7 @@ func BenchmarkPanicStartMixedRes(b *testing.B) {
 func BenchmarkPanicContinueMixedRes(b *testing.B) {
 	lines := getLines(sample.Panics)
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		for _, line := range lines {
 			goPanicContinueCheck(line)
 		}
@@ -32,8 +30,7 @@ func BenchmarkPanicContinueMixedRes(b *testing.B) {
 func BenchmarkPanicStartNegativeRes(b *testing.B) {
 	lines := getRandLines()
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		for _, line := range lines {
 			goPanicStartCheck(line)
 		}
@@ -43,8 +40,7 @@ func BenchmarkPanicStartNegativeRes(b *testing.B) {
 func BenchmarkPanicContinueNegativeRes(b *testing.B) {
 	lines := getRandLines()
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		for _, line := range lines {
 			goPanicContinueCheck(line)
 		}

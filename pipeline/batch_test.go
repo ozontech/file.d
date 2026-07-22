@@ -75,13 +75,13 @@ func TestBatcher(t *testing.T) {
 
 	eventsCh := make(chan *Event, 1024)
 	go func() {
-		for i := 0; i < eventCount; i++ {
+		for i := range eventCount {
 			eventsCh <- &Event{SeqID: uint64(i)}
 		}
 		close(eventsCh)
 	}()
 
-	for p := 0; p < processors; p++ {
+	for p := range processors {
 		go func(x int) {
 			for event := range eventsCh {
 				event.SourceID = SourceID(x)
@@ -145,13 +145,13 @@ func TestBatcherMaxSize(t *testing.T) {
 
 	eventsCh := make(chan *Event, 1024)
 	go func() {
-		for i := 0; i < eventCount; i++ {
+		for i := range eventCount {
 			eventsCh <- &Event{SeqID: uint64(i), Size: eventSize}
 		}
 		close(eventsCh)
 	}()
 
-	for p := 0; p < processors; p++ {
+	for p := range processors {
 		go func(x int) {
 			for event := range eventsCh {
 				event.SourceID = SourceID(x)

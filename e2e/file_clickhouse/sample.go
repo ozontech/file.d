@@ -73,8 +73,8 @@ func (s *Sample) MarshalJSON() ([]byte, error) {
 		StrArr    *[]string         `json:"str_arr"`
 		MapStrStr map[string]string `json:"map_str_str"`
 
-		UUID         string        `json:"uuid,omitempty"`
-		UUIDNullable uuid.NullUUID `json:"uuid_nullable,omitempty"`
+		UUID         string         `json:"uuid,omitempty"`
+		UUIDNullable *uuid.NullUUID `json:"uuid_nullable,omitempty"`
 	}{
 		C1:           s.C1,
 		C2:           s.C2,
@@ -93,6 +93,6 @@ func (s *Sample) MarshalJSON() ([]byte, error) {
 		StrArr:       s.StrArr,
 		MapStrStr:    s.MapStrStr,
 		UUID:         s.UUID.String(),
-		UUIDNullable: s.UUIDNullable,
+		UUIDNullable: &s.UUIDNullable,
 	})
 }
