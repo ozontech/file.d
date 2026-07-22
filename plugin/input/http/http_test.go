@@ -22,6 +22,9 @@ import (
 	"github.com/ozontech/file.d/test"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zaptest/observer"
 )
 
 func getInputInfo(config *Config) *pipeline.InputPluginInfo {
@@ -494,6 +497,78 @@ func TestPluginAuth(t *testing.T) {
 
 			r.Equal(tc.ShouldPass, ok)
 			r.Equal(tc.Login, login)
+		})
+	}
+}
+
+func TestServeHTTPAuthFailedLog(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		authHeader string
+		authValue  string
+		hasAuth    bool
+	}{
+		{
+			name:       "authorization header",
+			authHeader: "Authorization",
+			authValue:  "Bearer sensitive-token",
+			hasAuth:    true,
+		},
+		{
+			name:       "custom auth header",
+			authHeader: "X-Api-Key",
+			authValue:  "sensitive-api-key",
+			hasAuth:    true,
+		},
+		{
+			name:       "missing auth header",
+			authHeader: "Authorization",
+			hasAuth:    false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			pipelineMock, _, _ := test.NewPipelineMock(nil, "passive")
+			inputInfo := getInputInfo(&Config{
+				Address: "off",
+				Auth: AuthConfig{
+					Header:   tc.authHeader,
+					Strategy: "bearer",
+					Secrets:  map[string]string{"valid": "valid-token"},
+				},
+			})
+			pipelineMock.SetInput(inputInfo)
+			pipelineMock.Start()
+			t.Cleanup(pipelineMock.Stop)
+
+			core, logs := observer.New(zapcore.WarnLevel)
+			input := inputInfo.Plugin.(*Plugin)
+			input.logger = zap.New(core)
+
+			req := httptest.NewRequest(http.MethodPost, "/logger?token=sensitive-query-token", http.NoBody)
+			req.Header.Set("User-Agent", "test-agent")
+			if tc.authValue != "" {
+				req.Header.Set(tc.authHeader, tc.authValue)
+			}
+
+			resp := httptest.NewRecorder()
+			input.ServeHTTP(resp, req)
+
+			require.Equal(t, http.StatusUnauthorized, resp.Code)
+			require.Equal(t, 1, logs.Len())
+			assert.Equal(t, "auth failed", logs.All()[0].Message)
+			assert.Equal(t, map[string]any{
+				"user_agent":  "test-agent",
+				"remote_addr": "192.0.2.1:1234",
+				"method":      http.MethodPost,
+				"path":        "/logger",
+				"has_auth":    tc.hasAuth,
+			}, logs.All()[0].ContextMap())
 		})
 	}
 }
