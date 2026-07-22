@@ -1,11 +1,10 @@
 services:
-
-  grafana: 
+  grafana:
     image: grafana/grafana:latest
     container_name: grafana
     ports:
       - "3000:3000"
-    user: '0'
+    user: "0"
     environment:
       - GF_PATHS_PROVISIONING=/etc/grafana/provisioning
       - GF_AUTH_ANONYMOUS_ENABLED=true
@@ -31,9 +30,10 @@ services:
         /run.sh
 
   loki:
-    image: grafana/loki:latest
+    image: grafana/loki:3.5
     container_name: loki
-    command: --config.file=/etc/loki/config.yaml
+    command:
+      - --config.file=/etc/loki/config.yaml
     ports:
       - "3100:3100"
     volumes:
@@ -43,3 +43,4 @@ services:
       interval: 3s
       timeout: 10s
       retries: 10
+      start_period: 15s

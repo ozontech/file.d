@@ -1,6 +1,7 @@
 package file
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path"
@@ -14,7 +15,6 @@ import (
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/pipeline"
 	"go.uber.org/zap"
-	"golang.org/x/net/context"
 )
 
 /*{ introduction
