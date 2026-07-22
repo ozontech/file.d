@@ -327,8 +327,8 @@ func Parse(ptr any, values map[string]int) error {
 	return nil
 }
 
-// it isn't just a recursion
-// it also captures values with the same name from parent
+// it isn't just a recursion, it also captures values with the same name from parent
+// if the child value has zero value
 // i.e. take this config:
 //
 //	{
@@ -341,21 +341,24 @@ func Parse(ptr any, values map[string]int) error {
 // this function will set `config.Child.T = config.T`
 // see file.d/cfg/config_test.go:TestHierarchy for an example
 func ParseChild(parent reflect.Value, v reflect.Value, values map[string]int) error {
-	if v.CanAddr() {
-		for i := 0; i < v.NumField(); i++ {
-			name := v.Type().Field(i).Name
-			val := parent.FieldByName(name)
-			if val.CanAddr() {
-				v.Field(i).Set(val)
-			}
+	if !v.CanAddr() {
+		return nil
+	}
+
+	for i := range v.NumField() {
+		// set parent value only if child has zero value
+		if !v.Field(i).IsZero() {
+			continue
 		}
 
-		err := Parse(v.Addr().Interface(), values)
-		if err != nil {
-			return err
+		name := v.Type().Field(i).Name
+		val := parent.FieldByName(name)
+		if val.CanAddr() {
+			v.Field(i).Set(val)
 		}
 	}
-	return nil
+
+	return Parse(v.Addr().Interface(), values)
 }
 
 // ParseSlice recursively parses elements of an slice

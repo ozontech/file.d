@@ -438,10 +438,18 @@ func TestParseNestedFields(t *testing.T) {
 func TestHierarchy(t *testing.T) {
 	s := &hierarchy{T: "10"}
 	err := Parse(s, map[string]int{})
-
-	assert.Nil(t, err, "shouldn't be an error")
+	assert.NoError(t, err, "shouldn't be an error")
 	assert.Equal(t, "10", s.T, "wrong value")
 	assert.Equal(t, "10", s.Child.T, "wrong value")
+
+	s = &hierarchy{
+		T:     "10",
+		Child: hierarchyChild{T: "20"},
+	}
+	err = Parse(s, map[string]int{})
+	assert.NoError(t, err, "shouldn't be an error")
+	assert.Equal(t, "10", s.T, "wrong value")
+	assert.Equal(t, "20", s.Child.T, "wrong value")
 }
 
 func TestSlice(t *testing.T) {
