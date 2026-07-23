@@ -554,7 +554,7 @@ func BenchmarkHttpInputJson(b *testing.B) {
 		time.Sleep(100 * time.Millisecond) // http listen start delay
 
 		go func() {
-			for j := 0; j < DocumentCount; j++ {
+			for range DocumentCount {
 				jobs <- struct{}{}
 			}
 			close(jobs)
@@ -625,7 +625,6 @@ func TestGzip(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		tc := tc
 		t.Run(tc.Name, func(t *testing.T) {
 			t.Parallel()
 
@@ -798,7 +797,6 @@ func TestCORSPrepareAllowedOrigins(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		tc := tc
 		t.Run(tc.Name, func(t *testing.T) {
 			t.Parallel()
 			corsCfg := CORSConfig{
@@ -908,7 +906,6 @@ func TestCORSGetAllowedByOrigin(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		tc := tc
 		t.Run(tc.Name, func(t *testing.T) {
 			t.Parallel()
 			corsCfg := CORSConfig{

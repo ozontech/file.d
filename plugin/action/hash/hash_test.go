@@ -174,7 +174,6 @@ func TestHash(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			config := test.NewConfig(tt.config, nil)
 			p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, config, pipeline.MatchModeAnd, nil, false), tt.pipeOpts...)

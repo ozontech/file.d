@@ -377,7 +377,7 @@ func TestRedisThrottleMultiPipes(t *testing.T) {
 		`{"time":"%s","k8s_ns":"ns_3","k8s_pod":"pod_1"}`,
 		`{"time":"%s","k8s_ns":"ns_4","k8s_pod":"pod_1"}`,
 	}
-	for i := 0; i < len(firstPipeEvents); i++ {
+	for i := range len(firstPipeEvents) {
 		json := fmt.Sprintf(firstPipeEvents[i], time.Now().Format(time.RFC3339Nano))
 		input.In(10, sourceNames[rand.Int()%len(sourceNames)], test.NewOffset(0), []byte(json))
 		// timeout required due shifting time call to redis
@@ -386,7 +386,7 @@ func TestRedisThrottleMultiPipes(t *testing.T) {
 	// limit is 1 while events count is 3
 	assert.Greater(t, len(firstPipeEvents), outEvents, "wrong in events count")
 
-	for i := 0; i < len(secondPipeEvents); i++ {
+	for i := range len(secondPipeEvents) {
 		json := fmt.Sprintf(secondPipeEvents[i], time.Now().Format(time.RFC3339Nano))
 		inputSec.In(10, sourceNames[rand.Int()%len(sourceNames)], test.NewOffset(0), []byte(json))
 		// timeout required due shifting time call to redis
@@ -778,7 +778,7 @@ func TestThrottleLimiterExpiration(t *testing.T) {
 	}
 
 	nowTs := time.Now().Format(time.RFC3339Nano)
-	for i := 0; i < eventsTotal; i++ {
+	for i := range eventsTotal {
 		json := fmt.Sprintf(events[i], nowTs)
 
 		input.In(10, sourceNames[rand.Int()%len(sourceNames)], test.NewOffset(0), []byte(json))
@@ -909,7 +909,7 @@ func TestThrottleWithDistribution(t *testing.T) {
 	}
 
 	nowTs := time.Now().Format(time.RFC3339Nano)
-	for i := 0; i < len(events); i++ {
+	for i := range len(events) {
 		json := fmt.Sprintf(events[i], nowTs)
 		input.In(0, "test", test.NewOffset(0), []byte(json))
 	}

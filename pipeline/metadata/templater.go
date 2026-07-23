@@ -37,7 +37,7 @@ type MetaTemplate struct {
 // NewMetaTemplate creates a new TemplateWrapper with default function
 func NewMetaTemplate(source string) *MetaTemplate {
 	tmpl := template.Must(template.New("").Funcs(template.FuncMap{
-		"default": func(defaultValue string, value interface{}) interface{} {
+		"default": func(defaultValue string, value any) any {
 			if value == nil || value == "" {
 				return defaultValue
 			}
@@ -74,8 +74,8 @@ func NewMetaTemplater(templates cfg.MetaTemplates, logger *zap.Logger, cacheSize
 				continue
 			}
 			expression := strings.TrimSpace(match[1])
-			components := strings.Fields(expression)
-			for _, component := range components {
+
+			for component := range strings.FieldsSeq(expression) {
 				// catch all variables
 				if !strings.HasPrefix(component, ".") {
 					continue
@@ -140,7 +140,7 @@ func NewMetaTemplater(templates cfg.MetaTemplates, logger *zap.Logger, cacheSize
 		valueTypes:   valueTypes,
 		logger:       logger,
 		poolBuffer: sync.Pool{
-			New: func() interface{} { return new(bytes.Buffer) },
+			New: func() any { return new(bytes.Buffer) },
 		},
 		cache: cache,
 	}

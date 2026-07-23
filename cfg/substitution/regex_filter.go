@@ -84,7 +84,7 @@ func (r *RegexFilter) compareArgs(args []any) error {
 	if len(wantGroups) != len(gotGroups) {
 		return fmt.Errorf("wrong regex filter groups, want=%v got=%v", wantGroups, gotGroups)
 	}
-	for i := 0; i < len(wantGroups); i++ {
+	for i := range wantGroups {
 		if wantGroups[i] != gotGroups[i] {
 			return fmt.Errorf("wrong regex filter groups, want=%v got=%v", wantGroups, gotGroups)
 		}

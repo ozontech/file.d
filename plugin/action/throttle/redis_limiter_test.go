@@ -314,7 +314,6 @@ func Test_updateKeyLimit(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			ctl := metric.NewCtl("test", prometheus.NewRegistry(), time.Minute, 0)
@@ -462,7 +461,6 @@ func Test_decodeKeyLimitValue(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			gotLimit, gotDistr, err := decodeKeyLimitValue(tt.args.data, tt.args.valField, tt.args.distrField)

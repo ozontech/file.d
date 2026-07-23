@@ -112,7 +112,7 @@ func main() {
 }
 
 func start() {
-	appCfg := cfg.NewConfigFromFile(*config)
+	appCfg := cfg.NewConfigFromFiles(*config)
 
 	fileD = fd.New(appCfg, *http)
 	fileD.Start()

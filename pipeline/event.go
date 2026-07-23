@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math/bits"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -234,7 +235,7 @@ func newEventPool(capacity, avgEventSize int) *eventPool {
 
 	eventPool.getCond = sync.NewCond(eventPool.getMu)
 
-	for i := 0; i < capacity; i++ {
+	for range capacity {
 		eventPool.free1 = append(eventPool.free1, *atomic.NewBool(true))
 		eventPool.free2 = append(eventPool.free2, *atomic.NewBool(true))
 		eventPool.events = append(eventPool.events, newEvent())
@@ -251,13 +252,13 @@ func (p *eventPool) get(size int) *Event {
 	for {
 		if x < p.backCounter.Load() {
 			// fast path
-			if p.free1[x].CAS(true, false) {
+			if p.free1[x].CompareAndSwap(true, false) {
 				break
 			}
-			if p.free1[x].CAS(true, false) {
+			if p.free1[x].CompareAndSwap(true, false) {
 				break
 			}
-			if p.free1[x].CAS(true, false) {
+			if p.free1[x].CompareAndSwap(true, false) {
 				break
 			}
 		}
@@ -295,13 +296,13 @@ func (p *eventPool) back(event *Event) {
 	var tries int
 	for {
 		// fast path
-		if p.free2[x].CAS(false, true) {
+		if p.free2[x].CompareAndSwap(false, true) {
 			break
 		}
-		if p.free2[x].CAS(false, true) {
+		if p.free2[x].CompareAndSwap(false, true) {
 			break
 		}
-		if p.free2[x].CAS(false, true) {
+		if p.free2[x].CompareAndSwap(false, true) {
 			break
 		}
 		tries++
@@ -339,17 +340,21 @@ func (p *eventPool) wakeupWaiters() {
 
 func (p *eventPool) dump() string {
 	out := logger.Cond(len(p.events) == 0, logger.Header("no events"), func() string {
-		o := logger.Header("events")
-		for i := 0; i < p.capacity; i++ {
+		var sb strings.Builder
+
+		sb.WriteString(logger.Header("events"))
+		for i := range p.capacity {
 			event := p.events[i]
 			eventStr := event.String()
 			if eventStr == "" {
 				eventStr = "nil"
 			}
-			o += eventStr + "\n"
+
+			sb.WriteString(eventStr)
+			sb.WriteByte('\n')
 		}
 
-		return o
+		return sb.String()
 	})
 
 	return out
@@ -405,7 +410,7 @@ type lowMemoryEventPool struct {
 
 func newLowMemoryEventPool(capacity int) *lowMemoryEventPool {
 	pools := [syncPools]*sync.Pool{}
-	for i := 0; i < syncPools; i++ {
+	for i := range syncPools {
 		pools[i] = &sync.Pool{
 			New: func() any {
 				return newEvent()

@@ -28,7 +28,6 @@ func TestWatcher(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			dir := t.TempDir()
 			shouldCreate := atomic.Int64{}
@@ -178,7 +177,6 @@ func TestWatcherPaths(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		tt := tt
 		relFilename, _ := filepath.Rel(dir, tt.filename)
 		t.Run(relFilename, func(t *testing.T) {
 			filename := tt.filename

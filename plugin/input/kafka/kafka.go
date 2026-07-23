@@ -9,6 +9,7 @@ import (
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/pipeline/metadata"
+	"github.com/ozontech/file.d/xoauth"
 	"github.com/twmb/franz-go/pkg/kgo"
 	"go.uber.org/zap"
 )
@@ -46,19 +47,20 @@ pipelines:
 
 type Plugin struct {
 	config     *Config
-	logger     *zap.SugaredLogger
-	client     *kgo.Client
-	cancel     context.CancelFunc
+	logger     *zap.Logger
 	controller pipeline.InputPluginController
-	idByTopic  map[string]int
+
+	client        *kgo.Client
+	s             *splitConsume
+	tokenSource   xoauth.TokenSource
+	metaTemplater *metadata.MetaTemplater
+
+	ctx        context.Context
+	cancelFunc context.CancelFunc
 
 	// plugin metrics
 	commitErrorsMetric  *metric.Counter
 	consumeErrorsMetric *metric.Counter
-
-	metaTemplater *metadata.MetaTemplater
-
-	s *splitConsume
 }
 
 type OffsetType byte
@@ -176,7 +178,7 @@ type Config struct {
 	// > @3@4@5@6
 	// >
 	// > SASL mechanism to use.
-	SaslMechanism string `json:"sasl_mechanism" default:"SCRAM-SHA-512" options:"PLAIN|SCRAM-SHA-256|SCRAM-SHA-512|AWS_MSK_IAM"` // *
+	SaslMechanism string `json:"sasl_mechanism" default:"SCRAM-SHA-512" options:"PLAIN|SCRAM-SHA-256|SCRAM-SHA-512|AWS_MSK_IAM|OAUTHBEARER"` // *
 
 	// > @3@4@5@6
 	// >
@@ -187,6 +189,21 @@ type Config struct {
 	// >
 	// > SASL password.
 	SaslPassword string `json:"sasl_password" default:"password"` // *
+
+	// > @3@4@5@6
+	// >
+	// > SASL OAUTHBEARER config. It works only if `sasl_mechanism:"OAUTHBEARER"`.
+	// >> There are 2 options - a static token or a dynamically updated.
+	// >
+	// > `OAuthConfig` params:
+	// > * **`token`** *`string`* - static token
+	// > ---
+	// > * **`client_id`** *`string`* - client ID
+	// > * **`client_secret`** *`string`* - client secret
+	// > * **`token_url`** *`string`* - resource server's token endpoint URL
+	// > * **`scopes`** *`[]string`* - optional requested permissions
+	// > * **`auth_style`** *`string`* *`default=params`* *`options=params|header`* - specifies how the endpoint wants the client ID & client secret sent
+	SaslOAuth cfg.KafkaClientOAuthConfig `json:"sasl_oauth" child:"true"` // *
 
 	// > @3@4@5@6
 	// >
@@ -241,6 +258,7 @@ func (c *Config) GetSaslConfig() cfg.KafkaClientSaslConfig {
 		SaslMechanism: c.SaslMechanism,
 		SaslUsername:  c.SaslUsername,
 		SaslPassword:  c.SaslPassword,
+		SaslOAuth:     c.SaslOAuth,
 	}
 }
 
@@ -270,40 +288,49 @@ func Factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginParams) {
 	p.controller = params.Controller
-	p.logger = params.Logger
+	p.logger = params.Logger.Desugar()
 	p.config = config.(*Config)
 	p.registerMetrics(params.MetricCtl)
+	p.ctx, p.cancelFunc = context.WithCancel(context.Background())
+
+	p.logger.Info("starting")
 
 	if len(p.config.Meta) > 0 {
 		p.metaTemplater = metadata.NewMetaTemplater(
 			p.config.Meta,
-			p.logger.Desugar(),
+			p.logger,
 			params.PipelineSettings.MetaCacheSize,
 		)
 	}
 
-	p.idByTopic = make(map[string]int, len(p.config.Topics))
+	idByTopic := make(map[string]int, len(p.config.Topics))
 	for i, topic := range p.config.Topics {
-		p.idByTopic[topic] = i
+		idByTopic[topic] = i
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	p.cancel = cancel
 	p.s = &splitConsume{
 		consumers:              make(map[tp]*pconsumer),
 		bufferSize:             p.config.ChannelBufferSize,
 		maxConcurrentConsumers: p.config.MaxConcurrentConsumers,
-		idByTopic:              p.idByTopic,
+		idByTopic:              idByTopic,
 		controller:             p.controller,
-		logger:                 p.logger.Desugar(),
+		logger:                 p.logger,
 		metaTemplater:          p.metaTemplater,
 		consumeErrorsMetric:    p.consumeErrorsMetric,
 	}
-	p.client = NewClient(p.config, p.logger.Desugar(), p.s)
+
+	var err error
+	p.tokenSource, err = cfg.GetKafkaClientOAuthTokenSource(p.ctx, p.config)
+	if err != nil {
+		p.logger.Fatal("can't create oauth token source", zap.Error(err))
+	}
+
+	p.client = NewClient(p.ctx, p.config, p.logger, p.s, p.tokenSource)
+
 	p.controller.UseSpread()
 	p.controller.DisableStreams()
 
-	go p.s.consume(ctx, p.client)
+	go p.s.consume(p.ctx, p.client)
 }
 
 func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
@@ -312,7 +339,7 @@ func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 }
 
 func (p *Plugin) Stop() {
-	p.logger.Infof("Stopping")
+	p.logger.Info("stopping")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -320,10 +347,16 @@ func (p *Plugin) Stop() {
 	err := p.client.CommitMarkedOffsets(ctx)
 	if err != nil {
 		p.commitErrorsMetric.Inc()
-		p.logger.Errorf("can't commit marked offsets: %s", err.Error())
+		p.logger.Error("can't commit marked offsets", zap.Error(err))
 	}
+
 	p.client.Close()
-	p.cancel()
+
+	if p.tokenSource != nil {
+		p.tokenSource.Stop()
+	}
+
+	p.cancelFunc()
 }
 
 func (p *Plugin) Commit(event *pipeline.Event) {

@@ -10,6 +10,7 @@ import (
 	"net"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ClickHouse/ch-go"
@@ -21,7 +22,6 @@ import (
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/xtime"
 	"github.com/ozontech/file.d/xtls"
-	"go.uber.org/atomic"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -64,17 +64,19 @@ type Plugin struct {
 
 	// TODO: support shards
 	instances []instance
-	requestID atomic.Int64
+	requestID atomic.Uint64
 
 	// plugin metrics
-	insertErrorsMetric *metric.Counter
-	queriesCountMetric *metric.Counter
+	insertErrorsMetric    *metric.Counter
+	queriesCountMetric    *metric.Counter
+	bannedEndpointsMetric *metric.Gauge
 
 	router *pipeline.Router
 
 	compression ch.Compression
 	tlsConfig   *tls.Config
 
+	cbEnabled    bool
 	poolsByAddr  map[Address]Clickhouse
 	bannedHosts  map[Address]time.Time
 	pendingHosts map[Address]struct{}
@@ -356,7 +358,7 @@ type Config struct {
 	// > @3@4@5@6
 	// >
 	// > Period for which addresses will be banned in case of unavailability.
-	BanPeriod  cfg.Duration `json:"ban_period" default:"10s" parse:"duration"` // *
+	BanPeriod  cfg.Duration `json:"ban_period" default:"0s" parse:"duration"` // *
 	BanPeriod_ time.Duration
 
 	// > @3@4@5@6
@@ -380,6 +382,8 @@ func Factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 	p.insertErrorsMetric = ctl.RegisterCounter("output_clickhouse_errors_total", "Total clickhouse insert errors")
 	p.queriesCountMetric = ctl.RegisterCounter("output_clickhouse_queries_count_total", "How many queries sent by clickhouse output plugin")
+	p.bannedEndpointsMetric = ctl.RegisterGauge("output_clickhouse_banned_endpoints_count", "Current number of endpoints banned by circuit breaker")
+	p.bannedEndpointsMetric.Set(0)
 }
 
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginParams) {
@@ -390,7 +394,6 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		p.logger.Fatal("config.addresses can't be empty")
 	}
 
-	p.bannedHosts = make(map[Address]time.Time, len(p.config.Addresses))
 	p.pendingHosts = make(map[Address]struct{}, len(p.config.Addresses))
 	p.poolsByAddr = make(map[Address]Clickhouse, len(p.config.Addresses))
 
@@ -406,9 +409,22 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	if p.config.ReconnectInterval_ < 1 {
 		p.logger.Fatal("'reconnect_interval' can't be <1")
 	}
-	if p.config.BanPeriod_ < 1 {
-		p.logger.Fatal("'ban_period' cant't be <1")
+	if p.config.BanPeriod_ < 0 {
+		p.logger.Fatal("'ban_period' cant't be <0")
 	}
+
+	p.cbEnabled = p.config.BanPeriod_ > 0 && len(p.config.Addresses) > 1
+	logFields := []zap.Field{
+		zap.Duration("ban_period", p.config.BanPeriod_),
+		zap.Duration("reconnect_interval", p.config.ReconnectInterval_),
+		zap.Int("addresses_count", len(p.config.Addresses)),
+	}
+
+	logMsg := "circuit breaker disabled"
+	if p.cbEnabled {
+		logMsg = "circuit breaker enabled"
+	}
+	p.logger.Info(logMsg, logFields...)
 
 	schema, err := inferInsaneColInputs(p.config.Columns)
 	if err != nil {
@@ -468,7 +484,10 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		p.logger.Fatal("cannot start: no available clickhouse addresses in config")
 	}
 
-	go p.checkBannedHosts()
+	if p.cbEnabled {
+		p.bannedHosts = make(map[Address]time.Time, len(p.config.Addresses))
+		go p.checkBannedHosts()
+	}
 
 	if len(p.pendingHosts) > 0 {
 		go p.checkPendingHosts()
@@ -566,7 +585,7 @@ func (p *Plugin) checkPendingHosts() {
 
 				p.mu.Lock()
 				p.poolsByAddr[addr] = pool
-				for j := 0; j < *addr.Weight; j++ {
+				for range *addr.Weight {
 					p.instances = append(p.instances, instance{
 						addr: addr,
 						pool: pool,
@@ -588,6 +607,7 @@ func (p *Plugin) checkBannedHosts() {
 		case <-p.ctx.Done():
 			return
 		case <-ticker.C:
+			restoredAddresses := make([]string, 0, len(p.config.Addresses))
 			p.mu.Lock()
 			for addr, banUntil := range p.bannedHosts {
 				if !xtime.GetInaccurateTime().After(banUntil) {
@@ -601,8 +621,19 @@ func (p *Plugin) checkBannedHosts() {
 					})
 				}
 				delete(p.bannedHosts, addr)
+				restoredAddresses = append(restoredAddresses, addr.Addr)
 			}
+			activeCount, bannedCount := len(p.instances), len(p.bannedHosts)
 			p.mu.Unlock()
+
+			if len(restoredAddresses) > 0 {
+				p.logger.Info("clickhouse hosts restored",
+					zap.Strings("addrs", restoredAddresses),
+					zap.Int("active_instances", activeCount),
+					zap.Int("banned_hosts", bannedCount),
+				)
+				p.bannedEndpointsMetric.Set(float64(bannedCount))
+			}
 		}
 	}
 }
@@ -681,6 +712,11 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 
 	var err error
 	if attempts == 0 {
+		p.logger.Warn("all clickhouse hosts banned, failing back to all hosts")
+		if err := p.fallbackInsert(data.input); err == nil {
+			return nil
+		}
+
 		if p.config.FatalOnFailedInsert {
 			p.logger.Fatal("cannot start: no available clickhouse addresses in config")
 		}
@@ -692,8 +728,8 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 		return err
 	}
 
-	for i := 0; i < attempts; i++ {
-		requestID := p.requestID.Inc()
+	for i := range attempts {
+		requestID := p.requestID.Add(1)
 
 		p.mu.RLock()
 		if len(p.instances) == 0 {
@@ -710,8 +746,8 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 		}
 
 		var netError net.Error
-		if errors.As(err, &netError) {
-			p.banInstance(instance.addr)
+		if errors.As(err, &netError) || errors.Is(err, context.DeadlineExceeded) {
+			p.banInstance(instance.addr, err)
 		}
 	}
 	if err != nil {
@@ -738,7 +774,36 @@ func (p *Plugin) do(clickhouse Clickhouse, queryInput proto.Input) error {
 	})
 }
 
-func (p *Plugin) banInstance(addr Address) {
+func (p *Plugin) fallbackInsert(input proto.Input) error {
+	lastErr := errNoAvailableClickhouseAddresses
+
+	for range len(p.config.Addresses) {
+		idx := int(p.requestID.Add(1) % uint64(len(p.config.Addresses)))
+		addr := p.config.Addresses[idx]
+
+		p.mu.RLock()
+		pool := p.poolsByAddr[addr]
+		p.mu.RUnlock()
+
+		if pool == nil {
+			continue
+		}
+
+		if err := p.do(pool, input); err == nil {
+			return nil
+		} else {
+			lastErr = err
+		}
+	}
+
+	return lastErr
+}
+
+func (p *Plugin) banInstance(addr Address, err error) {
+	if !p.cbEnabled {
+		return
+	}
+
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -748,17 +813,29 @@ func (p *Plugin) banInstance(addr Address) {
 			filtered = append(filtered, it)
 		}
 	}
+
 	p.instances = filtered
 	p.bannedHosts[addr] = xtime.GetInaccurateTime().Add(p.config.BanPeriod_)
+	activeCount, bannedCount := len(p.instances), len(p.bannedHosts)
+
+	p.logger.Warn("clickhouse host banned",
+		zap.Error(err),
+		zap.String("addr", addr.Addr),
+		zap.Duration("ban_period", p.config.BanPeriod_),
+		zap.Int("active_instances", activeCount),
+		zap.Int("banned_hosts", bannedCount),
+	)
+
+	p.bannedEndpointsMetric.Set(float64(bannedCount))
 }
 
-func (p *Plugin) getInstance(requestID int64, retry int) instance {
+func (p *Plugin) getInstance(requestID uint64, retry int) instance {
 	var instanceIdx int
 	switch p.config.InsertStrategy_ {
 	case StrategyInOrder:
 		instanceIdx = retry % len(p.instances)
 	case StrategyRoundRobin:
-		instanceIdx = int(requestID) % len(p.instances)
+		instanceIdx = int(requestID % uint64(len(p.instances)))
 	}
 	return p.instances[instanceIdx]
 }

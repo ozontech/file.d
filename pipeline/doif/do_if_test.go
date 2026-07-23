@@ -88,7 +88,7 @@ func checkNode(t *testing.T, want, got Node) {
 			assert.Equal(t, wantNode.values, gotNode.values)
 		} else {
 			require.Equal(t, len(wantNode.values), len(gotNode.values))
-			for i := 0; i < len(wantNode.values); i++ {
+			for i := range wantNode.values {
 				wantValues := wantNode.values[i]
 				gotValues := gotNode.values[i]
 				assert.Equal(t, 0, slices.Compare(wantValues, gotValues))
@@ -103,7 +103,7 @@ func checkNode(t *testing.T, want, got Node) {
 				assert.True(t, ok, "values by key %d not present in got node", k)
 				if ok {
 					require.Equal(t, len(wantVals), len(gotVals))
-					for i := 0; i < len(wantVals); i++ {
+					for i := range wantVals {
 						assert.Equal(t, 0, slices.Compare(wantVals[i], gotVals[i]))
 					}
 				}
@@ -529,7 +529,6 @@ func TestBuildNodes(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			got, err := buildTree(tt.tree)
@@ -1133,7 +1132,6 @@ func TestCheck(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			var root Node
 			var eventRoot *insaneJSON.Root
@@ -1937,7 +1935,6 @@ func TestNodeIsEqual(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			root1, err := buildTree(tt.t1)
