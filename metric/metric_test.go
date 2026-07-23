@@ -53,7 +53,11 @@ func TestUnsafeStringInMetric(t *testing.T) {
 	bytes := []byte("hello world")
 	unsafeString := unsafe.String(unsafe.SliceData(bytes), len(bytes))
 
-	store := newHeldMetricsStore[prometheus.Counter](0)
+	store := newHeldMetricsStore(0,
+		func(hm *heldMetric[prometheus.Counter]) *Counter {
+			return &Counter{heldMetric: hm}
+		},
+	)
 
 	labels := []string{unsafeString}
 	m := store.GetOrCreate([]string{unsafeString}, func(s ...string) prometheus.Counter {
