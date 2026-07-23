@@ -406,7 +406,6 @@ func TestParseSubstitution(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			result, err := ParseSubstitution(tt.substitution, nil, lg)
@@ -526,7 +525,6 @@ func TestFilterApply(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			subOps, err := ParseSubstitution(tt.substitution, nil, lg)

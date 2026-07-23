@@ -59,6 +59,8 @@ func TestPluginParseLabels(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			pl := &Plugin{
 				config: &Config{
 					Labels: tt.lables,
@@ -102,6 +104,8 @@ func TestPluginGetAuthHeaders(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			pl := &Plugin{
 				config: &Config{
 					Auth: AuthConfig{

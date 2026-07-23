@@ -53,8 +53,9 @@ func (c *Config) Send(t *testing.T) {
 		Timeout_:         10 * time.Second,
 	}
 
-	client := kafka_out.NewClient(config,
+	client := kafka_out.NewClient(context.Background(), config,
 		zap.NewNop().WithOptions(zap.WithFatalHook(zapcore.WriteThenPanic)),
+		nil,
 	)
 	adminClient := kadm.NewClient(client)
 	_, err := adminClient.CreateTopic(context.TODO(), 1, 1, nil, c.Topics[0])
@@ -70,7 +71,7 @@ func (c *Config) Send(t *testing.T) {
 		msgs[i].Partition = int32(i)
 	}
 
-	for i := 0; i < c.Count; i++ {
+	for range c.Count {
 		result := client.ProduceSync(context.TODO(), msgs...)
 		err := result.FirstErr()
 		if err != nil {

@@ -18,6 +18,7 @@ import (
 	"github.com/ozontech/file.d/pipeline"
 	insaneJSON "github.com/ozontech/insane-json"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.uber.org/atomic"
 )
@@ -70,8 +71,8 @@ func (f *FileD) initMetrics() {
 
 func (f *FileD) createRegistry() {
 	f.registry = prometheus.NewRegistry()
-	f.registry.MustRegister(prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}))
-	f.registry.MustRegister(prometheus.NewGoCollector())
+	f.registry.MustRegister(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
+	f.registry.MustRegister(collectors.NewGoCollector())
 	f.registry.MustRegister(newFdsCollector())
 }
 

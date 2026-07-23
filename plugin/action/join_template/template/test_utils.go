@@ -8,7 +8,7 @@ import (
 func getLines(joinedContent string) []string {
 	content := strings.ReplaceAll(joinedContent, "# ===next===\n", "")
 	lines := make([]string, 0)
-	for _, line := range strings.Split(content, "\n") {
+	for line := range strings.SplitSeq(content, "\n") {
 		if line == "" {
 			continue
 		}
@@ -22,7 +22,7 @@ func getRandLines() []string {
 	const count = 100
 
 	lines := make([]string, 0, count)
-	for i := 0; i < count; i++ {
+	for range count {
 		lines = append(lines, getRandLine())
 	}
 
@@ -42,7 +42,7 @@ func getRandLine() string {
 	var b strings.Builder
 	b.Grow(sz)
 
-	for i := 0; i < sz; i++ {
+	for range sz {
 		b.WriteByte(from + byte(rand.Intn(to-from)))
 	}
 

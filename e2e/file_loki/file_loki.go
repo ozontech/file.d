@@ -45,7 +45,7 @@ func (c *Config) Configure(t *testing.T, conf *cfg.Config, pipelineName string) 
 	labels, err := output.Get("labels").Array()
 	r.NoError(err)
 
-	c.label = labels[0].(map[string]interface{})["label"].(string)
+	c.label = labels[0].(map[string]any)["label"].(string)
 	c.samples = samples
 
 	url := fmt.Sprintf("%s%s", c.lokiAddr, "/ready")

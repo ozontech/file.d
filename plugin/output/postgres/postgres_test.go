@@ -71,7 +71,7 @@ func TestPrivateOut(t *testing.T) {
 	pool := mockpool
 
 	ctx := context.Background()
-	var ctxMock = reflect.TypeOf((*context.Context)(nil)).Elem()
+	var ctxMock = reflect.TypeFor[context.Context]()
 
 	mockpool.EXPECT().Query(
 		gomock.AssignableToTypeOf(ctxMock),
@@ -141,7 +141,7 @@ func TestPrivateOutWithRetry(t *testing.T) {
 	pool := mockpool
 
 	ctx := context.Background()
-	var ctxMock = reflect.TypeOf((*context.Context)(nil)).Elem()
+	var ctxMock = reflect.TypeFor[context.Context]()
 
 	mockpool.EXPECT().Query(
 		gomock.AssignableToTypeOf(ctxMock),
@@ -274,7 +274,7 @@ func TestPrivateOutDeduplicatedEvents(t *testing.T) {
 	pool := mockpool
 
 	ctx := context.Background()
-	var ctxMock = reflect.TypeOf((*context.Context)(nil)).Elem()
+	var ctxMock = reflect.TypeFor[context.Context]()
 
 	mockpool.EXPECT().Query(
 		gomock.AssignableToTypeOf(ctxMock),
@@ -444,7 +444,7 @@ func TestPrivateOutFewUniqueEventsYetWithDeduplicationEventsAnpooladEvents(t *te
 	pool := mockpool
 
 	ctx := context.Background()
-	var ctxMock = reflect.TypeOf((*context.Context)(nil)).Elem()
+	var ctxMock = reflect.TypeFor[context.Context]()
 
 	mockpool.EXPECT().Query(
 		gomock.AssignableToTypeOf(ctxMock),

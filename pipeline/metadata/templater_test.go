@@ -146,6 +146,8 @@ func TestTemplaterRender(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			templater := NewMetaTemplater(
 				tt.templates,
 				zap.NewExample(),
@@ -187,7 +189,7 @@ func BenchmarkMetaTemplater_Render(b *testing.B) {
 		"auth":    nil,
 	}
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, err := templater.Render(testMetadata{data: mockData})
 		if err != nil {
 			b.Fatalf("Render failed: %v", err)

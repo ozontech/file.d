@@ -76,7 +76,7 @@ func TestEndToEnd(t *testing.T) {
 	fileCount := 8
 
 	// we are very deterministic :)
-	rand.Seed(0)
+	rnd := rand.New(rand.NewSource(0))
 
 	// disable k8s environment
 	meta.DisableMetaUpdates = true
@@ -86,7 +86,7 @@ func TestEndToEnd(t *testing.T) {
 	filesDir := t.TempDir()
 	offsetsDir := t.TempDir()
 
-	config := cfg.NewConfigFromFile([]string{configFilename, configOverrideFilename})
+	config := cfg.NewConfigFromFiles([]string{configFilename, configOverrideFilename})
 	input := config.Pipelines["test"].Raw.Get("input")
 	input.Set("watching_dir", filesDir)
 	input.Set("offsets_file", filepath.Join(offsetsDir, "offsets.yaml"))
@@ -96,8 +96,8 @@ func TestEndToEnd(t *testing.T) {
 
 	tm := time.Now()
 	for {
-		for i := 0; i < writerCount; i++ {
-			go runWriter(filesDir, fileCount)
+		for range writerCount {
+			go runWriter(filesDir, fileCount, rnd)
 		}
 
 		time.Sleep(iterationInterval)
@@ -107,7 +107,7 @@ func TestEndToEnd(t *testing.T) {
 	}
 }
 
-func runWriter(tempDir string, files int) {
+func runWriter(tempDir string, files int, rnd *rand.Rand) {
 	format := `{"log":"%s\n","stream":"stderr"}`
 	panicLines := make([]string, 0)
 	for _, line := range strings.Split(panicContent, "\n") {
@@ -117,7 +117,7 @@ func runWriter(tempDir string, files int) {
 		panicLines = append(panicLines, fmt.Sprintf(format, line))
 	}
 
-	for i := 0; i < files; i++ {
+	for range files {
 		u1 := strings.ReplaceAll(uuid.NewV4().String(), "-", "")
 		u2 := strings.ReplaceAll(uuid.NewV4().String(), "-", "")
 		name := path.Join(tempDir, "pod_ns_container-"+u1+u2+".log")
@@ -131,10 +131,10 @@ func runWriter(tempDir string, files int) {
 			}
 
 			stream := "stderr"
-			if rand.Int()%3 == 0 {
+			if rnd.Int()%3 == 0 {
 				stream = "stderr"
 			}
-			if rand.Int()%100 == 0 {
+			if rnd.Int()%100 == 0 {
 				for k := 0; k < 8; k++ {
 					_, _ = fmt.Fprintf(logFile, multilineJSON, stream)
 					_, _ = logFile.Write([]byte{'\n'})
@@ -251,7 +251,6 @@ func TestConfigParseValid(t *testing.T) {
 		},
 	}
 	for _, tl := range testList {
-		tl := tl
 		t.Run(tl.name, func(t *testing.T) {
 			t.Parallel()
 			pluginInfo, err := fd.DefaultPluginRegistry.Get(tl.kind, tl.name)
@@ -291,7 +290,6 @@ func TestConfigParseInvalid(t *testing.T) {
 		},
 	}
 	for _, tl := range testList {
-		tl := tl
 		t.Run(tl.name, func(t *testing.T) {
 			t.Parallel()
 			pluginInfo, err := fd.DefaultPluginRegistry.Get(tl.kind, tl.name)

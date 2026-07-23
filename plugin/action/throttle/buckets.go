@@ -113,7 +113,7 @@ func (b *simpleBuckets) isEmpty(index int) bool {
 func (b *simpleBuckets) rebuild(currentTs, ts time.Time) int {
 	resetFn := func(count int) {
 		b.b = append(b.b[count:], b.b[:count]...)
-		for i := 0; i < count; i++ {
+		for i := range count {
 			b.reset(b.getCount() - 1 - i)
 		}
 	}
@@ -139,7 +139,7 @@ func newDistributedBuckets(count, distributionSize int, interval time.Duration) 
 		bucketsMeta: newBucketsMeta(count, interval),
 		b:           make([]distributedBucket, count),
 	}
-	for i := 0; i < count; i++ {
+	for i := range count {
 		db.b[i] = newDistributedBucket(distributionSize)
 	}
 	return db
@@ -179,7 +179,7 @@ func (b *distributedBuckets) isEmpty(index int) bool {
 func (b *distributedBuckets) rebuild(currentTs, ts time.Time) int {
 	resetFn := func(count int) {
 		b.b = append(b.b[count:], b.b[:count]...)
-		for i := 0; i < count; i++ {
+		for i := range count {
 			b.reset(b.getCount() - 1 - i)
 		}
 	}

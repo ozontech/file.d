@@ -66,7 +66,7 @@ func doTest(t *testing.T, config *Config, clients int, parallel bool) {
 
 	if parallel {
 		conns := make([]net.Conn, 0, clients)
-		for i := 0; i < clients; i++ {
+		for range clients {
 			conn, err := net.Dial(config.Network, config.Address)
 			require.NoError(t, err)
 
@@ -84,7 +84,7 @@ func doTest(t *testing.T, config *Config, clients int, parallel bool) {
 			conn.Close()
 		}
 	} else {
-		for i := 0; i < clients; i++ {
+		for range clients {
 			conn, err := net.Dial(config.Network, config.Address)
 			require.NoError(t, err)
 

@@ -1,6 +1,7 @@
 package splunk
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -27,7 +28,6 @@ func TestSplunk(t *testing.T) {
 	}
 
 	for _, tt := range suites {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -54,7 +54,7 @@ func TestSplunk(t *testing.T) {
 				},
 				logger: zap.NewExample().Sugar(),
 			}
-			plugin.prepareClient()
+			plugin.prepareClient(context.Background())
 
 			batch := pipeline.NewPreparedBatch([]*pipeline.Event{
 				{Root: input},
@@ -96,7 +96,6 @@ func TestParseSplunkError(t *testing.T) {
 		},
 	}
 	for _, tt := range cases {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -157,7 +156,6 @@ func TestCopyFields(t *testing.T) {
 	}
 
 	for _, tt := range suites {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -185,7 +183,7 @@ func TestCopyFields(t *testing.T) {
 				copyFieldsPaths: tt.copyFields,
 				logger:          zap.NewExample().Sugar(),
 			}
-			plugin.prepareClient()
+			plugin.prepareClient(context.Background())
 
 			batch := pipeline.NewPreparedBatch([]*pipeline.Event{
 				{Root: input},

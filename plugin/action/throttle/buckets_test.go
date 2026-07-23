@@ -54,7 +54,6 @@ func TestMetaActualizeIndex(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
@@ -184,13 +183,12 @@ func TestRebuildBuckets(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
 			resetFn := func(count int) {
 				tt.tc.b = append(tt.tc.b[count:], tt.tc.b[:count]...)
-				for i := 0; i < count; i++ {
+				for i := range count {
 					tt.tc.b[len(tt.tc.b)-1-i] = 0
 				}
 			}
