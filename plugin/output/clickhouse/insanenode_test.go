@@ -89,6 +89,32 @@ func TestNodeAsTime(t *testing.T) {
 	test(`"1740643609"`, proto.PrecisionSecond, mustParseTime("2025-02-27T08:06:49.00Z"))
 }
 
+func TestNodeAsKVArray(t *testing.T) {
+	r := require.New(t)
+
+	root, err := insaneJSON.DecodeString(`{"b":"1","c":"2","b":"3","a":"4"}`)
+	defer insaneJSON.Release(root)
+	r.NoError(err)
+
+	// expected sorted keys
+	want := []proto.KV[string, string]{
+		{Key: "a", Value: "4"},
+		{Key: "b", Value: "1"},
+		{Key: "b", Value: "3"},
+		{Key: "c", Value: "2"},
+	}
+
+	n := NonStrictNode{root.Node}
+	got1, err := n.AsKVArray()
+	r.NoError(err)
+	r.Equal(want, got1)
+
+	sn := StrictNode{root.MutateToStrict()}
+	got2, err := sn.AsKVArray()
+	r.NoError(err)
+	r.Equal(want, got2)
+}
+
 func mustParseTime(s string) time.Time {
 	t, err := time.Parse(time.RFC3339Nano, s)
 	if err != nil {
