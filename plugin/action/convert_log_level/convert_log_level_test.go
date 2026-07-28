@@ -223,6 +223,8 @@ func TestDo(t *testing.T) {
 
 	for _, tc := range tcs {
 		t.Run(tc.Name, func(t *testing.T) {
+			t.Parallel()
+
 			config := test.NewConfig(&tc.Config, nil)
 			p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, config, pipeline.MatchModeAnd, nil, false))
 

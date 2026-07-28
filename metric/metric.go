@@ -40,78 +40,95 @@ func (h *heldMetric[T]) updateUsage() {
 	}
 }
 
-type heldMetricsStore[T prometheus.Metric] struct {
-	mu                        sync.RWMutex
-	metricsByHash             map[uint64][]*heldMetric[T]
-	metricMaxLabelValueLength int
+// heldMetricWrapper is implemented by all metric wrappers (Counter, Gauge, Histogram).
+// It gives the store access to the common held data while letting it cache and return
+// the concrete wrapper directly (without re-allocating on each WithLabelValues call).
+type heldMetricWrapper[T prometheus.Metric] interface {
+	getHeldMetric() *heldMetric[T]
 }
 
-func newHeldMetricsStore[T prometheus.Metric](metricMaxLabelValueLength int) *heldMetricsStore[T] {
-	return &heldMetricsStore[T]{
+type heldMetricsStore[T prometheus.Metric, W heldMetricWrapper[T]] struct {
+	mu                        sync.RWMutex
+	metricsByHash             map[uint64][]W
+	metricMaxLabelValueLength int
+	newWrapper                func(*heldMetric[T]) W
+}
+
+func newHeldMetricsStore[T prometheus.Metric, W heldMetricWrapper[T]](
+	metricMaxLabelValueLength int,
+	newWrapper func(*heldMetric[T]) W,
+) *heldMetricsStore[T, W] {
+	return &heldMetricsStore[T, W]{
 		mu:                        sync.RWMutex{},
-		metricsByHash:             make(map[uint64][]*heldMetric[T]),
+		metricsByHash:             make(map[uint64][]W),
 		metricMaxLabelValueLength: metricMaxLabelValueLength,
+		newWrapper:                newWrapper,
 	}
 }
 
-func (h *heldMetricsStore[T]) GetOrCreate(labels []string, newPromMetric func(...string) T) *heldMetric[T] {
+func (h *heldMetricsStore[T, W]) GetOrCreate(labels []string, newPromMetric func(...string) T) W {
 	h.truncateLabels(labels)
 	hash := computeStringsHash(labels)
-	// fast path - metric exists
+	// fast path - wrapper exists
 	h.mu.RLock()
-	hMetric, ok := h.getHeldMetricByHash(labels, hash)
+	w, ok := h.getByHash(labels, hash)
 	h.mu.RUnlock()
 	if ok {
-		return hMetric
+		return w
 	}
-	// slow path - create new metric
+	// slow path - create new wrapper
 	return h.tryCreate(labels, hash, newPromMetric)
 }
 
-func (h *heldMetricsStore[T]) Delete(labels []string, deleter metricDeleter) bool {
+func (h *heldMetricsStore[T, W]) Delete(labels []string, deleter metricDeleter) bool {
 	h.truncateLabels(labels)
 	hash := computeStringsHash(labels)
 
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	hMetrics, ok := h.metricsByHash[hash]
+	wrappers, ok := h.metricsByHash[hash]
 	if !ok {
 		return false
 	}
 
-	i := findHeldMetricIndex(hMetrics, labels)
+	i := h.findIndex(wrappers, labels)
 	if i == -1 {
 		return false
 	}
 
 	deleter.DeleteLabelValues(labels...)
-	*hMetrics[i] = heldMetric[T]{}
-	hMetrics = append(hMetrics[:i], hMetrics[i+1:]...)
+	*wrappers[i].getHeldMetric() = heldMetric[T]{}
+	wrappers = append(wrappers[:i], wrappers[i+1:]...)
 
-	if len(hMetrics) == 0 {
+	if len(wrappers) == 0 {
 		delete(h.metricsByHash, hash)
+	} else {
+		h.metricsByHash[hash] = wrappers
 	}
 
 	return ok
 }
 
-func (h *heldMetricsStore[T]) getHeldMetricByHash(labels []string, hash uint64) (*heldMetric[T], bool) {
-	hMetrics, ok := h.metricsByHash[hash]
+func (h *heldMetricsStore[T, W]) getByHash(labels []string, hash uint64) (W, bool) {
+	wrappers, ok := h.metricsByHash[hash]
 	if !ok {
-		return nil, false
+		var zero W
+		return zero, false
 	}
-	if len(hMetrics) == 1 {
-		return hMetrics[0], true
+	if len(wrappers) == 1 {
+		return wrappers[0], true
 	}
 
-	if i := findHeldMetricIndex(hMetrics, labels); i != -1 {
-		return hMetrics[i], true
+	if i := h.findIndex(wrappers, labels); i != -1 {
+		return wrappers[i], true
 	}
-	return nil, false
+
+	var zero W
+	return zero, false
 }
 
-func (h *heldMetricsStore[T]) tryCreate(labels []string, hash uint64, newPromMetric func(...string) T) *heldMetric[T] {
+func (h *heldMetricsStore[T, W]) tryCreate(labels []string, hash uint64, newPromMetric func(...string) T) W {
 	// copy labels because they are unsafe converted bytes
 	// TODO: replace with [][]byte to make it explicit
 	labelsCopy := make([]string, len(labels))
@@ -125,45 +142,56 @@ func (h *heldMetricsStore[T]) tryCreate(labels []string, hash uint64, newPromMet
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	hMetric, ok := h.getHeldMetricByHash(labels, hash)
-	if ok {
-		return hMetric
+	if w, ok := h.getByHash(labels, hash); ok {
+		return w
 	}
 
-	hMetric = newHeldMetric(labels, metric)
-	h.metricsByHash[hash] = append(h.metricsByHash[hash], hMetric)
-	return hMetric
+	w := h.newWrapper(newHeldMetric(labels, metric))
+	h.metricsByHash[hash] = append(h.metricsByHash[hash], w)
+	return w
 }
 
 type metricDeleter interface {
 	DeleteLabelValues(...string) bool
 }
 
-func (h *heldMetricsStore[T]) DeleteOldMetrics(holdDuration time.Duration, deleter metricDeleter) {
+func (h *heldMetricsStore[T, W]) DeleteOldMetrics(holdDuration time.Duration, deleter metricDeleter) {
 	now := xtime.GetInaccurateUnixNano()
 
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	for hash, hMetrics := range h.metricsByHash {
-		releasedMetrics := slices.DeleteFunc(hMetrics, func(hMetric *heldMetric[T]) bool {
-			lastUsage := hMetric.lastUsage.Load()
+	for hash, wrappers := range h.metricsByHash {
+		releasedMetrics := slices.DeleteFunc(wrappers, func(w W) bool {
+			hm := w.getHeldMetric()
+			lastUsage := hm.lastUsage.Load()
 			diff := now - lastUsage
 			isObsolete := diff > holdDuration.Nanoseconds()
 			if isObsolete {
-				deleter.DeleteLabelValues(hMetric.labels...)
-				*hMetric = heldMetric[T]{} // release objects in the structure
+				deleter.DeleteLabelValues(hm.labels...)
+				*hm = heldMetric[T]{} // release objects in the structure
 			}
 			return isObsolete
 		})
 
 		if len(releasedMetrics) == 0 {
 			delete(h.metricsByHash, hash)
+		} else {
+			h.metricsByHash[hash] = releasedMetrics
 		}
 	}
 }
 
-func (h *heldMetricsStore[T]) truncateLabels(lvs []string) {
+func (h *heldMetricsStore[T, W]) findIndex(wrappers []W, labels []string) int {
+	for i := range wrappers {
+		if slices.Equal(wrappers[i].getHeldMetric().labels, labels) {
+			return i
+		}
+	}
+	return -1
+}
+
+func (h *heldMetricsStore[T, W]) truncateLabels(lvs []string) {
 	if h.metricMaxLabelValueLength == 0 {
 		return
 	}
@@ -173,17 +201,6 @@ func (h *heldMetricsStore[T]) truncateLabels(lvs []string) {
 			lvs[i] = label[:h.metricMaxLabelValueLength]
 		}
 	}
-}
-
-func findHeldMetricIndex[T prometheus.Metric](hMetrics []*heldMetric[T], labels []string) int {
-	idx := -1
-	for i := range hMetrics {
-		if slices.Equal(hMetrics[i].labels, labels) {
-			idx = i
-			break
-		}
-	}
-	return idx
 }
 
 func computeStringsHash(s []string) uint64 {

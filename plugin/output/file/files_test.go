@@ -35,6 +35,8 @@ func TestPluginsExists(t *testing.T) {
 
 	for _, tCase := range cases {
 		t.Run(tCase.name, func(t *testing.T) {
+			t.Parallel()
+
 			plugins := tCase.prepareFunc()
 			exists := plugins.Exists(tCase.search)
 			require.Equal(t, tCase.expected, exists)
@@ -71,6 +73,8 @@ func TestPluginsIsStatic(t *testing.T) {
 
 	for _, tCase := range cases {
 		t.Run(tCase.name, func(t *testing.T) {
+			t.Parallel()
+
 			plugins := tCase.prepareFunc()
 			exists := plugins.IsStatic(tCase.search)
 			require.Equal(t, tCase.expected, exists)
@@ -108,6 +112,8 @@ func TestPluginsIsDynamic(t *testing.T) {
 
 	for _, tCase := range cases {
 		t.Run(tCase.name, func(t *testing.T) {
+			t.Parallel()
+
 			plugins := tCase.prepareFunc()
 			exists := plugins.IsDynamic(tCase.search)
 			require.Equal(t, tCase.expected, exists)

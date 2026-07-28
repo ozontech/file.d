@@ -35,10 +35,10 @@ func TestParseFields(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			parsedFields := parseFields(tt.m)
-			for i := range tt.v {
-				parsedFields.valsBuf[i] = tt.v[i]
-			}
+			copy(parsedFields.valsBuf, tt.v)
 
 			var buf []byte
 			result := parsedFields.appendTo(buf)
@@ -80,7 +80,7 @@ func TestCardinalityLimitDiscard(t *testing.T) {
 		outEventsCnt++
 	})
 
-	for i := 0; i < genEventsCnt; i++ {
+	for i := range genEventsCnt {
 		json := fmt.Sprintf(`{"info": {"host":"localhost"},"value":{"i":"%d"}}`, i)
 		input.In(10, "test", test.NewOffset(0), []byte(json))
 	}
@@ -134,7 +134,7 @@ func TestCardinalityLimitRemoveFields(t *testing.T) {
 		}
 	})
 
-	for i := 0; i < genEventsCnt; i++ {
+	for i := range genEventsCnt {
 		json := fmt.Sprintf(`{"host":"localhost","i":"%d"}`, i)
 		input.In(10, "test", test.NewOffset(0), []byte(json))
 	}
@@ -174,7 +174,7 @@ func TestCardinalityLimitDiscardIfNoSetKeyFields(t *testing.T) {
 		outEventsCnt++
 	})
 
-	for i := 0; i < genEventsCnt; i++ {
+	for i := range genEventsCnt {
 		json := fmt.Sprintf(`{"host":"localhost%d","i":"%d"}`, i, i)
 		input.In(10, "test", test.NewOffset(0), []byte(json))
 	}

@@ -282,12 +282,8 @@ func NewFieldOpNode(op string, field string, caseSensitive bool, values [][]byte
 			if !caseSensitive && curVal != nil {
 				curVal = bytes.ToLower(curVal)
 			}
-			if len(values[i]) < minValLen {
-				minValLen = len(values[i])
-			}
-			if len(values[i]) > maxValLen {
-				maxValLen = len(values[i])
-			}
+			minValLen = min(minValLen, len(values[i]))
+			maxValLen = max(maxValLen, len(values[i]))
 			if fop == fieldEqualOp {
 				valsBySize[len(curVal)] = append(valsBySize[len(curVal)], curVal)
 			} else {
@@ -422,7 +418,7 @@ func (n *fieldOpNode) isEqualTo(n2 Node, _ int) error {
 		} else if len(v) != len(v2) {
 			return fmt.Errorf("nodes have different valuesBySize values len under key %d expected: %d", k, len(v))
 		} else {
-			for i := 0; i < len(v); i++ {
+			for i := range len(v) {
 				if !bytes.Equal(v[i], v2[i]) {
 					return fmt.Errorf("nodes have different valuesBySize data under key %d: %v", k, v)
 				}

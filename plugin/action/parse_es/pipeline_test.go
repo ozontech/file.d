@@ -88,8 +88,9 @@ func TestPipeline(t *testing.T) {
 	}
 
 	for _, tCase := range cases {
-		tCase := tCase
 		t.Run(tCase.name, func(t *testing.T) {
+			t.Parallel()
+
 			config := test.NewConfig(&Config{}, nil)
 			p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, config, pipeline.MatchModeOr, nil, false))
 
