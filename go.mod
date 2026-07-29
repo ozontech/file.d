@@ -47,7 +47,6 @@ require (
 	github.com/twmb/franz-go/plugin/kzap v1.1.2
 	github.com/twmb/tlscfg v1.2.1
 	github.com/valyala/fasthttp v1.48.0
-	github.com/xdg-go/scram v1.1.2
 	go.uber.org/automaxprocs v1.5.3
 	go.uber.org/zap v1.27.0
 	golang.org/x/oauth2 v0.36.0
