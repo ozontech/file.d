@@ -196,7 +196,7 @@ func (n *checkTypeOpNode) isEqualTo(n2 Node, _ int) error {
 		"null":   root.Dig("null"),
 		"nil":    root.Dig("nil"),
 	}
-	for i := 0; i < len(n.checkTypeFns); i++ {
+	for i := range n.checkTypeFns {
 		for key, node := range nodes {
 			res1 := n.checkTypeFns[i](node)
 			res2 := n2f.checkTypeFns[i](node)

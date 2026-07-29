@@ -66,8 +66,9 @@ func TestDoPassAndDiscard(t *testing.T) {
 	}
 
 	for _, tCase := range cases {
-		tCase := tCase
 		t.Run(tCase.name, func(t *testing.T) {
+			t.Parallel()
+
 			p := &Plugin{}
 			p.passNext = tCase.passNextStartState
 			p.discardNext = tCase.discardNextStartState
@@ -123,8 +124,9 @@ func TestDo(t *testing.T) {
 	}
 
 	for _, tCase := range cases {
-		tCase := tCase
 		t.Run(tCase.name, func(t *testing.T) {
+			t.Parallel()
+
 			p := &Plugin{}
 			root := insaneJSON.Spawn()
 			defer insaneJSON.Release(root)

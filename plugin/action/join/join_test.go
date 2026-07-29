@@ -125,12 +125,13 @@ func TestSimpleJoin(t *testing.T) {
 	}
 
 	for _, tt := range cases {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			format := `{"log":"%s\n"}`
 			content := strings.ReplaceAll(tt.content, "# ===next===\n", "")
 			lines := make([]string, 0)
-			for _, line := range strings.Split(content, "\n") {
+			for line := range strings.SplitSeq(content, "\n") {
 				if line == "" {
 					continue
 				}
@@ -225,11 +226,13 @@ func TestJoinAfterNilNode(t *testing.T) {
 	}
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			formatNode := `{"log":"%s\n"}`
 			formatNilNode := `{"notlog":"%s\n"}`
 			content := strings.ReplaceAll(tt.content, "# ===next===\n", "")
 			lines := make([]string, 0)
-			for _, line := range strings.Split(content, "\n") {
+			for line := range strings.SplitSeq(content, "\n") {
 				if strings.HasPrefix(line, "NilNode:") {
 					lines = append(lines, fmt.Sprintf(formatNilNode, line))
 					continue

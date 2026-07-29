@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math/bits"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -239,7 +240,7 @@ func newEventPool(capacity, avgEventSize int) *eventPool {
 	eventPool.free2 = make([]atomic.Bool, capacity)
 	eventPool.events = make([]*Event, capacity)
 
-	for i := 0; i < capacity; i++ {
+	for i := range capacity {
 		eventPool.free1[i].Store(true)
 		eventPool.free2[i].Store(true)
 		eventPool.events[i] = newEvent()
@@ -344,17 +345,21 @@ func (p *eventPool) wakeupWaiters() {
 
 func (p *eventPool) dump() string {
 	out := logger.Cond(len(p.events) == 0, logger.Header("no events"), func() string {
-		o := logger.Header("events")
-		for i := 0; i < p.capacity; i++ {
+		var sb strings.Builder
+
+		sb.WriteString(logger.Header("events"))
+		for i := range p.capacity {
 			event := p.events[i]
 			eventStr := event.String()
 			if eventStr == "" {
 				eventStr = "nil"
 			}
-			o += eventStr + "\n"
+
+			sb.WriteString(eventStr)
+			sb.WriteByte('\n')
 		}
 
-		return o
+		return sb.String()
 	})
 
 	return out
@@ -410,7 +415,7 @@ type lowMemoryEventPool struct {
 
 func newLowMemoryEventPool(capacity int) *lowMemoryEventPool {
 	pools := [syncPools]*sync.Pool{}
-	for i := 0; i < syncPools; i++ {
+	for i := range syncPools {
 		pools[i] = &sync.Pool{
 			New: func() any {
 				return newEvent()

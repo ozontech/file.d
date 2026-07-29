@@ -411,7 +411,7 @@ func TestWatch(t *testing.T) {
 			addString(file, content, true, true)
 		},
 		Act: func(p *pipeline.Pipeline) {
-			for x := 0; x < iterations; x++ {
+			for x := range iterations {
 				dir := fmt.Sprintf("dir_%d", x)
 				go func(dir string) {
 					dir = filepath.Join(filepath.Dir(file), dir)
@@ -441,7 +441,7 @@ func TestReadSimple(t *testing.T) {
 
 	run(&test.Case{
 		Prepare: func() {
-			for i := 0; i < eventCount; i++ {
+			for i := range eventCount {
 				events = append(events, fmt.Sprintf(`{"field":"value_%d"}`, i))
 			}
 		},
@@ -475,7 +475,7 @@ func TestReadContinue(t *testing.T) {
 		},
 		Act: func(p *pipeline.Pipeline) {
 			file = createTempFile()
-			for x := 0; x < blockSize; x++ {
+			for x := range blockSize {
 				line := fmt.Sprintf(`{"data_1":"line_%d"}`, x)
 				size += len(line) + newLine
 				inputEvents[line] = true
@@ -484,7 +484,7 @@ func TestReadContinue(t *testing.T) {
 		},
 		Assert: func(p *pipeline.Pipeline) {
 			processed = p.GetEventsTotal()
-			for i := 0; i < processed; i++ {
+			for i := range processed {
 				outputEvents[p.GetEventLogItem(i)] = true
 			}
 		},
@@ -497,7 +497,7 @@ func TestReadContinue(t *testing.T) {
 		Prepare: func() {
 		},
 		Act: func(p *pipeline.Pipeline) {
-			for x := 0; x < blockSize; x++ {
+			for x := range blockSize {
 				line := fmt.Sprintf(`{"data_2":"line_%d"}`, x)
 				size += len(line) + newLine
 				inputEvents[line] = true
@@ -528,7 +528,7 @@ func TestReadCompressed(t *testing.T) {
 
 	run(&test.Case{
 		Prepare: func() {
-			for i := 0; i < eventCount; i++ {
+			for i := range eventCount {
 				events = append(events, fmt.Sprintf(`{"field":"value_%d"}`, i))
 			}
 		},
@@ -571,7 +571,7 @@ func TestOffsetsSaveSimple(t *testing.T) {
 	run(&test.Case{
 		Prepare: func() {
 			s := "1"
-			for i := 0; i < eventCount; i++ {
+			for range eventCount {
 				s += "1"
 				event := fmt.Sprintf(`{"field":"value_%s"}`, s)
 				events = append(events, event)
@@ -686,7 +686,7 @@ func TestReadBufferOverflow(t *testing.T) {
 	run(&test.Case{
 		Prepare: func() {
 			file = createTempFile()
-			for i := 0; i < iterations; i++ {
+			for range iterations {
 				addString(file, firstLine+"\n"+secondLine+"\n", false, false)
 			}
 		},
@@ -709,7 +709,7 @@ func TestReadManyCharsRace(t *testing.T) {
 			file = createTempFile()
 
 			addString(file, `"`, false, false)
-			for i := 0; i < charCount; i++ {
+			for range charCount {
 				addString(file, "a", false, false)
 			}
 			addString(file, `"`, true, false)
@@ -750,7 +750,7 @@ func TestReadManyFilesRace(t *testing.T) {
 	files := make([]string, 0, fileCount)
 	run(&test.Case{
 		Prepare: func() {
-			for i := 0; i < fileCount; i++ {
+			for range fileCount {
 				file := createTempFile()
 				oneFileSize = addLines(file, eventCountPerFile, eventCountPerFile*2)
 
@@ -776,7 +776,7 @@ func TestReadLongJSON(t *testing.T) {
 		},
 		Act: func(p *pipeline.Pipeline) {
 			file = createTempFile()
-			for i := 0; i < eventCount; i++ {
+			for range eventCount {
 				addBytes(file, json, false, true)
 			}
 		},
@@ -802,7 +802,7 @@ func TestReadManyFilesParallelRace(t *testing.T) {
 
 	run(&test.Case{
 		Prepare: func() {
-			for f := 0; f < fileCount; f++ {
+			for range fileCount {
 				file := createTempFile()
 				f, err := os.OpenFile(file, os.O_APPEND|os.O_WRONLY, perm)
 				if err != nil {
@@ -815,7 +815,7 @@ func TestReadManyFilesParallelRace(t *testing.T) {
 		Act: func(p *pipeline.Pipeline) {
 			for i := range fds {
 				go func(index int) {
-					for i := 0; i < blockCount; i++ {
+					for range blockCount {
 						addDataFile(fds[index], json)
 					}
 				}(i)
@@ -855,7 +855,7 @@ func TestReadManyCharsParallelRace(t *testing.T) {
 	eventCount := lineCount * blockCount * fileCount
 	run(&test.Case{
 		Prepare: func() {
-			for f := 0; f < fileCount; f++ {
+			for range fileCount {
 				file := createTempFile()
 				f, err := os.OpenFile(file, os.O_APPEND|os.O_WRONLY, perm)
 				if err != nil {
@@ -868,7 +868,7 @@ func TestReadManyCharsParallelRace(t *testing.T) {
 		Act: func(p *pipeline.Pipeline) {
 			for i := range fds {
 				go func(index int) {
-					for i := 0; i < blockCount; i++ {
+					for range blockCount {
 						addDataFile(fds[index], json1)
 						addDataFile(fds[index], json2)
 					}
@@ -929,11 +929,11 @@ func TestReadStreamRace(t *testing.T) {
 	run(&test.Case{
 		Prepare: func() {
 			content := make([]byte, 0, len(json)*blocksCount)
-			for i := 0; i < blocksCount; i++ {
+			for range blocksCount {
 				content = append(content, json...)
 			}
 
-			for f := 0; f < filesCount; f++ {
+			for range filesCount {
 				file := createTempFile()
 				fileNames = append(fileNames, file)
 				addBytes(file, content, false, false)
@@ -1099,7 +1099,7 @@ func TestTruncationSeq(t *testing.T) {
 
 	wg := &sync.WaitGroup{}
 
-	for k := 0; k < 4; k++ {
+	for range 4 {
 		wg.Add(1)
 		go func() {
 			lwg := &sync.WaitGroup{}
@@ -1204,11 +1204,11 @@ func BenchmarkLightJsonReadPar(b *testing.B) {
 		json := getContent("../../../testdata/json/light.json")
 
 		content := make([]byte, 0, len(json)*lines)
-		for i := 0; i < lines; i++ {
+		for range lines {
 			content = append(content, json...)
 		}
 
-		for f := 0; f < files; f++ {
+		for range files {
 			file := createTempFile()
 			addBytes(file, content, false, false)
 		}

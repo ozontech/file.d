@@ -16,33 +16,41 @@ func newHistogram(c prometheus.Histogram) *Histogram {
 	}
 }
 
+//nolint:unused
+func (h *Histogram) getHeldMetric() *heldMetric[prometheus.Histogram] {
+	return h.heldMetric
+}
+
 func (h *Histogram) Observe(v float64) {
 	h.metric.Observe(v)
 	h.updateUsage()
 }
 
 type HistogramVec struct {
-	store *heldMetricsStore[prometheus.Histogram]
+	store *heldMetricsStore[prometheus.Histogram, *Histogram]
 	vec   *prometheus.HistogramVec
 }
 
 func newHistogramVec(hv *prometheus.HistogramVec, maxLabelValueLength int) *HistogramVec {
 	return &HistogramVec{
-		vec:   hv,
-		store: newHeldMetricsStore[prometheus.Histogram](maxLabelValueLength),
+		vec: hv,
+		store: newHeldMetricsStore(
+			maxLabelValueLength,
+			func(hm *heldMetric[prometheus.Histogram]) *Histogram {
+				return &Histogram{heldMetric: hm}
+			},
+		),
 	}
 }
 
 func (hv *HistogramVec) WithLabelValues(lvs ...string) *Histogram {
-	return &Histogram{
-		heldMetric: hv.store.GetOrCreate(lvs, func(s ...string) prometheus.Histogram {
-			return hv.vec.WithLabelValues(s...).(prometheus.Histogram)
-		}),
-	}
+	return hv.store.GetOrCreate(lvs, func(s ...string) prometheus.Histogram {
+		return hv.vec.WithLabelValues(s...).(prometheus.Histogram)
+	})
 }
 
-func (cv *HistogramVec) DeleteLabelValues(lvs ...string) bool {
-	return cv.store.Delete(lvs, cv.vec)
+func (hv *HistogramVec) DeleteLabelValues(lvs ...string) bool {
+	return hv.store.Delete(lvs, hv.vec)
 }
 
 func (hv *HistogramVec) DeleteOldMetrics(holdDuration time.Duration) {

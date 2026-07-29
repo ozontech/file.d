@@ -158,6 +158,8 @@ func TestCheckInputBytes(t *testing.T) {
 
 	for _, tCase := range cases {
 		t.Run(tCase.name, func(t *testing.T) {
+			t.Parallel()
+
 			pipe := New("test_pipeline", tCase.pipelineSettings, prometheus.NewRegistry(), zap.NewNop())
 
 			data, cutoff, ok := pipe.checkInputBytes(tCase.input, "test", nil)
@@ -246,6 +248,8 @@ func TestCheckInputBytesMetric(t *testing.T) {
 
 	for _, tCase := range cases {
 		t.Run(tCase.name, func(t *testing.T) {
+			t.Parallel()
+
 			pipe := New("test_pipeline", tCase.pipelineSettings, prometheus.NewRegistry(), zap.NewNop())
 
 			pipe.checkInputBytes([]byte("some log"), tCase.sourceName, tCase.meta)
@@ -292,6 +296,8 @@ func TestSuggestDecoder(t *testing.T) {
 
 	for _, tCase := range tCases {
 		t.Run(tCase.name, func(t *testing.T) {
+			t.Parallel()
+
 			p := New("file_d", tCase.settings, prometheus.NewPedanticRegistry(), zap.NewNop())
 			p.SuggestDecoder(tCase.suggestType)
 			require.Equal(t, tCase.expectedType, p.decoderType)

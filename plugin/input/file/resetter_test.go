@@ -64,7 +64,6 @@ func Test_deleteOneOffsetByField(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			fname := "./one_offset_test.yaml"
 			err := os.WriteFile(fname, []byte(tt.fileData), os.ModePerm)

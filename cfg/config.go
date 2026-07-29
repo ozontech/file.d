@@ -327,8 +327,8 @@ func Parse(ptr any, values map[string]int) error {
 	return nil
 }
 
-// it isn't just a recursion
-// it also captures values with the same name from parent
+// it isn't just a recursion, it also captures values with the same name from parent
+// if the child value has zero value
 // i.e. take this config:
 //
 //	{
@@ -341,21 +341,24 @@ func Parse(ptr any, values map[string]int) error {
 // this function will set `config.Child.T = config.T`
 // see file.d/cfg/config_test.go:TestHierarchy for an example
 func ParseChild(parent reflect.Value, v reflect.Value, values map[string]int) error {
-	if v.CanAddr() {
-		for i := 0; i < v.NumField(); i++ {
-			name := v.Type().Field(i).Name
-			val := parent.FieldByName(name)
-			if val.CanAddr() {
-				v.Field(i).Set(val)
-			}
+	if !v.CanAddr() {
+		return nil
+	}
+
+	for i := range v.NumField() {
+		// set parent value only if child has zero value
+		if !v.Field(i).IsZero() {
+			continue
 		}
 
-		err := Parse(v.Addr().Interface(), values)
-		if err != nil {
-			return err
+		name := v.Type().Field(i).Name
+		val := parent.FieldByName(name)
+		if val.CanAddr() {
+			v.Field(i).Set(val)
 		}
 	}
-	return nil
+
+	return Parse(v.Addr().Interface(), values)
 }
 
 // ParseSlice recursively parses elements of an slice
@@ -647,7 +650,7 @@ func ParseNestedFields(fields []string) ([][]string, error) {
 	return result, nil
 }
 
-func SetDefaultValues(data interface{}) error {
+func SetDefaultValues(data any) error {
 	t := reflect.TypeOf(data).Elem()
 	v := reflect.ValueOf(data).Elem()
 
@@ -686,9 +689,10 @@ func SetDefaultValues(data interface{}) error {
 			case reflect.Bool:
 				currentValue := vField.Bool()
 				if !currentValue {
-					if defaultValue == "true" {
+					switch defaultValue {
+					case "true":
 						vField.SetBool(true)
-					} else if defaultValue == "false" {
+					case "false":
 						vField.SetBool(false)
 					}
 				}
@@ -747,8 +751,8 @@ func mergeYAMLs(a, b map[interface{}]interface{}) map[interface{}]interface{} {
 	}
 	for k, v := range b {
 		if existingValue, exists := merged[k]; exists {
-			if existingMap, ok := existingValue.(map[interface{}]interface{}); ok {
-				if newMap, ok := v.(map[interface{}]interface{}); ok {
+			if existingMap, ok := existingValue.(map[any]any); ok {
+				if newMap, ok := v.(map[any]any); ok {
 					merged[k] = mergeYAMLs(existingMap, newMap)
 					continue
 				}

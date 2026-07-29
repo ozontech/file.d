@@ -91,6 +91,8 @@ func Test_processor_isMatch(t *testing.T) {
 
 	for i, tc := range tcs {
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
+			t.Parallel()
+
 			proc := processor{
 				busyActions: []bool{false},
 				actionInfos: []*ActionPluginStaticInfo{
