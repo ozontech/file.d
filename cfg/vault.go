@@ -3,11 +3,13 @@ package cfg
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"strings"
 
 	"github.com/hashicorp/vault/api"
 	auth "github.com/hashicorp/vault/api/auth/approle"
 	"github.com/ozontech/file.d/logger"
+	"github.com/ozontech/file.d/xtls"
 )
 
 type secreter interface {
@@ -25,6 +27,24 @@ func newVault(cfg *VaultConfig) (*vault, error) {
 
 	conf := api.DefaultConfig()
 	conf.Address = cfg.Address
+	if tls := cfg.TLS; tls != nil {
+		b := xtls.NewConfigBuilder()
+		if tls.CACert != "" {
+			if err := b.AppendCARoot(tls.CACert); err != nil {
+				return nil, fmt.Errorf("can't append CA root: %w", err)
+			}
+		}
+		if tls.ClientCert != "" && tls.ClientKey != "" {
+			if err := b.AppendX509KeyPair(tls.ClientCert, tls.ClientKey); err != nil {
+				return nil, fmt.Errorf("can't append X509 key pair: %w", err)
+			}
+		}
+		b.SetSkipVerify(tls.Insecure)
+
+		transport, _ := conf.HttpClient.Transport.(*http.Transport)
+		transport.TLSClientConfig = b.Build()
+	}
+
 	c, err := api.NewClient(conf)
 	if err != nil {
 		return nil, fmt.Errorf("can't create api client: %w", err)
