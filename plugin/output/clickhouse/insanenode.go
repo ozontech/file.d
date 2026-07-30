@@ -1,9 +1,11 @@
 package clickhouse
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"net/netip"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -30,7 +32,7 @@ type InsaneNode interface {
 	AsIPv4() (proto.IPv4, error)
 	AsIPv6() (proto.IPv6, error)
 	AsTime(proto.Precision) (time.Time, error)
-	AsMapStringString() (map[string]string, error)
+	AsKVArray() ([]proto.KV[string, string], error) // sorted map[string]string
 
 	IsNull() bool
 }
@@ -117,7 +119,7 @@ func (s StrictNode) AsStringArray() ([]string, error) {
 	return vals, nil
 }
 
-func (s StrictNode) AsMapStringString() (map[string]string, error) {
+func (s StrictNode) AsKVArray() ([]proto.KV[string, string], error) {
 	if s.StrictNode == nil || s.IsNull() {
 		return nil, nil
 	}
@@ -127,22 +129,26 @@ func (s StrictNode) AsMapStringString() (map[string]string, error) {
 		return nil, err
 	}
 
-	m := make(map[string]string)
+	kvs := make([]proto.KV[string, string], 0, len(fields))
 	for _, f := range fields {
 		k := f.AsString()
 		vNode := f.AsFieldValue()
 		if vNode == nil || vNode.IsNull() {
-			m[k] = ""
+			kvs = append(kvs, proto.KV[string, string]{Key: k, Value: ""})
 			continue
 		}
 		v, err := vNode.MutateToStrict().AsString()
 		if err != nil {
 			return nil, err
 		}
-		m[k] = v
+		kvs = append(kvs, proto.KV[string, string]{Key: k, Value: v})
 	}
 
-	return m, nil
+	slices.SortStableFunc(kvs, func(a, b proto.KV[string, string]) int {
+		return cmp.Compare(a.Key, b.Key)
+	})
+
+	return kvs, nil
 }
 
 type NonStrictNode struct {
@@ -246,19 +252,25 @@ func (n NonStrictNode) AsTime(prec proto.Precision) (time.Time, error) {
 	return t, nil
 }
 
-func (n NonStrictNode) AsMapStringString() (map[string]string, error) {
+func (n NonStrictNode) AsKVArray() ([]proto.KV[string, string], error) {
 	if n.Node == nil || n.Node.IsNull() || !n.IsObject() {
 		return nil, nil
 	}
 
-	m := make(map[string]string)
-	for _, f := range n.AsFields() {
+	fields := n.AsFields()
+
+	kvs := make([]proto.KV[string, string], 0, len(fields))
+	for _, f := range fields {
 		k := f.AsString()
 		v := nonStrictAsString(f.AsFieldValue())
-		m[k] = v
+		kvs = append(kvs, proto.KV[string, string]{Key: k, Value: v})
 	}
 
-	return m, nil
+	slices.SortStableFunc(kvs, func(a, b proto.KV[string, string]) int {
+		return cmp.Compare(a.Key, b.Key)
+	})
+
+	return kvs, nil
 }
 
 // ZeroValueNode returns a null-value for all called methods.
@@ -318,7 +330,7 @@ func (z ZeroValueNode) IsNull() bool {
 	return false
 }
 
-func (z ZeroValueNode) AsMapStringString() (map[string]string, error) {
+func (z ZeroValueNode) AsKVArray() ([]proto.KV[string, string], error) {
 	return nil, nil
 }
 
