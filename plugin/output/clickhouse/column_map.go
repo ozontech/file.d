@@ -19,16 +19,16 @@ func NewColMapStringString() *ColMapStringString {
 var _ InsaneColInput = (*ColMapStringString)(nil)
 
 func (t *ColMapStringString) Append(node InsaneNode) error {
-	var m map[string]string
+	var kvs []proto.KV[string, string]
 	if node != nil {
 		var err error
-		m, err = node.AsMapStringString()
+		kvs, err = node.AsKVArray()
 		if err != nil {
 			return fmt.Errorf("converting node to the map of (string,string): %w", err)
 		}
 	}
 
-	t.ColMap.Append(m)
+	t.ColMap.AppendKV(kvs)
 
 	return nil
 }
