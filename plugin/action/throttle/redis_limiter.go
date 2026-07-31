@@ -118,7 +118,7 @@ func (l *redisLimiter) sync() {
 
 	l.keyIdxsForSync = l.keyIdxsForSync[:0]
 	l.bucketIdsForSync = l.bucketIdsForSync[:0]
-	for i := 0; i < count; i++ {
+	for i := range count {
 		l.bucketValuesForSync[i] = l.bucketValuesForSync[i][:0]
 
 		// no new events passed

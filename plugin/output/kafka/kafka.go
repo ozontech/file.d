@@ -5,9 +5,11 @@ import (
 	"time"
 
 	"github.com/ozontech/file.d/cfg"
+	"github.com/ozontech/file.d/encoder"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/xoauth"
 	"github.com/twmb/franz-go/pkg/kgo"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -29,19 +31,22 @@ type data struct {
 }
 
 type Plugin struct {
-	logger       *zap.SugaredLogger
+	logger       *zap.Logger
 	config       *Config
 	avgEventSize int
 	controller   pipeline.OutputPluginController
 
-	client     KafkaClient
-	batcher    *pipeline.RetriableBatcher
+	client      KafkaClient
+	encoder     encoder.Encoder
+	batcher     *pipeline.RetriableBatcher
+	router      *pipeline.Router
+	tokenSource xoauth.TokenSource
+
 	ctx        context.Context
 	cancelFunc context.CancelFunc
 
 	// plugin metrics
 	sendErrorMetric *metric.Counter
-	router          *pipeline.Router
 }
 
 // ! config-params
@@ -112,6 +117,30 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
+	// > Configure event serialization before sending.
+	// > Includes:
+	// > 1) `type` - codec to use for serializing events (`json` by default):
+	// > * `json` - serializes the full event as a JSON object.
+	// > * `raw`  - extracts a single field and sends its value as-is (unquoted
+	// >   for string fields, encoded JSON otherwise). If the field is missing an
+	// >   empty value is sent and a warning is logged.
+	// > 2) `params` - encoder parameters, keyed by encoder type:
+	// > * `json` - none.
+	// > * `raw`:
+	// >   * `field` - event field to extract (default `message`); supports
+	// >     nested paths such as `log.message`.
+	// >
+	// > Example sending only the `message` field as a raw value:
+	// > ```yaml
+	// > encoding:
+	// >   type: raw
+	// >   params:
+	// >     field: message
+	// > ```
+	Encoding encoder.EncodingConfig `json:"encoding" child:"true"` // *
+
+	// > @3@4@5@6
+	// >
 	// > Compression codec
 	Compression string `json:"compression" default:"none" options:"none|gzip|snappy|lz4|zstd"` // *
 
@@ -156,7 +185,7 @@ type Config struct {
 	// > @3@4@5@6
 	// >
 	// > SASL mechanism to use.
-	SaslMechanism string `json:"sasl_mechanism" default:"SCRAM-SHA-512" options:"PLAIN|SCRAM-SHA-256|SCRAM-SHA-512"` // *
+	SaslMechanism string `json:"sasl_mechanism" default:"SCRAM-SHA-512" options:"PLAIN|SCRAM-SHA-256|SCRAM-SHA-512|AWS_MSK_IAM|OAUTHBEARER"` // *
 
 	// > @3@4@5@6
 	// >
@@ -167,6 +196,21 @@ type Config struct {
 	// >
 	// > SASL password.
 	SaslPassword string `json:"sasl_password" default:"password"` // *
+
+	// > @3@4@5@6
+	// >
+	// > SASL OAUTHBEARER config. It works only if `sasl_mechanism:"OAUTHBEARER"`.
+	// >> There are 2 options - a static token or a dynamically updated.
+	// >
+	// > `OAuthConfig` params:
+	// > * **`token`** *`string`* - static token
+	// > ---
+	// > * **`client_id`** *`string`* - client ID
+	// > * **`client_secret`** *`string`* - client secret
+	// > * **`token_url`** *`string`* - resource server's token endpoint URL
+	// > * **`scopes`** *`[]string`* - optional requested permissions
+	// > * **`auth_style`** *`string`* *`default=params`* *`options=params|header`* - specifies how the endpoint wants the client ID & client secret sent
+	SaslOAuth cfg.KafkaClientOAuthConfig `json:"sasl_oauth" child:"true"` // *
 
 	// > @3@4@5@6
 	// >
@@ -211,6 +255,7 @@ func (c *Config) GetSaslConfig() cfg.KafkaClientSaslConfig {
 		SaslMechanism: c.SaslMechanism,
 		SaslUsername:  c.SaslUsername,
 		SaslPassword:  c.SaslPassword,
+		SaslOAuth:     c.SaslOAuth,
 	}
 }
 
@@ -240,7 +285,7 @@ func Factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 
 func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginParams) {
 	p.config = config.(*Config)
-	p.logger = params.Logger
+	p.logger = params.Logger.Desugar()
 	p.avgEventSize = params.PipelineSettings.AvgEventSize
 	p.controller = params.Controller
 	p.registerMetrics(params.MetricCtl)
@@ -250,9 +295,23 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		p.logger.Fatal("'retention' can't be <1")
 	}
 
-	p.logger.Infof("workers count=%d, batch size=%d", p.config.WorkersCount_, p.config.BatchSize_)
+	var err error
+	p.encoder, err = encoder.NewEncoder(p.config.Encoding)
+	if err != nil {
+		p.logger.Fatal("can't create encoder", zap.Error(err))
+	}
 
-	p.client = NewClient(p.config, p.logger.Desugar())
+	p.logger.Info("starting",
+		zap.Int("workers_count", p.config.WorkersCount_),
+		zap.Int("batch_size", p.config.BatchSize_),
+	)
+
+	p.tokenSource, err = cfg.GetKafkaClientOAuthTokenSource(p.ctx, p.config)
+	if err != nil {
+		p.logger.Fatal("can't create oauth token source", zap.Error(err))
+	}
+
+	p.client = NewClient(p.ctx, p.config, p.logger, p.tokenSource)
 
 	batcherOpts := pipeline.BatcherOptions{
 		PipelineName:   params.PipelineName,
@@ -281,7 +340,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 			level = zapcore.ErrorLevel
 		}
 
-		p.logger.Desugar().Log(level, "can't write batch",
+		p.logger.Log(level, "can't write batch",
 			zap.Int("retries", p.config.Retry),
 		)
 
@@ -330,7 +389,12 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 	defer cancel()
 
 	batch.ForEach(func(event *pipeline.Event) {
-		outBuf, start = event.Encode(outBuf)
+		start = len(outBuf)
+		var err error
+		outBuf, err = p.encoder.Encode(event, outBuf)
+		if err != nil {
+			p.logger.Warn("can't encode event, sending empty value", zap.Error(err))
+		}
 
 		topic := p.config.DefaultTopic
 		if p.config.UseTopicField {
@@ -351,7 +415,7 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 	})
 
 	if err := p.client.ProduceSync(ctx, data.messages[:i]...).FirstErr(); err != nil {
-		p.logger.Errorf("can't write batch: %v", err)
+		p.logger.Error("can't write batch", zap.Error(err))
 		p.sendErrorMetric.Inc()
 		return err
 	}
@@ -360,7 +424,12 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 }
 
 func (p *Plugin) Stop() {
+	p.logger.Info("stopping")
+
 	p.batcher.Stop()
 	p.cancelFunc()
 	p.client.Close()
+	if p.tokenSource != nil {
+		p.tokenSource.Stop()
+	}
 }

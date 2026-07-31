@@ -22,7 +22,7 @@ type Ctl struct {
 	register  *prometheus.Registry
 
 	holder                    *Holder
-	metrics                   map[string]prometheus.Collector
+	metrics                   map[string]any
 	metricMaxLabelValueLength int
 	mu                        sync.RWMutex
 }
@@ -31,7 +31,7 @@ func NewCtl(subsystem string, registry *prometheus.Registry, metricHoldDuration 
 	ctl := &Ctl{
 		subsystem:                 subsystem,
 		register:                  registry,
-		metrics:                   make(map[string]prometheus.Collector),
+		metrics:                   make(map[string]any),
 		metricMaxLabelValueLength: metricMaxLabelValueLength,
 	}
 
@@ -59,89 +59,129 @@ func (mc *Ctl) AddToHolder(mv heldMetricVec) {
 }
 
 func (mc *Ctl) RegisterCounter(name, help string) *Counter {
-	counter := prometheus.NewCounter(prometheus.CounterOpts{
-		Namespace: PromNamespace,
-		Subsystem: mc.subsystem,
-		Name:      name,
-		Help:      help,
-	})
-
-	return newCounter(mc.registerMetric(name, counter).(prometheus.Counter))
+	return registerWrapper(mc, name,
+		func() prometheus.Collector {
+			return prometheus.NewCounter(prometheus.CounterOpts{
+				Namespace: PromNamespace,
+				Subsystem: mc.subsystem,
+				Name:      name,
+				Help:      help,
+			})
+		},
+		func(c prometheus.Collector) *Counter {
+			return newCounter(c.(prometheus.Counter))
+		},
+	)
 }
 
 func (mc *Ctl) RegisterCounterVec(name, help string, labels ...string) *CounterVec {
-	counterVec := prometheus.NewCounterVec(prometheus.CounterOpts{
-		Namespace: PromNamespace,
-		Subsystem: mc.subsystem,
-		Name:      name,
-		Help:      help,
-	}, labels)
-
-	return newCounterVec(mc.registerMetric(name, counterVec).(*prometheus.CounterVec), mc.metricMaxLabelValueLength)
+	return registerWrapper(mc, name,
+		func() prometheus.Collector {
+			return prometheus.NewCounterVec(prometheus.CounterOpts{
+				Namespace: PromNamespace,
+				Subsystem: mc.subsystem,
+				Name:      name,
+				Help:      help,
+			}, labels)
+		},
+		func(c prometheus.Collector) *CounterVec {
+			return newCounterVec(c.(*prometheus.CounterVec), mc.metricMaxLabelValueLength)
+		},
+	)
 }
 
 func (mc *Ctl) RegisterGauge(name, help string) *Gauge {
-	gauge := prometheus.NewGauge(prometheus.GaugeOpts{
-		Namespace: PromNamespace,
-		Subsystem: mc.subsystem,
-		Name:      name,
-		Help:      help,
-	})
-
-	return newGauge(mc.registerMetric(name, gauge).(prometheus.Gauge))
+	return registerWrapper(mc, name,
+		func() prometheus.Collector {
+			return prometheus.NewGauge(prometheus.GaugeOpts{
+				Namespace: PromNamespace,
+				Subsystem: mc.subsystem,
+				Name:      name,
+				Help:      help,
+			})
+		},
+		func(c prometheus.Collector) *Gauge {
+			return newGauge(c.(prometheus.Gauge))
+		},
+	)
 }
 
 func (mc *Ctl) RegisterGaugeVec(name, help string, labels ...string) *GaugeVec {
-	gaugeVec := prometheus.NewGaugeVec(prometheus.GaugeOpts{
-		Namespace: PromNamespace,
-		Subsystem: mc.subsystem,
-		Name:      name,
-		Help:      help,
-	}, labels)
-
-	return newGaugeVec(mc.registerMetric(name, gaugeVec).(*prometheus.GaugeVec), mc.metricMaxLabelValueLength)
+	return registerWrapper(mc, name,
+		func() prometheus.Collector {
+			return prometheus.NewGaugeVec(prometheus.GaugeOpts{
+				Namespace: PromNamespace,
+				Subsystem: mc.subsystem,
+				Name:      name,
+				Help:      help,
+			}, labels)
+		},
+		func(c prometheus.Collector) *GaugeVec {
+			return newGaugeVec(c.(*prometheus.GaugeVec), mc.metricMaxLabelValueLength)
+		},
+	)
 }
 
 func (mc *Ctl) RegisterHistogram(name, help string, buckets []float64) *Histogram {
-	histogram := prometheus.NewHistogram(prometheus.HistogramOpts{
-		Namespace: PromNamespace,
-		Subsystem: mc.subsystem,
-		Name:      name,
-		Help:      help,
-		Buckets:   buckets,
-	})
-
-	return newHistogram(mc.registerMetric(name, histogram).(prometheus.Histogram))
+	return registerWrapper(mc, name,
+		func() prometheus.Collector {
+			return prometheus.NewHistogram(prometheus.HistogramOpts{
+				Namespace: PromNamespace,
+				Subsystem: mc.subsystem,
+				Name:      name,
+				Help:      help,
+				Buckets:   buckets,
+			})
+		},
+		func(c prometheus.Collector) *Histogram {
+			return newHistogram(c.(prometheus.Histogram))
+		},
+	)
 }
 
 func (mc *Ctl) RegisterHistogramVec(name, help string, buckets []float64, labels ...string) *HistogramVec {
-	histogramVec := prometheus.NewHistogramVec(prometheus.HistogramOpts{
-		Namespace: PromNamespace,
-		Subsystem: mc.subsystem,
-		Name:      name,
-		Help:      help,
-		Buckets:   buckets,
-	}, labels)
-
-	return newHistogramVec(mc.registerMetric(name, histogramVec).(*prometheus.HistogramVec), mc.metricMaxLabelValueLength)
+	return registerWrapper(mc, name,
+		func() prometheus.Collector {
+			return prometheus.NewHistogramVec(prometheus.HistogramOpts{
+				Namespace: PromNamespace,
+				Subsystem: mc.subsystem,
+				Name:      name,
+				Help:      help,
+				Buckets:   buckets,
+			}, labels)
+		},
+		func(c prometheus.Collector) *HistogramVec {
+			return newHistogramVec(c.(*prometheus.HistogramVec), mc.metricMaxLabelValueLength)
+		},
+	)
 }
 
-func (mc *Ctl) registerMetric(name string, newMetric prometheus.Collector) prometheus.Collector {
+// registerWrapper returns a cached wrapper by name or creates, registers and caches a new one.
+// The prometheus collector is created lazily only on a cache miss.
+func registerWrapper[W any](
+	mc *Ctl,
+	name string,
+	newCollector func() prometheus.Collector,
+	wrap func(prometheus.Collector) W,
+) W {
 	mc.mu.RLock()
-	metric, has := mc.metrics[name]
+	cached, has := mc.metrics[name]
 	mc.mu.RUnlock()
 	if has {
-		return metric
+		return cached.(W)
 	}
 
 	mc.mu.Lock()
 	defer mc.mu.Unlock()
-	metric, has = mc.metrics[name]
-	if !has {
-		metric = newMetric
-		mc.metrics[name] = metric
-		mc.register.MustRegister(metric)
+
+	if cached, has = mc.metrics[name]; has {
+		return cached.(W)
 	}
 
-	return metric
+	collector := newCollector()
+	mc.register.MustRegister(collector)
+
+	wrapper := wrap(collector)
+	mc.metrics[name] = wrapper
+	return wrapper
 }

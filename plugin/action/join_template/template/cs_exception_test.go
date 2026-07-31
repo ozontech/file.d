@@ -10,8 +10,7 @@ import (
 func BenchmarkSharpStartMixedRes(b *testing.B) {
 	lines := getLines(sample.SharpException)
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		for _, line := range lines {
 			sharpStartCheck(line)
 		}
@@ -21,8 +20,7 @@ func BenchmarkSharpStartMixedRes(b *testing.B) {
 func BenchmarkSharpContinueMixedRes(b *testing.B) {
 	lines := getLines(sample.SharpException)
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		for _, line := range lines {
 			sharpContinueCheck(line)
 		}
@@ -32,8 +30,7 @@ func BenchmarkSharpContinueMixedRes(b *testing.B) {
 func BenchmarkSharpStartNegativeRes(b *testing.B) {
 	lines := getRandLines()
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		for _, line := range lines {
 			sharpStartCheck(line)
 		}
@@ -43,8 +40,7 @@ func BenchmarkSharpStartNegativeRes(b *testing.B) {
 func BenchmarkSharpContinueNegativeRes(b *testing.B) {
 	lines := getRandLines()
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		for _, line := range lines {
 			sharpContinueCheck(line)
 		}

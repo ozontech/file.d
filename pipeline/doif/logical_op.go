@@ -213,7 +213,7 @@ func (n *logicalNode) isEqualTo(n2 Node, level int) error {
 	for i := 0; i < len(n.operands); i++ {
 		if err := n.operands[i].isEqualTo(n2l.operands[i], level+1); err != nil {
 			tabs := make([]byte, 0, level)
-			for j := 0; j < level; j++ {
+			for range level {
 				tabs = append(tabs, '\t')
 			}
 			return fmt.Errorf("nodes with op %q have different operand nodes on position %d:\n%s%w", n.op, i, tabs, err)

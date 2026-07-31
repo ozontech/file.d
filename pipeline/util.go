@@ -1,7 +1,6 @@
 package pipeline
 
 import (
-	"reflect"
 	"strings"
 	"unsafe"
 
@@ -27,9 +26,7 @@ func ByteToStringUnsafe(b []byte) string {
 // StringToByteUnsafe converts string to byte slice without memory copy
 // This creates mutable string, thus unsafe method, should be used with caution (never modify resulting byte slice)
 func StringToByteUnsafe(s string) []byte {
-	var buf = *(*[]byte)(unsafe.Pointer(&s))
-	(*reflect.SliceHeader)(unsafe.Pointer(&buf)).Cap = len(s)
-	return buf
+	return unsafe.Slice(unsafe.StringData(s), len(s))
 }
 
 /* There are actually a lot of interesting ways to do this. Saving them here, for the purpose of possible debugging.

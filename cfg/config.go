@@ -23,7 +23,7 @@ import (
 const trueValue = "true"
 
 type Config struct {
-	Vault     VaultConfig
+	Vault     *VaultConfig
 	Pipelines map[string]*PipelineConfig
 }
 
@@ -64,25 +64,33 @@ type PipelineConfig struct {
 	Raw *simplejson.Json
 }
 
+type VaultTLSConfig struct {
+	CACert     string
+	ClientCert string
+	ClientKey  string
+	Insecure   bool
+}
+
 type VaultConfig struct {
-	Token     string
-	Address   string
-	ShouldUse bool
+	Address string
+
+	Token string
+
+	AuthMountPath string
+	RoleID        string
+	SecretID      string
+
+	TLS *VaultTLSConfig
 }
 
 func NewConfig() *Config {
 	return &Config{
-		Vault: VaultConfig{
-			Token:     "",
-			Address:   "",
-			ShouldUse: false,
-		},
 		Pipelines: make(map[string]*PipelineConfig, 20),
 	}
 }
 
-func NewConfigFromFile(paths []string) *Config {
-	mergedConfig := make(map[interface{}]interface{})
+func NewConfigFromFiles(paths []string) *Config {
+	mergedConfig := make(map[any]any, len(paths))
 
 	for _, path := range paths {
 		logger.Infof("reading config %q", path)
@@ -90,7 +98,7 @@ func NewConfigFromFile(paths []string) *Config {
 		if err != nil {
 			logger.Fatalf("can't read config file %q: %s", path, err)
 		}
-		var currentConfig map[interface{}]interface{}
+		var currentConfig map[any]any
 		if err := yaml.Unmarshal(yamlContents, &currentConfig); err != nil {
 			logger.Fatalf("can't parse config file yaml %q: %s", path, err)
 		}
@@ -123,8 +131,8 @@ func NewConfigFromFile(paths []string) *Config {
 
 	// if vault is used then set value otherwise it is empty variable
 	vault := &vault{}
-	if config.Vault.ShouldUse {
-		vault, err = newVault(config.Vault.Address, config.Vault.Token)
+	if config.Vault != nil {
+		vault, err = newVault(config.Vault)
 		if err != nil {
 			logger.Fatalf("can't create vault client: %s", err.Error())
 		}
@@ -164,26 +172,14 @@ func applyEnvs(object *simplejson.Json) error {
 }
 
 func parseConfig(object *simplejson.Json) *Config {
-	config := NewConfig()
-	vault := object.Get("vault")
 	var err error
 
-	addr := vault.Get("address")
-	if addr.Interface() != nil {
-		config.Vault.Address, err = addr.String()
-		if err != nil {
-			logger.Panicf("can't parse vault address: %s", err.Error())
-		}
-	}
+	config := NewConfig()
 
-	token := vault.Get("token")
-	if token.Interface() != nil {
-		config.Vault.Token, err = token.String()
-		if err != nil {
-			logger.Panicf("can't parse vault token: %s", err.Error())
-		}
+	config.Vault, err = parseVaultConfig(object.Get("vault"))
+	if err != nil {
+		logger.Fatalf("can't parse vault config: %s", err.Error())
 	}
-	config.Vault.ShouldUse = config.Vault.Address != "" && config.Vault.Token != ""
 
 	pipelinesJson := object.Get("pipelines")
 	pipelines := pipelinesJson.MustMap()
@@ -199,6 +195,52 @@ func parseConfig(object *simplejson.Json) *Config {
 	}
 
 	return config
+}
+
+func parseVaultConfig(vault *simplejson.Json) (*VaultConfig, error) {
+	if vault.Interface() == nil {
+		return nil, nil
+	}
+
+	vc := &VaultConfig{
+		Address: vault.Get("address").MustString(),
+
+		Token: vault.Get("token").MustString(),
+
+		AuthMountPath: vault.Get("auth_mount_path").MustString(),
+		RoleID:        vault.Get("role_id").MustString(),
+		SecretID:      vault.Get("secret_id").MustString(),
+	}
+
+	tls := vault.Get("tls")
+	if tls.Interface() != nil {
+		vc.TLS = &VaultTLSConfig{
+			CACert:     tls.Get("ca_cert").MustString(),
+			ClientCert: tls.Get("client_cert").MustString(),
+			ClientKey:  tls.Get("client_key").MustString(),
+			Insecure:   tls.Get("insecure").MustBool(),
+		}
+	}
+
+	if vc.Address == "" {
+		return nil, errors.New("vault address must be provided")
+	}
+	if vc.TLS != nil {
+		if vc.TLS.ClientCert != "" && vc.TLS.ClientKey == "" ||
+			vc.TLS.ClientCert == "" && vc.TLS.ClientKey != "" {
+			return nil, errors.New("both client cert and client key must be provided")
+		}
+	}
+
+	if vc.Token != "" {
+		return vc, nil
+	}
+
+	if vc.AuthMountPath == "" && vc.RoleID == "" && vc.SecretID == "" {
+		return nil, errors.New("one of auth methods must be specified: token or role&secret")
+	}
+
+	return vc, nil
 }
 
 func validatePipelineName(name string) error {
@@ -311,8 +353,8 @@ func Parse(ptr any, values map[string]int) error {
 	return nil
 }
 
-// it isn't just a recursion
-// it also captures values with the same name from parent
+// it isn't just a recursion, it also captures values with the same name from parent
+// if the child value has zero value
 // i.e. take this config:
 //
 //	{
@@ -325,21 +367,24 @@ func Parse(ptr any, values map[string]int) error {
 // this function will set `config.Child.T = config.T`
 // see file.d/cfg/config_test.go:TestHierarchy for an example
 func ParseChild(parent reflect.Value, v reflect.Value, values map[string]int) error {
-	if v.CanAddr() {
-		for i := 0; i < v.NumField(); i++ {
-			name := v.Type().Field(i).Name
-			val := parent.FieldByName(name)
-			if val.CanAddr() {
-				v.Field(i).Set(val)
-			}
+	if !v.CanAddr() {
+		return nil
+	}
+
+	for i := range v.NumField() {
+		// set parent value only if child has zero value
+		if !v.Field(i).IsZero() {
+			continue
 		}
 
-		err := Parse(v.Addr().Interface(), values)
-		if err != nil {
-			return err
+		name := v.Type().Field(i).Name
+		val := parent.FieldByName(name)
+		if val.CanAddr() {
+			v.Field(i).Set(val)
 		}
 	}
-	return nil
+
+	return Parse(v.Addr().Interface(), values)
 }
 
 // ParseSlice recursively parses elements of an slice
@@ -631,7 +676,7 @@ func ParseNestedFields(fields []string) ([][]string, error) {
 	return result, nil
 }
 
-func SetDefaultValues(data interface{}) error {
+func SetDefaultValues(data any) error {
 	t := reflect.TypeOf(data).Elem()
 	v := reflect.ValueOf(data).Elem()
 
@@ -670,9 +715,10 @@ func SetDefaultValues(data interface{}) error {
 			case reflect.Bool:
 				currentValue := vField.Bool()
 				if !currentValue {
-					if defaultValue == "true" {
+					switch defaultValue {
+					case "true":
 						vField.SetBool(true)
-					} else if defaultValue == "false" {
+					case "false":
 						vField.SetBool(false)
 					}
 				}
@@ -731,8 +777,8 @@ func mergeYAMLs(a, b map[interface{}]interface{}) map[interface{}]interface{} {
 	}
 	for k, v := range b {
 		if existingValue, exists := merged[k]; exists {
-			if existingMap, ok := existingValue.(map[interface{}]interface{}); ok {
-				if newMap, ok := v.(map[interface{}]interface{}); ok {
+			if existingMap, ok := existingValue.(map[any]any); ok {
+				if newMap, ok := v.(map[any]any); ok {
 					merged[k] = mergeYAMLs(existingMap, newMap)
 					continue
 				}

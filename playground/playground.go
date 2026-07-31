@@ -167,7 +167,7 @@ func formatZapFields(fields []zapcore.Field) strings.Builder {
 		if fatalPayload.Len() > 0 {
 			fatalPayload.WriteString("; ")
 		}
-		fatalPayload.WriteString(fmt.Sprintf("%q=%q", key, value))
+		fmt.Fprintf(&fatalPayload, "%q=%q", key, value)
 	}
 	return fatalPayload
 }

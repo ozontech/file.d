@@ -72,6 +72,31 @@ Should be set equal to or smaller than the broker's `message.max.bytes`.
 
 <br>
 
+**`encoding`** *`encoder.EncodingConfig`* 
+
+Configure event serialization before sending.
+Includes:
+1) `type` - codec to use for serializing events (`json` by default):
+* `json` - serializes the full event as a JSON object.
+* `raw`  - extracts a single field and sends its value as-is (unquoted
+  for string fields, encoded JSON otherwise). If the field is missing an
+  empty value is sent and a warning is logged.
+2) `params` - encoder parameters, keyed by encoder type:
+* `json` - none.
+* `raw`:
+  * `field` - event field to extract (default `message`); supports
+    nested paths such as `log.message`.
+
+Example sending only the `message` field as a raw value:
+```yaml
+encoding:
+  type: raw
+  params:
+    field: message
+```
+
+<br>
+
 **`compression`** *`string`* *`default=none`* *`options=none|gzip|snappy|lz4|zstd`* 
 
 Compression codec
@@ -121,7 +146,7 @@ If set, the plugin will use SASL authentications mechanism.
 
 <br>
 
-**`sasl_mechanism`** *`string`* *`default=SCRAM-SHA-512`* *`options=PLAIN|SCRAM-SHA-256|SCRAM-SHA-512`* 
+**`sasl_mechanism`** *`string`* *`default=SCRAM-SHA-512`* *`options=PLAIN|SCRAM-SHA-256|SCRAM-SHA-512|AWS_MSK_IAM|OAUTHBEARER`* 
 
 SASL mechanism to use.
 
@@ -136,6 +161,22 @@ SASL username.
 **`sasl_password`** *`string`* *`default=password`* 
 
 SASL password.
+
+<br>
+
+**`sasl_oauth`** *`cfg.KafkaClientOAuthConfig`* 
+
+SASL OAUTHBEARER config. It works only if `sasl_mechanism:"OAUTHBEARER"`.
+> There are 2 options - a static token or a dynamically updated.
+
+`OAuthConfig` params:
+* **`token`** *`string`* - static token
+---
+* **`client_id`** *`string`* - client ID
+* **`client_secret`** *`string`* - client secret
+* **`token_url`** *`string`* - resource server's token endpoint URL
+* **`scopes`** *`[]string`* - optional requested permissions
+* **`auth_style`** *`string`* *`default=params`* *`options=params|header`* - specifies how the endpoint wants the client ID & client secret sent
 
 <br>
 

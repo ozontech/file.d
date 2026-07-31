@@ -17,6 +17,11 @@ func newCounter(c prometheus.Counter) *Counter {
 	}
 }
 
+//nolint:unused
+func (c *Counter) getHeldMetric() *heldMetric[prometheus.Counter] {
+	return c.heldMetric
+}
+
 func (c *Counter) Inc() {
 	c.metric.Inc()
 	c.updateUsage()
@@ -33,21 +38,24 @@ func (c *Counter) ToFloat64() float64 {
 }
 
 type CounterVec struct {
-	store *heldMetricsStore[prometheus.Counter]
+	store *heldMetricsStore[prometheus.Counter, *Counter]
 	vec   *prometheus.CounterVec
 }
 
 func newCounterVec(cv *prometheus.CounterVec, maxLabelValueLength int) *CounterVec {
 	return &CounterVec{
-		vec:   cv,
-		store: newHeldMetricsStore[prometheus.Counter](maxLabelValueLength),
+		vec: cv,
+		store: newHeldMetricsStore(
+			maxLabelValueLength,
+			func(hm *heldMetric[prometheus.Counter]) *Counter {
+				return &Counter{heldMetric: hm}
+			},
+		),
 	}
 }
 
 func (cv *CounterVec) WithLabelValues(lvs ...string) *Counter {
-	return &Counter{
-		heldMetric: cv.store.GetOrCreate(lvs, cv.vec.WithLabelValues),
-	}
+	return cv.store.GetOrCreate(lvs, cv.vec.WithLabelValues)
 }
 
 func (cv *CounterVec) DeleteLabelValues(lvs ...string) bool {

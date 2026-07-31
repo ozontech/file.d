@@ -13,7 +13,7 @@ func TestDeltaWrapper(t *testing.T) {
 
 	initial := int64(0)
 
-	for i := 0; i <= 1000000; i++ {
+	for range 1000000 {
 		delta := rand.Int63n(5000)
 		initial += delta
 		assert.Equal(t, delta, int64(dw.updateValue(initial)))
