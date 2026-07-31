@@ -27,24 +27,25 @@ Sends HTTP requests with event data as body. Writes response body to the configu
 /*{ examples
 ```yaml
 pipelines:
-  - actions:
-       	...
-       - type: http_request
-        address: "http://example.com/api/{{ .id | default "unknown" }}"
-        method: GET
-        content_type: "application/json"
-        params:
-          id: "field.id"
-          user_id: "user"
-        response_field: "http_response"
-        retry: 3
-        retention: 100ms
-        timeout: 5s
-    ...
+  - example:
+      actions:
+        ...
+        - type: http_request
+          address: "http://example.com/api/{{ .id | default 'unknown' }}"
+          method: GET
+          content_type: "application/json"
+          params:
+            id: "field.id"
+            user_id: "user"
+          response_field: "http_response"
+          retry: 3
+          retention: 100ms
+          timeout: 5s
+```
 ```
 
-# example of request to server:
-# GET http://example.com/api/id_value?user_id=user
+### example of request to server:
+```GET http://example.com/api/id_value?user_id=user```
 
 }*/
 
@@ -57,6 +58,7 @@ type Plugin struct {
 	backoffStrategy backoff.BackOff
 	paramFields     map[string][]string // pre-parsed field selectors for params
 	addressTmpl     *template.Template  // compiled URL template
+	buf             bytes.Buffer
 }
 
 // ! config-params
@@ -75,7 +77,7 @@ type Config struct {
 	// > @3@4@5@6
 	// >
 	// > URL address to send requests to.
-	// > Example: `http://localhost:8080/api`.com/v1/events`
+	// > Example: `http://localhost:8080/api/v1/events`
 	Address string `json:"address" required:"true"` // *
 
 	// > @3@4@5@6
@@ -193,7 +195,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 
 	// Compile URL template
 	tmpl := template.Must(template.New("").Funcs(template.FuncMap{
-		"default": func(defaultValue string, value interface{}) interface{} {
+		"default": func(defaultValue string, value any) any {
 			if value == nil || value == "" {
 				return defaultValue
 			}
@@ -262,14 +264,14 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	}
 
 	// Build the address using template execution
-	var buf bytes.Buffer
-	if err := p.addressTmpl.Execute(&buf, params); err != nil {
+	p.buf.Reset()
+	if err := p.addressTmpl.Execute(&p.buf, params); err != nil {
 		p.logger.Fatal("failed to execute URL template",
 			zap.String("address", p.config.Address),
 			zap.Error(err),
 		)
 	}
-	address := buf.String()
+	address := p.buf.String()
 
 	// Measure total request time including retries
 	startTime := time.Now()

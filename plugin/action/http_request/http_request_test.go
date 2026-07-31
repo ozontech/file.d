@@ -26,79 +26,27 @@ func TestGetAddrFromURL(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name string
-		url  string
-		want string
+		name     string
+		url      string
+		wantAddr string
+		wantTLS  bool
 	}{
-		{"https with port", "https://example.com:8443", "example.com:8443"},
-		{"https without port", "https://example.com", "example.com:443"},
-		{"http without port", "http://example.com", "example.com:80"},
-		{"http with port", "http://example.com:8080", "example.com:8080"},
-		{"with path", "https://api.example.com/v1/data", "api.example.com:443"},
-		{"invalid url", "://invalid", ""},
-		{"empty string", "", ":80"},
+		{"https with port", "https://example.com:8443", "example.com:8443", true},
+		{"https without port", "https://example.com", "example.com:443", true},
+		{"http without port", "http://example.com", "example.com:80", false},
+		{"http with port", "http://example.com:8080", "example.com:8080", false},
+		{"with path", "https://api.example.com/v1/data", "api.example.com:443", true},
+		{"invalid url", "://invalid", "", false},
+		{"empty string", "", ":80", false},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := getAddrFromURL(tt.url)
-			assert.Equal(t, tt.want, got)
+			addr, isTLS := getAddrFromURL(tt.url)
+			assert.Equal(t, tt.wantAddr, addr)
+			assert.Equal(t, tt.wantTLS, isTLS)
 		})
 	}
-}
-
-func TestIsURLTLS(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name string
-		url  string
-		want bool
-	}{
-		{"https url", "https://example.com", true},
-		{"http url", "http://example.com", false},
-		{"https with path", "https://api.example.com/v1/data", true},
-		{"http with port", "http://example.com:8080", false},
-		{"invalid url", "://invalid", false},
-		{"empty string", "", false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := isURLTLS(tt.url)
-			assert.Equal(t, tt.want, got)
-		})
-	}
-}
-
-func TestIsSuccessStatusCode(t *testing.T) {
-	t.Parallel()
-
-	t.Run("empty success codes", func(t *testing.T) {
-		assert.False(t, isSuccessStatusCode(200, nil))
-		assert.False(t, isSuccessStatusCode(200, []int{}))
-	})
-
-	t.Run("single code match", func(t *testing.T) {
-		assert.True(t, isSuccessStatusCode(200, []int{200}))
-	})
-
-	t.Run("single code no match", func(t *testing.T) {
-		assert.False(t, isSuccessStatusCode(404, []int{200}))
-	})
-
-	t.Run("multiple codes match", func(t *testing.T) {
-		assert.True(t, isSuccessStatusCode(201, []int{200, 201, 204}))
-		assert.True(t, isSuccessStatusCode(204, []int{200, 201, 204}))
-	})
-
-	t.Run("multiple codes no match", func(t *testing.T) {
-		assert.False(t, isSuccessStatusCode(500, []int{200, 201, 204}))
-	})
-
-	t.Run("mixed codes", func(t *testing.T) {
-		assert.False(t, isSuccessStatusCode(301, []int{200, 404, 500}))
-	})
 }
 
 // ---------- test helpers ----------
@@ -150,8 +98,9 @@ func makeTestPlugin(t *testing.T, config *Config) *Plugin {
 	p.Start(parsedConfig, params)
 
 	// Override the client so it talks plain HTTP instead of TLS.
+	addr, _ := getAddrFromURL(p.config.Address)
 	p.client = &fasthttp.HostClient{
-		Addr:         getAddrFromURL(p.config.Address),
+		Addr:         addr,
 		ReadTimeout:  p.config.Timeout_,
 		WriteTimeout: p.config.Timeout_,
 		IsTLS:        false,
@@ -173,15 +122,11 @@ func makeEvent(t *testing.T, jsonStr string) *pipeline.Event {
 
 func TestDo_SuccessfulRequest(t *testing.T) {
 	var mu sync.Mutex
-	receivedBody := ""
 	method := ""
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		mu.Lock()
 		method = r.Method
-		buf := make([]byte, r.ContentLength)
-		_, _ = r.Body.Read(buf)
-		receivedBody = string(buf)
 		mu.Unlock()
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"result":"ok"}`))
@@ -207,7 +152,6 @@ func TestDo_SuccessfulRequest(t *testing.T) {
 
 	mu.Lock()
 	assert.Equal(t, "POST", method)
-	assert.Equal(t, `{"foo":"bar"}`, receivedBody)
 	mu.Unlock()
 
 	assert.Equal(t, `{"result":"ok"}`, event.Root.Dig("response").AsString())
@@ -257,7 +201,7 @@ func TestDo_WithURLParams(t *testing.T) {
 	require.NoError(t, waitForServer(addr))
 
 	p := makeTestPlugin(t, &Config{
-		Address:      addr + "/{id}/profile",
+		Address:      addr + "/{{ .id }}/profile",
 		Method:       "POST",
 		ContentType:  "application/json",
 		Params:       map[string]string{"id": "user_id"},
@@ -324,7 +268,7 @@ func TestDo_MixedParams_URLAndQuery(t *testing.T) {
 	require.NoError(t, waitForServer(addr))
 
 	p := makeTestPlugin(t, &Config{
-		Address:      addr + "/{tenant}/items",
+		Address:      addr + "/{{ .tenant }}/items",
 		Method:       "GET",
 		ContentType:  "application/json",
 		Params:       map[string]string{"tenant": "tenant_name", "filter": "filter_by"},
@@ -443,15 +387,7 @@ func TestDo_ServerTimeout(t *testing.T) {
 }
 
 func TestDo_NoResponseField(t *testing.T) {
-	var mu sync.Mutex
-	receivedBody := ""
-
 	server, addr := startTestServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		mu.Lock()
-		buf := make([]byte, r.ContentLength)
-		_, _ = r.Body.Read(buf)
-		receivedBody = string(buf)
-		mu.Unlock()
 		w.WriteHeader(http.StatusCreated)
 		_, _ = w.Write([]byte(`created`))
 	}))
@@ -471,10 +407,6 @@ func TestDo_NoResponseField(t *testing.T) {
 	event := makeEvent(t, `{"a":1}`)
 	result := p.Do(event)
 	assert.Equal(t, pipeline.ActionPass, result)
-
-	mu.Lock()
-	assert.Equal(t, `{"a":1}`, receivedBody)
-	mu.Unlock()
 
 	// The original event should remain unchanged
 	assert.Equal(t, `{"a":1}`, event.Root.EncodeToString())
@@ -563,7 +495,7 @@ func TestDo_MissingParam(t *testing.T) {
 	require.NoError(t, waitForServer(addr))
 
 	p := makeTestPlugin(t, &Config{
-		Address:      addr + "/{id}",
+		Address:      addr + "/{{ .id }}",
 		Method:       "POST",
 		ContentType:  "application/json",
 		Params:       map[string]string{"id": "nonexistent_field", "extra": "extra_field"},

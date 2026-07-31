@@ -4,24 +4,25 @@ Sends HTTP requests with event data as body. Writes response body to the configu
 ## Example
 ```yaml
 pipelines:
-  - actions:
-       	...
-       - type: http_request
-        address: "http://example.com/api/{{ .id | default "unknown" }}"
-        method: GET
-        content_type: "application/json"
-        params:
-          id: "field.id"
-          user_id: "user"
-        response_field: "http_response"
-        retry: 3
-        retention: 100ms
-        timeout: 5s
-    ...
+  - example:
+      actions:
+        ...
+        - type: http_request
+          address: "http://example.com/api/{{ .id | default 'unknown' }}"
+          method: GET
+          content_type: "application/json"
+          params:
+            id: "field.id"
+            user_id: "user"
+          response_field: "http_response"
+          retry: 3
+          retention: 100ms
+          timeout: 5s
+```
 ```
 
-# example of request to server:
-# GET http://example.com/api/id_value?user_id=user
+### example of request to server:
+```GET http://example.com/api/id_value?user_id=user```
 
 
 ## Config params
@@ -40,7 +41,7 @@ HTTP method to use.
 **`address`** *`string`* *`required`* 
 
 URL address to send requests to.
-Example: `http://localhost:8080/api`.com/v1/events`
+Example: `http://localhost:8080/api/v1/events`
 
 <br>
 
