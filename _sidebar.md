@@ -50,6 +50,7 @@
     - [set_time](plugin/action/set_time/README.md)
     - [split](plugin/action/split/README.md)
     - [throttle](plugin/action/throttle/README.md)
+    - [transform](plugin/action/transform/README.md)
 
   - [Output](/plugin/output/README.md)
     - [clickhouse](plugin/output/clickhouse/README.md)

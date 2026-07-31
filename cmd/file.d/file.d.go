@@ -44,6 +44,7 @@ import (
 	_ "github.com/ozontech/file.d/plugin/action/set_time"
 	_ "github.com/ozontech/file.d/plugin/action/split"
 	_ "github.com/ozontech/file.d/plugin/action/throttle"
+	_ "github.com/ozontech/file.d/plugin/action/transform"
 	_ "github.com/ozontech/file.d/plugin/input/dmesg"
 	_ "github.com/ozontech/file.d/plugin/input/fake"
 	_ "github.com/ozontech/file.d/plugin/input/file"
