@@ -137,9 +137,18 @@ vault:
   auth_mount_path: some/path # used when formatting the authorization uri: 'auth/%s/login'
 ```
 
+### TLS support
+```yaml
+vault:
+  tls:
+    ca_cert: path_or_content_of_ca_cert_file
+    client_cert: path_or_content_of_client_cert_file
+    client_key: path_or_content_of_client_key_file
+    insecure: true
+```
+
 ## Env support
 Consider this config:
-
 ```yaml
 pipelines:
   example:

@@ -64,6 +64,13 @@ type PipelineConfig struct {
 	Raw *simplejson.Json
 }
 
+type VaultTLSConfig struct {
+	CACert     string
+	ClientCert string
+	ClientKey  string
+	Insecure   bool
+}
+
 type VaultConfig struct {
 	Address string
 
@@ -72,6 +79,8 @@ type VaultConfig struct {
 	AuthMountPath string
 	RoleID        string
 	SecretID      string
+
+	TLS *VaultTLSConfig
 }
 
 func NewConfig() *Config {
@@ -203,9 +212,26 @@ func parseVaultConfig(vault *simplejson.Json) (*VaultConfig, error) {
 		SecretID:      vault.Get("secret_id").MustString(),
 	}
 
-	if vc.Address == "" {
-		return nil, errors.New("vault address must be non-empty string")
+	tls := vault.Get("tls")
+	if tls.Interface() != nil {
+		vc.TLS = &VaultTLSConfig{
+			CACert:     tls.Get("ca_cert").MustString(),
+			ClientCert: tls.Get("client_cert").MustString(),
+			ClientKey:  tls.Get("client_key").MustString(),
+			Insecure:   tls.Get("insecure").MustBool(),
+		}
 	}
+
+	if vc.Address == "" {
+		return nil, errors.New("vault address must be provided")
+	}
+	if vc.TLS != nil {
+		if vc.TLS.ClientCert != "" && vc.TLS.ClientKey == "" ||
+			vc.TLS.ClientCert == "" && vc.TLS.ClientKey != "" {
+			return nil, errors.New("both client cert and client key must be provided")
+		}
+	}
+
 	if vc.Token != "" {
 		return vc, nil
 	}
