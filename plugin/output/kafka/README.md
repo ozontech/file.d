@@ -72,6 +72,31 @@ Should be set equal to or smaller than the broker's `message.max.bytes`.
 
 <br>
 
+**`encoding`** *`encoder.EncodingConfig`* 
+
+Configure event serialization before sending.
+Includes:
+1) `type` - codec to use for serializing events (`json` by default):
+* `json` - serializes the full event as a JSON object.
+* `raw`  - extracts a single field and sends its value as-is (unquoted
+  for string fields, encoded JSON otherwise). If the field is missing an
+  empty value is sent and a warning is logged.
+2) `params` - encoder parameters, keyed by encoder type:
+* `json` - none.
+* `raw`:
+  * `field` - event field to extract (default `message`); supports
+    nested paths such as `log.message`.
+
+Example sending only the `message` field as a raw value:
+```yaml
+encoding:
+  type: raw
+  params:
+    field: message
+```
+
+<br>
+
 **`compression`** *`string`* *`default=none`* *`options=none|gzip|snappy|lz4|zstd`* 
 
 Compression codec

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/ozontech/file.d/cfg"
+	"github.com/ozontech/file.d/encoder"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
@@ -32,7 +33,7 @@ type Plugin struct {
 	config *Config
 
 	client  *xhttp.Client
-	encoder Encoder
+	encoder encoder.Encoder
 
 	logger     *zap.Logger
 	controller pipeline.OutputPluginController
@@ -67,12 +68,25 @@ type Config struct {
 	// >
 	// > Configure event serialization before sending.
 	// > Includes:
-	// > 1) Type - codec to use for serializing events:
-	// > * `json` - serializes the full event as a JSON object (default).
-	// > * `raw`  - extracts a single field and sends its value as-is.
-	//  > By default `json` is used.
-	// > 2) Params - Encoder parameters.
-	Encoding EncodingConfig `json:"encoding" child:"true"` // *
+	// > 1) `type` - codec to use for serializing events (`json` by default):
+	// > * `json` - serializes the full event as a JSON object.
+	// > * `raw`  - extracts a single field and sends its value as-is (unquoted
+	// >   for string fields, encoded JSON otherwise). If the field is missing an
+	// >   empty value is sent and a warning is logged.
+	// > 2) `params` - encoder parameters, keyed by encoder type:
+	// > * `json` - none.
+	// > * `raw`:
+	// >   * `field` - event field to extract (default `message`); supports
+	// >     nested paths such as `log.message`.
+	// >
+	// > Example sending only the `message` field as a raw value:
+	// > ```yaml
+	// > encoding:
+	// >   type: raw
+	// >   params:
+	// >     field: message
+	// > ```
+	Encoding encoder.EncodingConfig `json:"encoding" child:"true"` // *
 
 	// > @3@4@5@6
 	// >
@@ -234,7 +248,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	}
 
 	var err error
-	p.encoder, err = NewEncoder(p.config.Encoding)
+	p.encoder, err = encoder.NewEncoder(p.config.Encoding)
 	if err != nil {
 		p.logger.Fatal("can't create encoder", zap.Error(err))
 	}
@@ -374,7 +388,11 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 	batch.ForEach(func(event *pipeline.Event) {
 		eventsCount++
 		data.begin = append(data.begin, len(data.outBuf))
-		data.outBuf = p.encoder.Encode(event, data.outBuf)
+		var err error
+		data.outBuf, err = p.encoder.Encode(event, data.outBuf)
+		if err != nil {
+			p.logger.Warn("can't encode event, sending empty value", zap.Error(err))
+		}
 		data.outBuf = append(data.outBuf, '\n')
 	})
 	data.begin = append(data.begin, len(data.outBuf))

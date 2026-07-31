@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/ozontech/file.d/encoder"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/test"
 	insaneJSON "github.com/ozontech/insane-json"
@@ -26,18 +27,20 @@ func TestEncoding(t *testing.T) {
 	data := data{}
 	event := &pipeline.Event{Root: root}
 
-	encoder := newJSONEncoder(&JSONEncoderParams{})
-	data.outBuf = encoder.Encode(event, data.outBuf)
+	jsonEncoder, _ := encoder.NewEncoder(encoder.EncodingConfig{
+		Type: encoder.EncoderTypeJSON,
+	})
+	data.outBuf, _ = jsonEncoder.Encode(event, data.outBuf)
 	data.outBuf = append(data.outBuf, '\n')
 
 	expected := fmt.Sprintf("%s\n", `{"message":"[INFO] some event","field_a":"AAAA","field_b":"BBBB"}`)
 	assert.Equal(t, expected, string(data.outBuf), "wrong request content")
 
-	var params RawEncoderParams
-	rawEncoder := newRawEncoder(&params)
-
+	rawEncoder, _ := encoder.NewEncoder(encoder.EncodingConfig{
+		Type: encoder.EncoderTypeRaw,
+	})
 	data.outBuf = data.outBuf[:0]
-	data.outBuf = rawEncoder.Encode(event, data.outBuf)
+	data.outBuf, _ = rawEncoder.Encode(event, data.outBuf)
 	data.outBuf = append(data.outBuf, '\n')
 
 	expected = fmt.Sprintf("%s\n", `[INFO] some event`)
@@ -48,7 +51,7 @@ func TestEncoding(t *testing.T) {
 	event.Root = root2
 
 	data.outBuf = data.outBuf[:0]
-	data.outBuf = rawEncoder.Encode(event, data.outBuf)
+	data.outBuf, _ = rawEncoder.Encode(event, data.outBuf)
 	data.outBuf = append(data.outBuf, '\n')
 
 	expected = fmt.Sprintf("%s\n", `{"log":"[INFO] some event"}`)

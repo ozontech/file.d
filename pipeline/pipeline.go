@@ -498,7 +498,11 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offsets Offsets, byt
 		decoder.SYSLOG_RFC3164, decoder.SYSLOG_RFC5424, decoder.CSV:
 		err = p.decoder.DecodeToJson(event.Root, bytes)
 	case decoder.RAW:
-		event.Root.AddFieldNoAlloc(event.Root, "message").MutateToBytesCopy(event.Root, bytes[:len(bytes)-1])
+		if bytes[len(bytes)-1] == '\n' {
+			event.Root.AddFieldNoAlloc(event.Root, "message").MutateToBytesCopy(event.Root, bytes[:len(bytes)-1])
+		} else {
+			event.Root.AddFieldNoAlloc(event.Root, "message").MutateToBytesCopy(event.Root, bytes)
+		}
 	case decoder.CRI:
 		event.Root.AddFieldNoAlloc(event.Root, "log").MutateToBytesCopy(event.Root, row.Log)
 		event.Root.AddFieldNoAlloc(event.Root, "time").MutateToBytesCopy(event.Root, row.Time)
