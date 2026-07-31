@@ -60,7 +60,7 @@ The event `{"log":"INFO 2025-05-25 11:11:11,222 [shard 1] compaction - done"}` b
 }
 ```
 
-The program is compiled once at pipeline start; a bad program fails fast at startup.
+The program is compiled once at pipeline start; an invalid program fails fast at startup.
 A runtime error (e.g. a type error on a particular event) stops the program for that
 event only: the error is logged and the event continues down the pipeline, keeping
 the fields that were set before the error.
