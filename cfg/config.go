@@ -64,11 +64,24 @@ type PipelineConfig struct {
 	Raw *simplejson.Json
 }
 
-type VaultTLSConfig struct {
-	CACert     string
-	ClientCert string
-	ClientKey  string
-	Insecure   bool
+type TLSConfig struct {
+	CACert     string `json:"ca_cert"`
+	ClientCert string `json:"client_cert"`
+	ClientKey  string `json:"client_key"`
+	Insecure   bool   `json:"insecure"`
+}
+
+func parseTLSConfig(tls *simplejson.Json) *TLSConfig {
+	if tls.Interface() == nil {
+		return nil
+	}
+
+	return &TLSConfig{
+		CACert:     tls.Get("ca_cert").MustString(),
+		ClientCert: tls.Get("client_cert").MustString(),
+		ClientKey:  tls.Get("client_key").MustString(),
+		Insecure:   tls.Get("insecure").MustBool(),
+	}
 }
 
 type VaultConfig struct {
@@ -80,7 +93,7 @@ type VaultConfig struct {
 	RoleID        string
 	SecretID      string
 
-	TLS *VaultTLSConfig
+	TLS *TLSConfig
 }
 
 func NewConfig() *Config {
@@ -210,16 +223,8 @@ func parseVaultConfig(vault *simplejson.Json) (*VaultConfig, error) {
 		AuthMountPath: vault.Get("auth_mount_path").MustString(),
 		RoleID:        vault.Get("role_id").MustString(),
 		SecretID:      vault.Get("secret_id").MustString(),
-	}
 
-	tls := vault.Get("tls")
-	if tls.Interface() != nil {
-		vc.TLS = &VaultTLSConfig{
-			CACert:     tls.Get("ca_cert").MustString(),
-			ClientCert: tls.Get("client_cert").MustString(),
-			ClientKey:  tls.Get("client_key").MustString(),
-			Insecure:   tls.Get("insecure").MustBool(),
-		}
+		TLS: parseTLSConfig(vault.Get("tls")),
 	}
 
 	if vc.Address == "" {

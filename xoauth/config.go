@@ -1,6 +1,8 @@
 package xoauth
 
-import "fmt"
+import (
+	"errors"
+)
 
 type AuthStyle int
 
@@ -10,23 +12,38 @@ const (
 	AuthStyleInHeader
 )
 
+type TLSConfig struct {
+	CACert     string
+	ClientCert string
+	ClientKey  string
+	Insecure   bool
+}
+
 type Config struct {
 	ClientID     string
 	ClientSecret string
 	TokenURL     string
 	Scopes       []string
 	AuthStyle    AuthStyle
+
+	TLS *TLSConfig
 }
 
 func (c *Config) validate() error {
 	if c.ClientID == "" {
-		return fmt.Errorf("client id must be non-empty")
+		return errors.New("client id must be non-empty")
 	}
 	if c.TokenURL == "" {
-		return fmt.Errorf("token url must be non-empty")
+		return errors.New("token url must be non-empty")
 	}
 	if c.AuthStyle == AuthStyleUnknown {
-		return fmt.Errorf("auth style must be specified")
+		return errors.New("auth style must be specified")
+	}
+	if tls := c.TLS; tls != nil {
+		if tls.ClientCert != "" && tls.ClientKey == "" ||
+			tls.ClientCert == "" && tls.ClientKey != "" {
+			return errors.New("both client cert and client key must be provided")
+		}
 	}
 	return nil
 }

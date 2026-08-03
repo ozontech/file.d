@@ -171,12 +171,20 @@ SASL OAUTHBEARER config. It works only if `sasl_mechanism:"OAUTHBEARER"`.
 
 `OAuthConfig` params:
 * **`token`** *`string`* - static token
----
+
 * **`client_id`** *`string`* - client ID
 * **`client_secret`** *`string`* - client secret
 * **`token_url`** *`string`* - resource server's token endpoint URL
 * **`scopes`** *`[]string`* - optional requested permissions
 * **`auth_style`** *`string`* *`default=params`* *`options=params|header`* - specifies how the endpoint wants the client ID & client secret sent
+
+* **`tls`** *`TLSConfig`* - tls config
+
+`TLSConfig` params:
+* **`ca_cert`** *`string`* - path or content of a PEM-encoded CA file
+* **`client_cert`** *`string`* - path or content of a PEM-encoded client certificate file
+* **`client_key`** *`string`* - path or content of a PEM-encoded client key file
+* **`insecure`** *`bool`* - if set, the token issuer will skip SSL/TLS verification
 
 <br>
 
