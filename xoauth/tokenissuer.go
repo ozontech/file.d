@@ -5,12 +5,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
 
 	"github.com/ozontech/file.d/xtime"
+	"github.com/ozontech/file.d/xtls"
 	"golang.org/x/oauth2"
 )
 
@@ -25,13 +27,35 @@ type httpTokenIssuer struct {
 	cfg    *Config
 }
 
-func newHTTPTokenIssuer(cfg *Config) *httpTokenIssuer {
-	return &httpTokenIssuer{
+func newHTTPTokenIssuer(cfg *Config) (*httpTokenIssuer, error) {
+	ti := &httpTokenIssuer{
 		client: &http.Client{
-			Timeout: defaultHttpTimeout,
+			Timeout:   defaultHttpTimeout,
+			Transport: defaultHTTPTransport(),
 		},
 		cfg: cfg,
 	}
+	if cfg.TLS == nil {
+		return ti, nil
+	}
+
+	b := xtls.NewConfigBuilder()
+	if cfg.TLS.CACert != "" {
+		if err := b.AppendCARoot(cfg.TLS.CACert); err != nil {
+			return nil, fmt.Errorf("can't append CA root: %w", err)
+		}
+	}
+	if cfg.TLS.ClientCert != "" && cfg.TLS.ClientKey != "" {
+		if err := b.AppendX509KeyPair(cfg.TLS.ClientCert, cfg.TLS.ClientKey); err != nil {
+			return nil, fmt.Errorf("can't append X509 key pair: %w", err)
+		}
+	}
+	b.SetSkipVerify(cfg.TLS.Insecure)
+
+	transport, _ := ti.client.Transport.(*http.Transport)
+	transport.TLSClientConfig = b.Build()
+
+	return ti, nil
 }
 
 type tokenJSON struct {
@@ -110,4 +134,19 @@ func newTokenRequest(ctx context.Context, cfg *Config) (*http.Request, error) {
 	}
 
 	return req, nil
+}
+
+func defaultHTTPTransport() *http.Transport {
+	return &http.Transport{
+		Proxy: http.ProxyFromEnvironment,
+		DialContext: (&net.Dialer{
+			Timeout:   30 * time.Second,
+			KeepAlive: 30 * time.Second,
+		}).DialContext,
+		ForceAttemptHTTP2:     true,
+		MaxIdleConns:          100,
+		IdleConnTimeout:       90 * time.Second,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
+	}
 }
