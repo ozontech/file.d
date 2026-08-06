@@ -543,7 +543,7 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offsets Offsets, byt
 
 			// Can't process event, return to pool.
 			p.eventPool.back(event)
-			return EventSeqIDError
+			continue
 		}
 
 		if len(meta) > 0 {
