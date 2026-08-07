@@ -1064,8 +1064,7 @@ func (p *Pipeline) serveActionSample(actionIndex int) func(http.ResponseWriter, 
 }
 
 func extractJSONArrElements(data []byte, fieldPath []string) ([][]byte, bool) {
-	d := &jx.Decoder{}
-	d.ResetBytes(data)
+	d := jx.DecodeBytes(data)
 
 	for _, key := range fieldPath {
 		if d.Next() != jx.Object {
