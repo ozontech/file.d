@@ -149,9 +149,7 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 		}
 
 		splitJSONArray = settings.Get("split_json_array").MustBool()
-		if arr := settings.Get("split_json_array_field").MustStringArray(); len(arr) > 0 {
-			splitJSONArrayField = arr
-		} else if str := settings.Get("split_json_array_field").MustString(); str != "" {
+		if str := settings.Get("split_json_array_field").MustString(); str != "" {
 			splitJSONArrayField = cfg.ParseFieldSelector(str)
 		}
 
