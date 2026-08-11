@@ -226,6 +226,23 @@ are required; named arguments are optional and fall back to their defaults:
   ```
   .shard = between(.log, "[", "]")
   ```
+
++ `lookup(value, table, default: <unchanged>)` — translates a value through a
+  table of replacements. It turns enumeration codes into readable names without
+  a chain of `if`s:
+  ```
+  api_key = {"0": "produce", "1": "fetch", "2": "offsets"}
+  .kafka_request_api_key = lookup(.kafka_request_api_key, api_key)
+  ```
+  Keys are matched by their string form, so the number `0` and the string `"0"`
+  are the same key — JSON writes codes both ways. A value that is not in the
+  table is returned unchanged; pass `default:` to replace it instead:
+  ```
+  .severity = lookup(.status, {"500": "crit", "400": "warn"}, default: "ok")
+  ```
+  A table written as a literal is built once at startup, not per event, so a
+  large table costs no more than a small one. Keep it in a variable when the
+  same table is used more than once.
 }*/
 
 type Plugin struct {

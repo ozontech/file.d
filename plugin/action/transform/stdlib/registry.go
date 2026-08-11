@@ -21,6 +21,7 @@ func init() {
 	registry.mustRegister(after{})
 	registry.mustRegister(before{})
 	registry.mustRegister(between{})
+	registry.mustRegister(lookup{})
 }
 
 func GetRegistry() *Registry {

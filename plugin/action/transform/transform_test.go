@@ -433,6 +433,77 @@ func TestLanguage(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "equality_against_event_fields",
+			source: `
+			.obj_eq = .obj == {a: 1}
+			.arr_eq = .arr == [1, 2]
+			.num_eq = .num == 1
+			.flt_eq = .num == 1.0
+			.mixed  = .num == "1"
+			.nodes  = .num == .num2
+			.differ = .obj == {a: 2}
+		`,
+			events: []eventCase{
+				{
+					in: `{"obj":{"a":1},"arr":[1,2],"num":1,"num2":1}`,
+					fields: map[string]string{
+						// Composite literals used to never match a field, because
+						// the two sides were compared as text in different formats.
+						"obj_eq": "true",
+						"arr_eq": "true",
+						"num_eq": "true",
+						"flt_eq": "true",
+						// Equality is type-aware.
+						"mixed":  "false",
+						"nodes":  "true",
+						"differ": "false",
+					},
+				},
+			},
+		},
+		{
+			name: "func_lookup",
+			source: `
+			api_key = {"0": "produce", "1": "fetch", "2": "offsets"}
+			.kafka_request_api_key = lookup(.kafka_request_api_key, api_key)
+			.severity = lookup(.status, {"500": "crit", "400": "warn"}, default: "ok")
+		`,
+			events: []eventCase{
+				{
+					// A numeric code matches the string key of the table.
+					in: `{"kafka_request_api_key":1,"status":500}`,
+					fields: map[string]string{
+						"kafka_request_api_key": "fetch",
+						"severity":              "crit",
+					},
+				},
+				{
+					// Same table, a second event: the folded table survives reuse.
+					in: `{"kafka_request_api_key":"0","status":200}`,
+					fields: map[string]string{
+						"kafka_request_api_key": "produce",
+						"severity":              "ok",
+					},
+				},
+				{
+					// An unmapped code passes through unchanged.
+					in: `{"kafka_request_api_key":77,"status":400}`,
+					fields: map[string]string{
+						"kafka_request_api_key": "77",
+						"severity":              "warn",
+					},
+				},
+				{
+					// A missing field stays missing rather than becoming a default.
+					in: `{"status":400}`,
+					fields: map[string]string{
+						"kafka_request_api_key": "null",
+						"severity":              "warn",
+					},
+				},
+			},
+		},
 	}
 
 	for _, tc := range tests {
