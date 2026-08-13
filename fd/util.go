@@ -266,6 +266,8 @@ func extractBannedSourcesSample(settings *simplejson.Json) (*antispam.BannedSour
 			interval = pipeline.DefaultBannedSourcesSampleInterval
 		}
 		options.Interval = interval
+	} else {
+		options.Interval = pipeline.DefaultBannedSourcesSampleInterval
 	}
 
 	first := sampleJSON.Get("first").MustInt()
