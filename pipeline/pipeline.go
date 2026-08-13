@@ -24,24 +24,28 @@ import (
 )
 
 const (
-	DefaultAntispamThreshold         = -1
-	DefaultSourceNameMetaField       = ""
-	DefaultDecoder                   = "auto"
-	DefaultIsStrict                  = false
-	DefaultStreamField               = "stream"
-	DefaultCapacity                  = 1024
-	DefaultAvgInputEventSize         = 4 * 1024
-	DefaultMaxInputEventSize         = 0
-	DefaultCutOffEventByLimit        = false
-	DefaultCutOffEventByLimitField   = ""
-	DefaultJSONNodePoolSize          = 16
-	DefaultMaintenanceInterval       = time.Second * 5
-	DefaultEventTimeout              = time.Second * 30
-	DefaultFieldValue                = "not_set"
-	DefaultStreamName                = StreamName("not_set")
-	DefaultMetricHoldDuration        = time.Minute * 30
-	DefaultMetaCacheSize             = 1024
-	DefaultMetricMaxLabelValueLength = 0
+	DefaultAntispamThreshold             = -1
+	DefaultSourceNameMetaField           = ""
+	DefaultDecoder                       = "auto"
+	DefaultIsStrict                      = false
+	DefaultStreamField                   = "stream"
+	DefaultCapacity                      = 1024
+	DefaultAvgInputEventSize             = 4 * 1024
+	DefaultMaxInputEventSize             = 0
+	DefaultCutOffEventByLimit            = false
+	DefaultCutOffEventByLimitField       = ""
+	DefaultJSONNodePoolSize              = 16
+	DefaultMaintenanceInterval           = time.Second * 5
+	DefaultEventTimeout                  = time.Second * 30
+	DefaultFieldValue                    = "not_set"
+	DefaultStreamName                    = StreamName("not_set")
+	DefaultMetricHoldDuration            = time.Minute * 30
+	DefaultMetaCacheSize                 = 1024
+	DefaultMetricMaxLabelValueLength     = 0
+	DefaultBannedSourcesSampleInterval   = time.Second * 3     // idk
+	DefaultBannedSourcesSampleFirst      = 3                   // too
+	DefaultBannedSourcesSampleThereafter = 0                   // and too
+	DefaultBannedSourcesSampleField      = "_antispam_sampled" // may be just _sampled ?
 
 	EventSeqIDError = uint64(0)
 
@@ -172,6 +176,7 @@ type AntispamSettings struct {
 	Rules               antispam.Rules
 	Exceptions          antispam.Exceptions
 	MaintenanceInterval time.Duration
+	BannedSourcesSample *antispam.BannedSourcesSampleOptions
 }
 
 type PoolType string
@@ -221,6 +226,7 @@ func New(name string, settings *Settings, registry *prometheus.Registry, lg *zap
 			MetricsController:   metricCtl,
 			Rules:               settings.Antispam.Rules,
 			Exceptions:          settings.Antispam.Exceptions,
+			BannedSourcesSample: settings.Antispam.BannedSourcesSample,
 		}),
 		metricCtl: metricCtl,
 
@@ -400,8 +406,9 @@ func (p *Pipeline) GetOutput() OutputPlugin {
 // In decodes message and passes it to event stream.
 func (p *Pipeline) In(sourceID SourceID, sourceName string, offsets Offsets, bytes []byte, isNewSource bool, meta metadata.MetaData) (seqID uint64) {
 	var (
-		ok     bool
-		cutoff bool
+		ok              bool
+		cutoff          bool
+		antispamSampled bool
 	)
 	// don't process mud.
 	bytes, cutoff, ok = p.checkInputBytes(bytes, sourceName, meta)
@@ -476,10 +483,11 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offsets Offsets, byt
 				p.Error(fmt.Sprintf("cannot parse raw time %s: %v", row.Time, err))
 			}
 		}
-		isSpam := p.antispamer.IsSpam(checkSourceID, checkSourceName, isNewSource, bytes, eventTime, meta)
-		if isSpam {
+		isSpam, sampled := p.antispamer.IsSpam(checkSourceID, checkSourceName, isNewSource, bytes, eventTime, meta)
+		if isSpam && !sampled {
 			return EventSeqIDError
 		}
+		antispamSampled = sampled
 	}
 
 	p.inputEvents.Inc()
@@ -549,6 +557,22 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offsets Offsets, byt
 	}
 	if cutoff && p.settings.CutOffEventByLimitField != "" {
 		event.Root.AddFieldNoAlloc(event.Root, p.settings.CutOffEventByLimitField).MutateToBool(true)
+	}
+	if antispamSampled {
+		cfg := p.settings.Antispam.BannedSourcesSample
+		event.Root.AddFieldNoAlloc(event.Root, cfg.SampledField).MutateToBool(true)
+
+		if sm := p.antispamer.SampledMetric(); sm != nil {
+			values := make([]string, 0, len(cfg.SampledMetricLabels))
+			for _, path := range cfg.SampledMetricLabels {
+				v := "not_set"
+				if node := event.Root.Dig(path); node != nil {
+					v = node.AsString()
+				}
+				values = append(values, v)
+			}
+			sm.WithLabelValues(values...).Inc()
+		}
 	}
 
 	event.Offset = offsets.current

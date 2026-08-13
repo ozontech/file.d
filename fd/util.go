@@ -34,6 +34,7 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 	antispamMaintenanceInterval := pipeline.DefaultMaintenanceInterval
 	var antispamExceptions antispam.Exceptions
 	var antispamRules antispam.Rules
+	var bannedSourcesSample *antispam.BannedSourcesSampleOptions
 
 	metricHoldDuration := pipeline.DefaultMetricHoldDuration
 	metricMaxLabelValueLength := pipeline.DefaultMetricMaxLabelValueLength
@@ -126,6 +127,11 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 			logger.Fatalf("extract antispam rules: %s", err)
 		}
 
+		bannedSourcesSample, err = extractBannedSourcesSample(antispamSettings)
+		if err != nil {
+			logger.Fatalf("extract antispam banned sources sample: %s", err)
+		}
+
 		sourceNameMetaField = settings.Get("source_name_meta_field").MustString()
 		isStrict = settings.Get("is_strict").MustBool()
 
@@ -167,6 +173,7 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 			Rules:               antispamRules,
 			Exceptions:          antispamExceptions,
 			MaintenanceInterval: antispamMaintenanceInterval,
+			BannedSourcesSample: bannedSourcesSample,
 		},
 		SourceNameMetaField: sourceNameMetaField,
 		MaintenanceInterval: maintenanceInterval,
@@ -240,6 +247,51 @@ func extractAntispamRules(settings *simplejson.Json, antispamMaintenanceInterval
 	}
 
 	return rules, nil
+}
+
+func extractBannedSourcesSample(settings *simplejson.Json) (*antispam.BannedSourcesSampleOptions, error) {
+	sampleJSON, ok := settings.CheckGet("banned_sources_sample")
+	if !ok {
+		return nil, nil
+	}
+
+	options := &antispam.BannedSourcesSampleOptions{}
+	if str := sampleJSON.Get("interval").MustString(); str != "" {
+		interval, err := time.ParseDuration(str)
+		if err != nil {
+			return nil, fmt.Errorf("parse interval: %w", err)
+		}
+		if interval < pipeline.DefaultBannedSourcesSampleInterval {
+			logger.Warnf("interval must be >= default value, using default %s", pipeline.DefaultBannedSourcesSampleInterval)
+			interval = pipeline.DefaultBannedSourcesSampleInterval
+		}
+		options.Interval = interval
+	}
+
+	first := sampleJSON.Get("first").MustInt()
+	if first < pipeline.DefaultBannedSourcesSampleFirst {
+		logger.Warnf("first must be >= default value, using default %d", pipeline.DefaultBannedSourcesSampleFirst)
+		first = pipeline.DefaultBannedSourcesSampleFirst
+	}
+	options.First = first
+
+	thereafter := sampleJSON.Get("thereafter").MustInt()
+	if thereafter < pipeline.DefaultBannedSourcesSampleThereafter {
+		logger.Warnf("thereafter must be >= default value, using default %d", pipeline.DefaultBannedSourcesSampleThereafter)
+		thereafter = pipeline.DefaultBannedSourcesSampleThereafter
+	}
+	options.Thereafter = thereafter
+
+	if str := sampleJSON.Get("sampled_field").MustString(); str == "" {
+		options.SampledField = pipeline.DefaultBannedSourcesSampleField
+	} else {
+		options.SampledField = str
+	}
+
+	options.SampledMetricName = sampleJSON.Get("sampled_metric_name").MustString()
+	options.SampledMetricLabels = sampleJSON.Get("sampled_metric_labels").MustStringArray()
+
+	return options, nil
 }
 
 func extractMatchMode(actionJSON *simplejson.Json) pipeline.MatchMode {
