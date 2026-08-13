@@ -251,6 +251,10 @@ func (a *Antispammer) Maintenance() {
 		if isMore && x < threshold {
 			a.banMetric.WithLabelValues(source.name).Dec()
 			a.logger.Info("source has been unbanned", zap.Any("id", sourceID))
+			source.sampleMu.Lock()
+			source.sampleUntil = time.Time{}
+			source.sampleCounter = 0
+			source.sampleMu.Unlock()
 		}
 
 		if x >= threshold {
