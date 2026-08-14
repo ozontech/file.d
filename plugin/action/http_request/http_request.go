@@ -132,8 +132,14 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
-	// > Path or content of a PEM-encoded CA file.
-	CACert string `json:"ca_cert"` // *
+	// > TLS configuration for the HTTP client.
+	// >
+	// > `TLSConfig` params:
+	// > * **`ca_cert`** *`string`* - path or content of a PEM-encoded CA file
+	// > * **`client_cert`** *`string`* - path or content of a PEM-encoded client certificate file
+	// > * **`client_key`** *`string`* - path or content of a PEM-encoded client key file
+	// > * **`insecure`** *`bool`* - if set, the client will skip SSL/TLS verification
+	TLS *cfg.TLSConfig `json:"tls"` // *
 
 	// > @3@4@5@6
 	// >
@@ -141,6 +147,12 @@ type Config struct {
 	// > Useful when running multiple instances to avoid metric name collisions.
 	// > Leave empty for default metric naming.
 	MetricPrefix string `json:"metric_prefix" default:""` // *
+
+	// > @3@4@5@6
+	// >
+	// > If set to false, errors will be logged instead of causing a fatal failure.
+	// > Useful for non-critical pipelines where you want to avoid stopping the entire pipeline on template errors.
+	FailOnError bool `json:"fail_on_error" default:"false"` // *
 }
 
 func init() {
@@ -175,10 +187,25 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 		}
 	}
 
-	if p.config.CACert != "" {
+	var tlsConfig *cfg.TLSConfig
+	if t := p.config.TLS; t != nil {
+		tlsConfig = t
+	}
+
+	if tlsConfig != nil && (tlsConfig.CACert != "" || tlsConfig.ClientCert != "" || tlsConfig.ClientKey != "" || tlsConfig.Insecure) {
 		tlsBuilder := xtls.NewConfigBuilder()
-		if err := tlsBuilder.AppendCARoot(p.config.CACert); err != nil {
-			p.logger.Fatal("can't append CA root", zap.Error(err))
+		if tlsConfig.CACert != "" {
+			if err := tlsBuilder.AppendCARoot(tlsConfig.CACert); err != nil {
+				p.logger.Fatal("can't append CA root", zap.Error(err))
+			}
+		}
+		if tlsConfig.ClientCert != "" || tlsConfig.ClientKey != "" {
+			if err := tlsBuilder.AppendX509KeyPair(tlsConfig.ClientCert, tlsConfig.ClientKey); err != nil {
+				p.logger.Fatal("can't append X509 key pair", zap.Error(err))
+			}
+		}
+		if tlsConfig.Insecure {
+			tlsBuilder.SetSkipVerify(true)
 		}
 		p.client.TLSConfig = tlsBuilder.Build()
 	}
@@ -266,10 +293,18 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	// Build the address using template execution
 	p.buf.Reset()
 	if err := p.addressTmpl.Execute(&p.buf, params); err != nil {
-		p.logger.Fatal("failed to execute URL template",
-			zap.String("address", p.config.Address),
-			zap.Error(err),
-		)
+		if p.config.FailOnError {
+			p.logger.Fatal("failed to execute URL template",
+				zap.String("address", p.config.Address),
+				zap.Error(err),
+			)
+		} else {
+			p.logger.Error("failed to execute URL template",
+				zap.String("address", p.config.Address),
+				zap.Error(err),
+			)
+			return pipeline.ActionDiscard
+		}
 	}
 	address := p.buf.String()
 

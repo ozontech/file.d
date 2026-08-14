@@ -96,9 +96,15 @@ List of HTTP status codes that are considered successful.
 
 <br>
 
-**`ca_cert`** *`string`* 
+**`tls`** *`*cfg.TLSConfig`* 
 
-Path or content of a PEM-encoded CA file.
+TLS configuration for the HTTP client.
+
+`TLSConfig` params:
+* **`ca_cert`** *`string`* - path or content of a PEM-encoded CA file
+* **`client_cert`** *`string`* - path or content of a PEM-encoded client certificate file
+* **`client_key`** *`string`* - path or content of a PEM-encoded client key file
+* **`insecure`** *`bool`* - if set, the client will skip SSL/TLS verification
 
 <br>
 
