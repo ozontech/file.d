@@ -2,6 +2,7 @@ package prometheus
 
 import (
 	"context"
+	"crypto/tls"
 	"net"
 	"net/http"
 	"time"
@@ -12,6 +13,7 @@ import (
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/xtls"
 	insaneJSON "github.com/ozontech/insane-json"
 
 	"go.uber.org/zap"
@@ -28,11 +30,6 @@ const (
 	metricTypeGauge   = "gauge"
 	metricTypeCounter = "counter"
 )
-
-type Label struct {
-	Label string `json:"label" required:"true"`
-	Value string `json:"value" required:"true"`
-}
 
 // ! config-params
 // ^ config-params
@@ -60,13 +57,14 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
-	// > If set true, the plugin will use SSL/TLS connections method.
-	TLSEnabled bool `json:"tls_enabled" default:"false"` // *
-
-	// > @3@4@5@6
+	// > TLS config.
 	// >
-	// > If set, the plugin will skip SSL/TLS verification.
-	TLSSkipVerify bool `json:"tls_skip_verify" default:"false"` // *
+	// > `TLSConfig` params:
+	// > * `ca_cert` - path or content of a PEM-encoded CA file
+	// > * `client_cert` - path or content of a PEM-encoded client certificate file
+	// > * `client_key` - path or content of a PEM-encoded client key file
+	// > * `insecure` - if set, the plugin will skip SSL/TLS verification
+	TLS *cfg.TLSConfig `json:"tls"` // *
 
 	// > @3@4@5@6
 	// >
@@ -163,8 +161,9 @@ type Plugin struct {
 	controller pipeline.OutputPluginController
 	logger     *zap.Logger
 
-	config *Config
-	client PrometheusClient
+	config    *Config
+	tlsConfig *tls.Config
+	client    PrometheusClient
 
 	// plugin metrics
 	sendErrorMetric *metric.Counter
@@ -200,6 +199,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.registerMetrics(params.MetricCtl)
 	p.collector = newCollector(p, 15*time.Second, p.logger)
 
+	p.buildTLSConfig()
 	p.prepareClient()
 	p.isAvailable = true
 	p.retryChan = make(chan struct{})
@@ -358,8 +358,32 @@ func (p *Plugin) prepareClient() {
 				KeepAlive: p.config.KeepAlive.MaxConnDuration_,
 			}).DialContext,
 			IdleConnTimeout: p.config.KeepAlive.MaxIdleConnDuration_,
+			TLSClientConfig: p.tlsConfig,
 		},
 	}
 
 	p.client = promwrite.NewClient(p.config.Endpoint, promwrite.HttpClient(customClient))
+}
+
+func (p *Plugin) buildTLSConfig() {
+	if p.config.TLS == nil {
+		return
+	}
+
+	b := xtls.NewConfigBuilder()
+	tlsCfg := p.config.TLS
+
+	if tlsCfg.CACert != "" {
+		if err := b.AppendCARoot(tlsCfg.CACert); err != nil {
+			p.logger.Fatal("can't append CA root", zap.Error(err))
+		}
+	}
+	if tlsCfg.ClientCert != "" && tlsCfg.ClientKey != "" {
+		if err := b.AppendX509KeyPair(tlsCfg.ClientCert, tlsCfg.ClientKey); err != nil {
+			p.logger.Fatal("can't append X509 key pair", zap.Error(err))
+		}
+	}
+	b.SetSkipVerify(tlsCfg.Insecure)
+
+	p.tlsConfig = b.Build()
 }

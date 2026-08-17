@@ -25,15 +25,15 @@ Token is used for HTTP Bearer Authentication.
 
 <br>
 
-**`tls_enabled`** *`bool`* *`default=false`* 
+**`tls`** *`*cfg.TLSConfig`* 
 
-If set true, the plugin will use SSL/TLS connections method.
+TLS config.
 
-<br>
-
-**`tls_skip_verify`** *`bool`* *`default=false`* 
-
-If set, the plugin will skip SSL/TLS verification.
+`TLSConfig` params:
+* `ca_cert` - path or content of a PEM-encoded CA file
+* `client_cert` - path or content of a PEM-encoded client certificate file
+* `client_key` - path or content of a PEM-encoded client key file
+* `insecure` - if set, the plugin will skip SSL/TLS verification
 
 <br>
 
