@@ -8,6 +8,7 @@ import (
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/pipeline/doif"
 	"github.com/ozontech/file.d/xtime"
+
 	"go.uber.org/zap"
 )
 
@@ -327,7 +328,7 @@ func prepareCheckersForMetrics(configMetrics []Metric, logger *zap.Logger) []Met
 			m.DoIfChecker, err = doif.NewFromMap(m.DoIfCheckerMap)
 			if err != nil {
 				logger.Fatal(
-					"can't init do_if for mask",
+					"can't init do_if for metric",
 					zap.Error(err),
 					zap.String("metric_name", m.Name),
 				)
@@ -363,8 +364,6 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	for i := range p.Metrics {
 		if p.Metrics[i].DoIfChecker == nil || p.Metrics[i].DoIfChecker.Check(doif.NewEventData(event.Root)) {
 			p.metricIndices = append(p.metricIndices, i)
-		} else {
-			p.metricIndices = append(p.metricIndices, -1)
 		}
 	}
 
@@ -394,12 +393,8 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 
 	var timestampMs int64 = timestamp.UnixMilli()
 
-	for i, metricIdx := range p.metricIndices {
-		if metricIdx == -1 {
-			// skip by do_if condition
-			continue
-		}
-		metric := &p.Metrics[i]
+	for _, metricIdx := range p.metricIndices {
+		metric := &p.Metrics[metricIdx]
 
 		var value float64 = 1
 		if len(metric.Value) > 0 {
@@ -410,10 +405,8 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 		}
 
 		labels := make(map[string]string)
-		if len(metric.labelFields) > 0 {
-			for labelName, fieldPath := range metric.labelFields {
-				labels[labelName] = event.Root.Dig(fieldPath...).AsString()
-			}
+		for labelName, fieldPath := range metric.labelFields {
+			labels[labelName] = event.Root.Dig(fieldPath...).AsString()
 		}
 		metricData := &p.metricDataList[metricIdx]
 		metricData.timestamp = timestampMs
@@ -422,15 +415,10 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	}
 
 	metricsArray := event.Root.MutateToArray()
-	for i, metricIdx := range p.metricIndices {
-		if metricIdx == -1 {
-			// skip by do_if condition
-			continue
-		}
-		metricData := p.metricDataList[i]
+	for _, metricIdx := range p.metricIndices {
+		metricData := p.metricDataList[metricIdx]
 
-		metricNode := metricsArray.AddElement()
-		object := metricNode.MutateToObject()
+		object := metricsArray.AddElement().MutateToObject()
 
 		object.AddField("name").MutateToBytes(metricData.name)
 		object.AddField("type").MutateToBytes(metricData.metricType)
@@ -441,7 +429,7 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 		if len(metricData.labels) > 0 {
 			labelsObject := object.AddField("labels").MutateToObject()
 			for labelName, value := range metricData.labels {
-				labelsObject.AddField(labelName).MutateToBytes(pipeline.StringToByteUnsafe(value))
+				labelsObject.AddField(labelName).MutateToBytesCopy(event.Root, []byte(value))
 			}
 		}
 	}

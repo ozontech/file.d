@@ -6,8 +6,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/castai/promwrite"
 	"github.com/ozontech/file.d/xtime"
+
+	"github.com/castai/promwrite"
 	"go.uber.org/zap"
 )
 
@@ -126,10 +127,8 @@ func (p *metricCollector) flushMetrics() {
 		}
 	}
 
-	if len(toDelete) > 0 {
-		for _, key := range toDelete {
-			delete(p.metrics, key)
-		}
+	for _, key := range toDelete {
+		delete(p.metrics, key)
 	}
 
 	if len(toSend) > 0 {
