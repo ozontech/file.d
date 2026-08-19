@@ -198,14 +198,23 @@ are required; named arguments are optional and fall back to their defaults:
   .msg = "code is " + string(.code)
   ```
 
-+ `capture(value, pattern)` — matches the string against a regular expression
-  and returns an object of its named groups `(?P<name>...)`, or `null` when the
-  value does not match (unnamed groups are ignored):
++ `capture(value, pattern, numeric_groups: false)` — matches the string against a
+  regular expression and returns an object of its named groups `(?P<name>...)`,
+  or `null` when the value does not match (unnamed groups are ignored):
   ```
   m = capture(.log, r'^(?P<level>\S+)\s+(?P<message>.+)$')
   if m != null {
     .level = m.level
     .message = m.message
+  }
+  ```
+  With `numeric_groups: true` every group is additionally keyed by its index as a
+  string — `"0"` is the whole match — which is how a pattern without named groups
+  is read:
+  ```
+  m = capture(.message, r'(\w+):.*', numeric_groups: true)
+  if m != null {
+    .level = m["1"]
   }
   ```
 
@@ -243,6 +252,36 @@ are required; named arguments are optional and fall back to their defaults:
   A table written as a literal is built once at startup, not per event, so a
   large table costs no more than a small one. Keep it in a variable when the
   same table is used more than once.
++ `find_all(value, pattern, group: 0, limit: -1)` — returns every match of
+  `pattern` as an array, or an empty array when nothing matches. `group` selects
+  a capture group (`0` is the whole match) and a negative `limit` collects all
+  occurrences:
+  ```
+  .ids = find_all(.log, r'id=(\w+)', group: 1)
+  ```
+
++ `join(value, separator)` — joins an array of strings into one string. Only
+  strings are joined; convert other values with `string()` first:
+  ```
+  .extracted = join(find_all(.message, r're\d+', limit: 2), ",")   # "re1,re2"
+  ```
+
++ `trim(value, cutset)`, `trim_left(value, cutset)`,
+  `trim_right(value, cutset)` — strip characters from both ends, the start or
+  the end. `cutset` is a *set of characters*, not a substring: `trim_right(v, "ms")`
+  removes every trailing `m` and `s`.
+  ```
+  .message = trim_right(.message, "\n")
+  ```
+
++ `slice(value, start, end: null)` — returns the part of the string between two
+  positions, counted in characters. Both positions may be negative to count from
+  the end, and positions outside the string are clamped rather than raising an
+  error. `end` defaults to the end of the string:
+  ```
+  .head = slice(.message, 0, end: 10)   # first 10 characters
+  .tail = slice(.message, -5)           # last 5 characters
+  ```
 }*/
 
 type Plugin struct {

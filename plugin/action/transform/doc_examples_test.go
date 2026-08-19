@@ -61,6 +61,15 @@ func TestDocExamplesCompile(t *testing.T) {
 		`api_key = {"0": "produce", "1": "fetch", "2": "offsets"}
 		.kafka_request_api_key = lookup(.kafka_request_api_key, api_key)`,
 		`.severity = lookup(.status, {"500": "crit", "400": "warn"}, default: "ok")`,
+		`m = capture(.message, r'(\w+):.*', numeric_groups: true)
+		if m != null {
+		  .level = m["1"]
+		}`,
+		`.ids = find_all(.log, r'id=(\w+)', group: 1)`,
+		`.extracted = join(find_all(.message, r're\d+', limit: 2), ",")`,
+		`.message = trim_right(.message, "\n")`,
+		`.head = slice(.message, 0, end: 10)
+		.tail = slice(.message, -5)`,
 	}
 
 	for i, src := range snippets {
