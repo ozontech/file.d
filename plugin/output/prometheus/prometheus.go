@@ -3,6 +3,8 @@ package prometheus
 import (
 	"context"
 	"crypto/tls"
+	"encoding/base64"
+	"fmt"
 	"net"
 	"net/http"
 	"sync"
@@ -361,18 +363,56 @@ func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 }
 
 func (p *Plugin) prepareClient() {
+	baseTransport := &http.Transport{
+		DialContext: (&net.Dialer{
+			Timeout:   p.config.ConnectionTimeout_,
+			KeepAlive: p.config.KeepAlive.MaxConnDuration_,
+		}).DialContext,
+		IdleConnTimeout: p.config.KeepAlive.MaxIdleConnDuration_,
+		TLSClientConfig: p.tlsConfig,
+	}
+
+	authTransport := &authTransport{
+		base:       baseTransport,
+		authHeader: p.getAuthHeader(),
+		tenantID:   p.config.Auth.TenantID,
+		strategy:   p.config.Auth.Strategy_,
+	}
+
 	customClient := &http.Client{
-		Transport: &http.Transport{
-			DialContext: (&net.Dialer{
-				Timeout:   p.config.ConnectionTimeout_,
-				KeepAlive: p.config.KeepAlive.MaxConnDuration_,
-			}).DialContext,
-			IdleConnTimeout: p.config.KeepAlive.MaxIdleConnDuration_,
-			TLSClientConfig: p.tlsConfig,
-		},
+		Transport: authTransport,
 	}
 
 	p.client = promwrite.NewClient(p.config.Endpoint, promwrite.HttpClient(customClient))
+}
+
+// authTransport adds authentication headers to requests.
+type authTransport struct {
+	base       *http.Transport
+	authHeader string
+	tenantID   string
+	strategy   AuthStrategy
+}
+
+func (t *authTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	switch t.strategy {
+	case StrategyTenant:
+		req.Header.Set("X-Scope-OrgID", t.tenantID)
+	case StrategyBasic, StrategyBearer:
+		req.Header.Set("Authorization", t.authHeader)
+	}
+	return t.base.RoundTrip(req)
+}
+
+func (p *Plugin) getAuthHeader() string {
+	switch p.config.Auth.Strategy_ {
+	case StrategyBasic:
+		credentials := []byte(p.config.Auth.Username + ":" + p.config.Auth.Password)
+		return fmt.Sprintf("Basic %s", base64.StdEncoding.EncodeToString(credentials))
+	case StrategyBearer:
+		return fmt.Sprintf("Bearer %s", p.config.Auth.BearerToken)
+	}
+	return ""
 }
 
 func (p *Plugin) buildTLSConfig() {
