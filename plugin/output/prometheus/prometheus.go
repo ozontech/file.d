@@ -5,6 +5,8 @@ import (
 	"crypto/tls"
 	"net"
 	"net/http"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/castai/promwrite"
@@ -111,11 +113,6 @@ type Config struct {
 	// >
 	// > Multiplier for exponential increase of retention between retries
 	RetentionExponentMultiplier int `json:"retention_exponentially_multiplier" default:"2"` // *
-
-	// > @3@4@5@6
-	// >
-	// > Number of retry attempts.
-	AttemptNum int `json:"attempt_num" default:"3"` // *
 }
 
 type AuthStrategy byte
@@ -170,8 +167,11 @@ type Plugin struct {
 
 	collector *metricCollector
 
-	// isAvailable tracks if Prometheus is currently available
-	isAvailable bool
+	// mu protects retryChan from race conditions
+	mu sync.Mutex
+
+	// isAvailable indicates if Prometheus is currently available (atomic)
+	isAvailable atomic.Bool
 
 	// retryChan is used to signal waiting events when Prometheus becomes available
 	retryChan chan struct{}
@@ -201,7 +201,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 
 	p.buildTLSConfig()
 	p.prepareClient()
-	p.isAvailable = true
+	p.isAvailable.Store(true)
 	p.retryChan = make(chan struct{})
 }
 
@@ -222,8 +222,15 @@ func (p *Plugin) Out(event *pipeline.Event) {
 			p.processMetricNode(metricNode)
 		}
 
-		if !p.isAvailable {
-			<-p.retryChan // Block until Prometheus is available
+		if !p.isAvailable.Load() {
+			p.mu.Lock()
+			if !p.isAvailable.Load() {
+				retryChan := p.retryChan
+				p.mu.Unlock()
+				<-retryChan
+			} else {
+				p.mu.Unlock()
+			}
 		}
 	}
 
@@ -300,7 +307,7 @@ func (p *Plugin) sendToStorage(values []promwrite.TimeSeries) error {
 	expBackoff := pipeline.GetBackoff(
 		p.config.Retention_,
 		float64(p.config.RetentionExponentMultiplier),
-		uint64(p.config.AttemptNum),
+		uint64(p.config.Retry),
 	)
 	expBackoff.Reset()
 
@@ -317,6 +324,9 @@ func (p *Plugin) sendToStorage(values []promwrite.TimeSeries) error {
 		return nil
 	}, expBackoff)
 
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
 	if err != nil {
 		var level zapcore.Level
 		if p.config.FatalOnFailedInsert {
@@ -326,7 +336,7 @@ func (p *Plugin) sendToStorage(values []promwrite.TimeSeries) error {
 		}
 
 		p.logger.Log(level, "max retries reached")
-		p.isAvailable = false
+		p.isAvailable.Store(false)
 		newRetryChan := make(chan struct{})
 		if p.retryChan != nil {
 			close(p.retryChan)
@@ -334,8 +344,8 @@ func (p *Plugin) sendToStorage(values []promwrite.TimeSeries) error {
 		p.retryChan = newRetryChan
 
 		p.logger.Info("prometheus unavailable, events will wait")
-	} else if !p.isAvailable {
-		p.isAvailable = true
+	} else if !p.isAvailable.Load() {
+		p.isAvailable.Store(true)
 		if p.retryChan != nil {
 			close(p.retryChan)
 			p.logger.Info("prometheus available")
