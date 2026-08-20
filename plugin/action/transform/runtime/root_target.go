@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -59,30 +60,92 @@ func (t *RootTarget) Set(path core.Path, value core.Value) error {
 		return fmt.Errorf("set %s: %w", formatSegments(path.Segments), err)
 	}
 
-	encoded, err := valueToJSON(value)
-	if err != nil {
-		return fmt.Errorf("set %s: %w", formatSegments(path.Segments), err)
+	// A composite has to be serialized before the tree is touched below:
+	// AddFieldNoAlloc splices into the parent's node chain, and encoding a source
+	// node that lives under that same parent must happen while the chain is still
+	// intact.
+	scalar := isScalarValue(value)
+	var encoded string
+	if !scalar {
+		encoded, err = valueToJSON(value)
+		if err != nil {
+			return fmt.Errorf("set %s: %w", formatSegments(path.Segments), err)
+		}
 	}
 
 	leaf := path.Segments[len(path.Segments)-1]
+	var node *insaneJSON.Node
 	if leaf.IsIndex() {
 		arr := parent.AsArray()
 		idx := resolveIndex(leaf.Idx, len(arr))
 		if idx < 0 || idx >= len(arr) {
 			return fmt.Errorf("set: index %d out of bounds", leaf.Idx)
 		}
-		node := arr[idx]
-		node.MutateToJSON(t.Root, encoded)
+		node = arr[idx]
 	} else {
-		existing := parent.Dig(leaf.Field)
-		if existing == nil {
-			parent.AddFieldNoAlloc(t.Root, leaf.Field).MutateToJSON(t.Root, encoded)
-		} else {
-			existing.MutateToJSON(t.Root, encoded)
+		node = parent.Dig(leaf.Field)
+		if node == nil {
+			node = parent.AddFieldNoAlloc(t.Root, leaf.Field)
 		}
 	}
 
+	if scalar {
+		setScalar(node, value)
+	} else {
+		node.MutateToJSON(t.Root, encoded)
+	}
+
 	return nil
+}
+
+// isScalarValue reports whether value can be written with one of insane-json's
+// typed mutators, which only set a node's bits and data.
+//
+// Everything else goes through valueToJSON plus MutateToJSON, which serializes
+// the value and parses it back. That round trip is what makes an assignment cost
+// a full encode and re-parse of the subtree, and it is also what draws nodes
+// from the root's decoder pool on every assignment.
+//
+// A number read out of the event is deliberately not treated as scalar: the node
+// keeps the literal exactly as it was written ("1.50", "1e3"), and rewriting it
+// through MutateToFloat would change what the event carries downstream. Numbers
+// produced by the language itself carry no literal, so they stay on the fast path.
+func isScalarValue(v core.Value) bool {
+	switch val := v.(type) {
+	case core.NullValue, core.BoolValue, core.IntegerValue, core.FloatValue, core.StringValue:
+		return true
+	case core.JSONNodeValue:
+		n := val.N
+		return n == nil || n.IsNull() || n.IsString() || n.IsTrue() || n.IsFalse()
+	}
+	return false
+}
+
+// setScalar writes a value that isScalarValue accepted.
+func setScalar(node *insaneJSON.Node, v core.Value) {
+	switch val := v.(type) {
+	case core.NullValue:
+		node.MutateToNull()
+	case core.BoolValue:
+		node.MutateToBool(val.V)
+	case core.IntegerValue:
+		node.MutateToInt64(val.V)
+	case core.FloatValue:
+		node.MutateToFloat(val.V)
+	case core.StringValue:
+		node.MutateToString(val.V)
+	case core.JSONNodeValue:
+		switch n := val.N; {
+		case n == nil || n.IsNull():
+			node.MutateToNull()
+		case n.IsString():
+			node.MutateToString(n.AsString())
+		case n.IsTrue():
+			node.MutateToBool(true)
+		default:
+			node.MutateToBool(false)
+		}
+	}
 }
 
 // digOrCreateParent walks the given parent segments, creating missing object
@@ -204,6 +267,21 @@ func toInsaneJSONPath(segments []core.Segment, pathBuffer []string) []string {
 	return pathBuffer
 }
 
+// quoteJSON renders a string as a JSON string literal.
+//
+// strconv.Quote is Go quoting, not JSON quoting: it escapes a control character
+// as \x01 and a byte that is not valid UTF-8 as \xff, neither of which JSON
+// accepts. Using it here put malformed JSON into the event whenever a log line
+// carried such a byte.
+func quoteJSON(s string) string {
+	encoded, err := json.Marshal(s)
+	if err != nil {
+		// json.Marshal only fails on unsupported types, never on a string.
+		return strconv.Quote(s)
+	}
+	return string(encoded)
+}
+
 // valueToJSON serializes a core.Value to a JSON string.
 func valueToJSON(v core.Value) (string, error) {
 	switch val := v.(type) {
@@ -219,7 +297,7 @@ func valueToJSON(v core.Value) (string, error) {
 	case core.FloatValue:
 		return strconv.FormatFloat(val.V, 'f', -1, 64), nil
 	case core.StringValue:
-		return strconv.Quote(val.V), nil
+		return quoteJSON(val.V), nil
 	case core.ArrayValue:
 		parts := make([]string, len(val.V))
 		for i, el := range val.V {
@@ -237,7 +315,7 @@ func valueToJSON(v core.Value) (string, error) {
 			if err != nil {
 				return "", err
 			}
-			parts = append(parts, strconv.Quote(k)+":"+s)
+			parts = append(parts, quoteJSON(k)+":"+s)
 		}
 		return "{" + strings.Join(parts, ",") + "}", nil
 	case core.JSONNodeValue:
