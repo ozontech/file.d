@@ -334,7 +334,7 @@ func (p *Plugin) sendToStorage(values []promwrite.TimeSeries) error {
 		p.retryChan = newRetryChan
 
 		p.logger.Info("prometheus unavailable, events will wait")
-	} else {
+	} else if !p.isAvailable {
 		p.isAvailable = true
 		if p.retryChan != nil {
 			close(p.retryChan)

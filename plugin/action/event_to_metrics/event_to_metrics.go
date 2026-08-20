@@ -397,10 +397,18 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 		metric := &p.Metrics[metricIdx]
 
 		var value float64 = 1
-		if len(metric.Value) > 0 {
+		if len(metric.valueFields) > 0 {
 			value = 0
 			for _, fieldPath := range metric.valueFields {
-				value += event.Root.Dig(fieldPath...).AsFloat()
+				node := event.Root.Dig(fieldPath...)
+				if node == nil {
+					continue
+				}
+				if !node.IsNumber() {
+					p.logger.Warn("non-numeric metric field", zap.Any("path", fieldPath))
+					continue
+				}
+				value += node.AsFloat()
 			}
 		}
 
