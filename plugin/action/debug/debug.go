@@ -2,6 +2,7 @@ package debug
 
 import (
 	"encoding/json"
+	"fmt"
 	"sync"
 	"time"
 
@@ -36,9 +37,9 @@ Following that, it will allow through every 5th event in that interval.
 }*/
 
 type Plugin struct {
-	logger       *zap.Logger
-	config       *Config
-	pipelineName string
+	logger         *zap.Logger
+	config         *Config
+	pipelineAction string
 }
 
 // ! config-params
@@ -74,7 +75,7 @@ func factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 
 func (p *Plugin) Start(anyConfig pipeline.AnyConfig, params *pipeline.ActionPluginParams) {
 	p.config = anyConfig.(*Config)
-	p.pipelineName = params.PipelineName
+	p.pipelineAction = fmt.Sprintf("%s_%d", params.PipelineName, params.Index)
 
 	lg := params.Logger.Desugar()
 	p.setupLogger(lg, p.config)
@@ -91,14 +92,14 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 }
 
 var (
-	loggerByPipeline   = make(map[string]*zap.Logger)
-	loggerByPipelineMu sync.Mutex
+	loggerByPipelineAction = make(map[string]*zap.Logger)
+	loggerByPipelineMu     sync.Mutex
 )
 
 func (p *Plugin) Stop() {
 	loggerByPipelineMu.Lock()
 	defer loggerByPipelineMu.Unlock()
-	delete(loggerByPipeline, p.pipelineName)
+	delete(loggerByPipelineAction, p.pipelineAction)
 }
 
 // return shared logger between concurrent running processors
@@ -110,13 +111,13 @@ func (p *Plugin) setupLogger(parentLogger *zap.Logger, config *Config) {
 	loggerByPipelineMu.Lock()
 	defer loggerByPipelineMu.Unlock()
 
-	lg, ok := loggerByPipeline[p.pipelineName]
+	lg, ok := loggerByPipelineAction[p.pipelineAction]
 	if !ok {
 		// enable sampler
 		lg = parentLogger.WithOptions(zap.WrapCore(func(core zapcore.Core) zapcore.Core {
 			return zapcore.NewSamplerWithOptions(parentLogger.Core(), config.Interval_, config.First, config.Thereafter)
 		}))
-		loggerByPipeline[p.pipelineName] = lg
+		loggerByPipelineAction[p.pipelineAction] = lg
 	}
 	p.logger = lg
 }
