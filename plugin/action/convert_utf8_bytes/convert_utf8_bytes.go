@@ -105,7 +105,6 @@ The resulting event:
 type Plugin struct {
 	config *Config
 	fields [][]string
-	buf    []byte
 }
 
 // ! config-params
@@ -152,14 +151,14 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 		if node == nil || !node.IsString() {
 			continue
 		}
-		p.convert(node)
+		p.convert(event, node)
 	}
 
 	return pipeline.ActionPass
 }
 
-func (p *Plugin) convert(node *insaneJSON.Node) {
-	p.buf = p.buf[:0]
+func (p *Plugin) convert(event *pipeline.Event, node *insaneJSON.Node) {
+	buf := event.Buf[:0]
 
 	nodeStr := node.AsString()
 
@@ -167,7 +166,7 @@ func (p *Plugin) convert(node *insaneJSON.Node) {
 	if idx < 0 {
 		return
 	}
-	p.buf = append(p.buf, nodeStr[:idx]...)
+	buf = append(buf, nodeStr[:idx]...)
 	nodeStr = nodeStr[idx+1:]
 
 	for nodeStr != "" {
@@ -175,7 +174,7 @@ func (p *Plugin) convert(node *insaneJSON.Node) {
 		switch ch {
 		case '\\':
 			nodeStr = nodeStr[1:]
-			p.buf = append(p.buf, `\\`...)
+			buf = append(buf, `\\`...)
 		// unicode
 		case 'u', 'U':
 			nodeStr = nodeStr[1:]
@@ -186,14 +185,14 @@ func (p *Plugin) convert(node *insaneJSON.Node) {
 			}
 
 			if len(nodeStr) < size {
-				p.buf = append(p.buf, '\\', ch)
+				buf = append(buf, '\\', ch)
 				break
 			}
 
 			ss := nodeStr[:size]
 			u, err := strconv.ParseUint(ss, 16, 64)
 			if err != nil {
-				p.buf = append(p.buf, '\\', ch)
+				buf = append(buf, '\\', ch)
 				break
 			}
 
@@ -205,33 +204,33 @@ func (p *Plugin) convert(node *insaneJSON.Node) {
 
 			// '\U...' or 1-byte '\u...'
 			if size == 8 || !utf16.IsSurrogate(rune(u)) {
-				p.buf = append(p.buf, string(rune(u))...)
+				buf = append(buf, string(rune(u))...)
 				break
 			}
 
 			if len(nodeStr) < 6 || nodeStr[:2] != `\u` {
-				p.buf = append(p.buf, `\u`...)
-				p.buf = append(p.buf, ss...)
+				buf = append(buf, `\u`...)
+				buf = append(buf, ss...)
 				break
 			}
 
 			// 2-byte '\u...\u...'
 			u2, err := strconv.ParseUint(nodeStr[2:6], 16, 64)
 			if err != nil {
-				p.buf = append(p.buf, `\u`...)
-				p.buf = append(p.buf, ss...)
+				buf = append(buf, `\u`...)
+				buf = append(buf, ss...)
 				break
 			}
 
 			r := utf16.DecodeRune(rune(u), rune(u2))
-			p.buf = append(p.buf, string(r)...)
+			buf = append(buf, string(r)...)
 			nodeStr = nodeStr[6:]
 		// hex
 		case 'x':
 			nodeStr = nodeStr[1:]
 
 			if len(nodeStr) < 2 {
-				p.buf = append(p.buf, `\x`...)
+				buf = append(buf, `\x`...)
 				break
 			}
 
@@ -254,39 +253,40 @@ func (p *Plugin) convert(node *insaneJSON.Node) {
 
 			hexBytes, err := hex.DecodeString(sb.String())
 			if err != nil {
-				p.buf = append(p.buf, `\x`...)
-				p.buf = append(p.buf, nodeStr[:pos]...)
+				buf = append(buf, `\x`...)
+				buf = append(buf, nodeStr[:pos]...)
 			} else {
-				p.buf = append(p.buf, hexBytes...)
+				buf = append(buf, hexBytes...)
 			}
 			nodeStr = nodeStr[pos:]
 		// octal
 		case '0', '1', '2', '3':
 			if len(nodeStr) < 3 {
-				p.buf = append(p.buf, '\\')
+				buf = append(buf, '\\')
 				break
 			}
 
 			u, err := strconv.ParseUint(nodeStr[:3], 8, 64)
 			if err != nil {
-				p.buf = append(p.buf, '\\')
+				buf = append(buf, '\\')
 				break
 			}
 
-			p.buf = append(p.buf, byte(u))
+			buf = append(buf, byte(u))
 			nodeStr = nodeStr[3:]
 		default:
-			p.buf = append(p.buf, '\\')
+			buf = append(buf, '\\')
 		}
 
-		idx = strings.IndexByte(nodeStr, '\\')
+		idx := strings.IndexByte(nodeStr, '\\')
 		if idx < 0 {
-			p.buf = append(p.buf, nodeStr...)
+			buf = append(buf, nodeStr...)
 			break
 		}
-		p.buf = append(p.buf, nodeStr[:idx]...)
+		buf = append(buf, nodeStr[:idx]...)
 		nodeStr = nodeStr[idx+1:]
 	}
 
-	node.MutateToString(pipeline.ByteToStringUnsafe(p.buf))
+	event.Buf = buf
+	node.MutateToString(pipeline.ByteToStringUnsafe(buf))
 }
