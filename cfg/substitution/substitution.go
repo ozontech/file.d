@@ -82,14 +82,9 @@ func ParseSubstitution(substitution string, filtersBuf []byte, logger *zap.Logge
 			break
 		}
 
-		if len(substitution) < pos+1 {
-			substitution = substitution[pos+1:]
-			continue
-		}
-
 		switch substitution[pos+1] {
 		case '$':
-			tail = substitution[:pos+1]
+			tail += substitution[:pos+1]
 			substitution = substitution[pos+2:]
 		case '{':
 			// append SubstitutionOpKindRaw only if there is non-empty content
@@ -128,7 +123,7 @@ func ParseSubstitution(substitution string, filtersBuf []byte, logger *zap.Logge
 
 			substitution = substitution[end+1:]
 		default:
-			tail = substitution[:pos+1]
+			tail += substitution[:pos+1]
 			substitution = substitution[pos+1:]
 		}
 	}
