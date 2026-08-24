@@ -45,6 +45,38 @@ func TestParseSubstitution(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name:         "no_filter_two_fields",
+			substitution: `${a.b} - ${c.d}`,
+			data: [][]string{
+				{"a", "b"},
+				{" - "},
+				{"c", "d"},
+			},
+			wantErr: false,
+		},
+		{
+			name:         "no_filter_two_fields_with_curly_brackets",
+			substitution: `{ ${a.b} : ${c.d} }`,
+			data: [][]string{
+				{"{ "},
+				{"a", "b"},
+				{" : "},
+				{"c", "d"},
+				{" }"},
+			},
+			wantErr: false,
+		},
+		{
+			name:         "no_filter_two_fields_with_pipe",
+			substitution: `${a.b} | ${c.d}`,
+			data: [][]string{
+				{"a", "b"},
+				{" | "},
+				{"c", "d"},
+			},
+			wantErr: false,
+		},
+		{
 			name:         "no_filter_field_no_ending",
 			substitution: `days till world end ${prediction.days}`,
 			data: [][]string{
@@ -110,6 +142,31 @@ func TestParseSubstitution(t *testing.T) {
 					},
 				},
 				nil,
+			},
+			wantErr: false,
+		},
+		{
+			name:         "with_filter_two_fields_and_pipe",
+			substitution: `${a.b|trim("all","\\n")} | ${c.d|trim("all","\\n")}`,
+			data: [][]string{
+				{"a", "b"},
+				{" | "},
+				{"c", "d"},
+			},
+			filters: [][][]any{
+				{
+					{
+						trimModeAll,
+						"\\n",
+					},
+				},
+				nil,
+				{
+					{
+						trimModeAll,
+						"\\n",
+					},
+				},
 			},
 			wantErr: false,
 		},
@@ -402,6 +459,14 @@ func TestParseSubstitution(t *testing.T) {
 			name:         "err_cut_filter_invalid_second_arg_2",
 			substitution: `test ${field|trim_to("first",-10)} test2`,
 			wantErr:      true,
+		},
+		{
+			name:         "test_many_special_symbols",
+			substitution: `test1 $ test2 $$ test3 $ test4`,
+			data: [][]string{
+				{"test1 $ test2 $ test3 $ test4"},
+			},
+			wantErr: false,
 		},
 	}
 
