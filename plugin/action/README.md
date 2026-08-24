@@ -129,6 +129,13 @@ For example,
 This will log the first 10 events in a one second interval as-is.
 Following that, it will allow through every 5th event in that interval.
 
+If it is needed to log every entry, logger without sampling can be used,
+
+```yaml
+- type: debug
+  interval: 0s
+```
+
 
 [More details...](plugin/action/debug/README.md)
 ## decode
