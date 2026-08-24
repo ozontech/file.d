@@ -460,6 +460,14 @@ func TestParseSubstitution(t *testing.T) {
 			substitution: `test ${field|trim_to("first",-10)} test2`,
 			wantErr:      true,
 		},
+		{
+			name:         "test_many_special_symbols",
+			substitution: `test1 $ test2 $$ test3 $ test4`,
+			data: [][]string{
+				{"test1 $ test2 $ test3 $ test4"},
+			},
+			wantErr: false,
+		},
 	}
 
 	for _, tt := range tests {
