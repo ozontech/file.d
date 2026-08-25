@@ -201,8 +201,10 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.registerMetrics(params.MetricCtl)
 	p.collector = newCollector(p, 15*time.Second, p.logger)
 
-	p.buildTLSConfig()
-	p.prepareClient()
+	if p.client == nil {
+		p.buildTLSConfig()
+		p.prepareClient()
+	}
 	p.isAvailable.Store(true)
 	p.retryChan = make(chan struct{})
 }

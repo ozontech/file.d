@@ -339,9 +339,9 @@ pipelines:
 
 [More details...](plugin/action/discard/README.md)
 ## event_to_metrics
-Get metric from event
+Transforms events into metric format
 
-This plugin transforms incoming events into metric data. Each event can generate one or more metrics with configurable labels and values. Using the Prometheus output plugin, you can send the generated metrics to Prometheus.
+This plugin extracts values and labels from event fields and restructures the event into an array of metrics containing `name`, `type`, `value`, `timestamp`, `ttl`, and `labels`.
 
 **Important:** This action should be the last one in the pipeline, as it consumes events and does not pass them further.
 

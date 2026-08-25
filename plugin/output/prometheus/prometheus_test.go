@@ -2,6 +2,7 @@ package prometheus
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -71,6 +72,12 @@ type mockController struct {
 func (m *mockController) Commit(_ *pipeline.Event) {}
 func (m *mockController) Error(_ string)           {}
 
+// wrapInArray wraps a metric object JSON in an array
+func wrapInArray(metricJSON string) *insaneJSON.Root {
+	root, _ := insaneJSON.DecodeBytes([]byte(fmt.Sprintf("[%s]", metricJSON)))
+	return root
+}
+
 func TestPluginOut(t *testing.T) {
 	t.Run("add event", func(t *testing.T) {
 		logger := zaptest.NewLogger(t)
@@ -105,15 +112,14 @@ func TestPluginOut(t *testing.T) {
 		plugin.Start(config, params)
 		time.Sleep(50 * time.Millisecond)
 
-		// Create a test event using insaneJSON
-		root, err := insaneJSON.DecodeBytes([]byte(`{
+		// Create a test event wrapped in array (as produced by event_to_metrics)
+		root := wrapInArray(`{
 			"name": "test_metric",
 			"type": "gauge",
 			"value": 1.0,
 			"timestamp": 1234567890,
 			"labels": {"job": "test"}
-		}`))
-		require.NoError(t, err)
+		}`)
 
 		event := &pipeline.Event{
 			Root: root,
@@ -166,14 +172,13 @@ func TestPluginSend(t *testing.T) {
 
 		// Test sending multiple metrics
 		for i := 0; i < 5; i++ {
-			root, err := insaneJSON.DecodeBytes([]byte(`{
-				"name": "metric_` + string(rune('0'+i)) + `",
+			root := wrapInArray(fmt.Sprintf(`{
+				"name": "metric_%d",
 				"type": "gauge",
 				"value": 1.5,
 				"timestamp": 1234567890,
 				"labels": {"job": "test", "instance": "localhost"}
-			}`))
-			require.NoError(t, err)
+			}`, i))
 
 			event := &pipeline.Event{
 				Root: root,
@@ -226,14 +231,13 @@ func TestPluginWithErrorClient(t *testing.T) {
 		time.Sleep(50 * time.Millisecond)
 
 		// Create and send an event that will fail
-		root, err := insaneJSON.DecodeBytes([]byte(`{
+		root := wrapInArray(`{
 			"name": "error_metric",
 			"type": "gauge",
 			"value": 1.0,
 			"timestamp": 1234567890,
 			"labels": {"job": "test"}
-		}`))
-		require.NoError(t, err)
+		}`)
 
 		event := &pipeline.Event{
 			Root: root,

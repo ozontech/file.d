@@ -87,11 +87,5 @@ Multiplier for exponential increase of retention between retries
 
 <br>
 
-**`attempt_num`** *`int`* *`default=3`* 
-
-Number of retry attempts.
-
-<br>
-
 
 <br>*Generated using [__insane-doc__](https://github.com/vitkovskii/insane-doc)*

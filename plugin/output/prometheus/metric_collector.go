@@ -128,9 +128,9 @@ func (p *metricCollector) flushMetrics() {
 			metric.sendedTimestamp = timeSeries.Sample.Time
 			metric.lastValueIsSended = true
 			p.metrics[key] = metric
-			if now.After(metric.expiredAt) {
-				toDelete = append(toDelete, key)
-			}
+		}
+		if now.After(metric.expiredAt) {
+			toDelete = append(toDelete, key)
 		}
 	}
 
@@ -163,18 +163,55 @@ func createTimeSeries(labels []promwrite.Label, metric *metricCollectorValue, ro
 	}
 }
 
+func escapeCommas(s string) string {
+	return strings.ReplaceAll(s, ",", `\,`)
+}
+
+func unescapeCommas(s string) string {
+	return strings.ReplaceAll(s, `\,`, ",")
+}
+
 func keyToLabels(key string) []promwrite.Label {
 	if key == "" {
 		return nil
 	}
-	key = key[:len(key)-1] // Remove trailing comma
-	labels := make([]promwrite.Label, 0, strings.Count(key, ",")+1)
+	// Count how many labels to know which is the last
+	numLabels := strings.Count(key, ",") + 1
 
-	for key != "" {
-		pair, rest, _ := strings.Cut(key, ",")
-		name, value, _ := strings.Cut(pair, "=")
-		labels = append(labels, promwrite.Label{Name: name, Value: value})
-		key = rest
+	labels := make([]promwrite.Label, 0, numLabels)
+
+	for {
+		// Find the first = to get name
+		equalsIdx := strings.Index(key, "=")
+		if equalsIdx == -1 {
+			break
+		}
+		name := key[:equalsIdx]
+		key = key[equalsIdx+1:]
+
+		if len(labels)+1 == numLabels {
+			// This is the last label - the rest is the value (minus trailing comma)
+			if key != "" && key[len(key)-1] == ',' {
+				key = key[:len(key)-1]
+			}
+			labels = append(labels, promwrite.Label{Name: name, Value: unescapeCommas(key)})
+			break
+		}
+
+		// Not the last label - find unescaped comma
+		commaIdx := -1
+		for i := 0; i < len(key); i++ {
+			if key[i] == ',' && (i == 0 || key[i-1] != '\\') {
+				commaIdx = i
+				break
+			}
+		}
+		if commaIdx == -1 {
+			break
+		}
+		value := key[:commaIdx]
+		labels = append(labels, promwrite.Label{Name: name, Value: unescapeCommas(value)})
+		key = key[commaIdx+1:]
 	}
 	return labels
 }
@@ -185,7 +222,7 @@ func labelsToKey(labels []promwrite.Label) string {
 		if len(labels) == 0 {
 			return ""
 		}
-		return labels[0].Name + "=" + labels[0].Value + ","
+		return labels[0].Name + "=" + escapeCommas(labels[0].Value) + ","
 	}
 
 	sorted := make([]promwrite.Label, len(labels))
@@ -200,7 +237,7 @@ func labelsToKey(labels []promwrite.Label) string {
 	for _, l := range sorted {
 		b.WriteString(l.Name)
 		b.WriteByte('=')
-		b.WriteString(l.Value)
+		b.WriteString(escapeCommas(l.Value))
 		b.WriteByte(',')
 	}
 	return b.String()
