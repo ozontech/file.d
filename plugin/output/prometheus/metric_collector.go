@@ -65,8 +65,9 @@ func (p *metricCollector) handleMetric(data metricData) {
 
 	value := data.value
 	timestamp := data.timestamp
+	existing, exists := p.metrics[key]
 
-	if existing, exists := p.metrics[key]; exists {
+	if exists {
 		if data.metricType == metricTypeCounter {
 			value += existing.value
 		}
@@ -83,6 +84,12 @@ func (p *metricCollector) handleMetric(data metricData) {
 		lastValueIsSended: false,
 		expiredAt:         now.Add(time.Duration(data.ttl) * time.Millisecond),
 	}
+
+	if exists {
+		metric.sendedTimestamp = existing.sendedTimestamp
+		metric.lastValueIsSended = existing.lastValueIsSended
+	}
+
 	p.metrics[key] = metric
 }
 
