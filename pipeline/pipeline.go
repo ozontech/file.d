@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/go-faster/jx"
 	"github.com/ozontech/file.d/decoder"
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/metric"
@@ -42,6 +43,7 @@ const (
 	DefaultMetricHoldDuration        = time.Minute * 30
 	DefaultMetaCacheSize             = 1024
 	DefaultMetricMaxLabelValueLength = 0
+	DefaultSplitJSONArray            = false
 
 	EventSeqIDError = uint64(0)
 
@@ -158,6 +160,8 @@ type Settings struct {
 	CutOffEventByLimitField string
 	StreamField             string
 	IsStrict                bool
+	SplitJSONArray          bool
+	SplitJSONArrayField     []string
 	Pool                    PoolType
 	Metric                  *MetricSettings
 }
@@ -172,6 +176,17 @@ type AntispamSettings struct {
 	Rules               antispam.Rules
 	Exceptions          antispam.Exceptions
 	MaintenanceInterval time.Duration
+}
+
+// values that stay the same for all chunks of one In call
+type chunkParams struct {
+	dec        decoder.Type
+	row        decoder.CRIRow
+	sourceID   SourceID
+	sourceName string
+	offsets    Offsets
+	meta       metadata.MetaData
+	cutoff     bool
 }
 
 type PoolType string
@@ -482,81 +497,35 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offsets Offsets, byt
 		}
 	}
 
-	p.inputEvents.Inc()
-	p.inputSize.Add(int64(length))
-
-	now := time.Now()
-	event := p.eventPool.get(len(bytes))
-	p.eventPoolLatency.Observe(time.Since(now).Seconds())
-
-	err = nil
-	if !(dec == decoder.JSON || dec == decoder.PROTOBUF) {
-		_ = event.Root.DecodeString("{}")
-	}
-	switch dec {
-	case decoder.JSON, decoder.NGINX_ERROR, decoder.PROTOBUF,
-		decoder.SYSLOG_RFC3164, decoder.SYSLOG_RFC5424, decoder.CSV:
-		err = p.decoder.DecodeToJson(event.Root, bytes)
-	case decoder.RAW:
-		if bytes[len(bytes)-1] == '\n' {
-			event.Root.AddFieldNoAlloc(event.Root, "message").MutateToBytesCopy(event.Root, bytes[:len(bytes)-1])
-		} else {
-			event.Root.AddFieldNoAlloc(event.Root, "message").MutateToBytesCopy(event.Root, bytes)
+	chunks := [][]byte{bytes}
+	if p.settings.SplitJSONArray && dec == decoder.JSON {
+		if elems, split := extractJSONArrElements(bytes, p.settings.SplitJSONArrayField); split {
+			chunks = elems
 		}
-	case decoder.CRI:
-		event.Root.AddFieldNoAlloc(event.Root, "log").MutateToBytesCopy(event.Root, row.Log)
-		event.Root.AddFieldNoAlloc(event.Root, "time").MutateToBytesCopy(event.Root, row.Time)
-		event.Root.AddFieldNoAlloc(event.Root, "stream").MutateToBytesCopy(event.Root, row.Stream)
-	case decoder.POSTGRES:
-		err = decoder.DecodePostgresToJson(event.Root, bytes)
-	default:
-		p.logger.Panic("unknown decoder", zap.Int("decoder", int(dec)))
 	}
 
-	if err != nil {
-		level := zapcore.ErrorLevel
-		if p.settings.IsStrict {
-			level = zapcore.FatalLevel
+	params := &chunkParams{
+		sourceID:   sourceID,
+		sourceName: sourceName,
+		offsets:    offsets,
+		meta:       meta,
+		cutoff:     cutoff,
+		dec:        dec,
+		row:        row,
+	}
+
+	var lastSeqID uint64
+	for _, chunk := range chunks {
+		if id := p.streamChunk(params, chunk); id != EventSeqIDError {
+			lastSeqID = id
 		}
+	}
 
-		p.logger.Log(level, "wrong log format", zap.Error(err),
-			zap.Int64("offset", offsets.current),
-			zap.Int("length", length),
-			zap.Uint64("source", uint64(sourceID)),
-			zap.String("source_name", sourceName),
-			zap.ByteString("log", bytes))
-
-		// Can't process event, return to pool.
-		p.eventPool.back(event)
+	if lastSeqID == 0 {
 		return EventSeqIDError
 	}
 
-	if len(meta) > 0 {
-		if event.Root.IsArray() {
-			nodeArray := event.Root.AsArray()
-			for _, elem := range nodeArray {
-				if elem.IsObject() {
-					for k, v := range meta {
-						elem.AddField(k).MutateToString(v)
-					}
-				}
-			}
-		} else {
-			for k, v := range meta {
-				CreateNestedField(event.Root, []string{k}).MutateToString(v)
-			}
-		}
-	}
-	if cutoff && p.settings.CutOffEventByLimitField != "" {
-		event.Root.AddFieldNoAlloc(event.Root, p.settings.CutOffEventByLimitField).MutateToBool(true)
-	}
-
-	event.Offset = offsets.current
-	event.SourceID = sourceID
-	event.SourceName = sourceName
-	event.streamName = DefaultStreamName
-
-	return p.streamEvent(event)
+	return lastSeqID
 }
 
 func (p *Pipeline) checkInputBytes(bytes []byte, sourceName string, meta metadata.MetaData) ([]byte, bool, bool) {
@@ -586,6 +555,86 @@ func (p *Pipeline) checkInputBytes(bytes []byte, sourceName string, meta metadat
 	}
 
 	return bytes, false, true
+}
+
+func (p *Pipeline) streamChunk(params *chunkParams, chunk []byte) uint64 {
+	length := len(chunk)
+
+	p.inputEvents.Inc()
+	p.inputSize.Add(int64(length))
+
+	now := time.Now()
+	event := p.eventPool.get(len(chunk))
+	p.eventPoolLatency.Observe(time.Since(now).Seconds())
+
+	var err error
+	if !(params.dec == decoder.JSON || params.dec == decoder.PROTOBUF) {
+		_ = event.Root.DecodeString("{}")
+	}
+	switch params.dec {
+	case decoder.JSON, decoder.NGINX_ERROR, decoder.PROTOBUF,
+		decoder.SYSLOG_RFC3164, decoder.SYSLOG_RFC5424, decoder.CSV:
+		err = p.decoder.DecodeToJson(event.Root, chunk)
+	case decoder.RAW:
+		if chunk[len(chunk)-1] == '\n' {
+			event.Root.AddFieldNoAlloc(event.Root, "message").MutateToBytesCopy(event.Root, chunk[:len(chunk)-1])
+		} else {
+			event.Root.AddFieldNoAlloc(event.Root, "message").MutateToBytesCopy(event.Root, chunk)
+		}
+	case decoder.CRI:
+		event.Root.AddFieldNoAlloc(event.Root, "log").MutateToBytesCopy(event.Root, params.row.Log)
+		event.Root.AddFieldNoAlloc(event.Root, "time").MutateToBytesCopy(event.Root, params.row.Time)
+		event.Root.AddFieldNoAlloc(event.Root, "stream").MutateToBytesCopy(event.Root, params.row.Stream)
+	case decoder.POSTGRES:
+		err = decoder.DecodePostgresToJson(event.Root, chunk)
+	default:
+		p.logger.Panic("unknown decoder", zap.Int("decoder", int(params.dec)))
+	}
+
+	if err != nil {
+		level := zapcore.ErrorLevel
+		if p.settings.IsStrict {
+			level = zapcore.FatalLevel
+		}
+
+		p.logger.Log(level, "wrong log format", zap.Error(err),
+			zap.Int64("offset", params.offsets.current),
+			zap.Int("length", length),
+			zap.Uint64("source", uint64(params.sourceID)),
+			zap.String("source_name", params.sourceName),
+			zap.ByteString("log", chunk))
+
+		// Can't process event, return to pool.
+		p.eventPool.back(event)
+		return EventSeqIDError
+	}
+
+	if len(params.meta) > 0 {
+		if event.Root.IsArray() {
+			nodeArray := event.Root.AsArray()
+			for _, elem := range nodeArray {
+				if elem.IsObject() {
+					for k, v := range params.meta {
+						elem.AddField(k).MutateToString(v)
+					}
+				}
+			}
+		} else {
+			for k, v := range params.meta {
+				CreateNestedField(event.Root, []string{k}).MutateToString(v)
+			}
+		}
+	}
+	if params.cutoff && p.settings.CutOffEventByLimitField != "" {
+		event.Root.AddFieldNoAlloc(event.Root, p.settings.CutOffEventByLimitField).MutateToBool(true)
+	}
+
+	event.Offset = params.offsets.current
+	event.SourceID = params.sourceID
+	event.SourceName = params.sourceName
+	event.streamName = DefaultStreamName
+
+	return p.streamEvent(event)
 }
 
 func (p *Pipeline) streamEvent(event *Event) uint64 {
@@ -1039,6 +1088,59 @@ func (p *Pipeline) serveActionSample(actionIndex int) func(http.ResponseWriter, 
 			writeErr(w, "Timeout while try to display an event before and after the action processing.")
 		}
 	}
+}
+
+func extractJSONArrElements(data []byte, fieldPath []string) ([][]byte, bool) {
+	d := jx.DecodeBytes(data)
+
+	for _, key := range fieldPath {
+		if d.Next() != jx.Object {
+			return nil, false
+		}
+		objIter, err := d.ObjIter()
+		if err != nil {
+			return nil, false
+		}
+
+		var found bool
+		for objIter.Next() {
+			if string(objIter.Key()) == key {
+				found = true
+				break
+			}
+			if err := d.Skip(); err != nil {
+				return nil, false
+			}
+		}
+
+		if !found {
+			return nil, false
+		}
+	}
+
+	arrIter, err := d.ArrIter()
+	if err != nil {
+		return nil, false
+	}
+
+	var elements [][]byte
+	for arrIter.Next() {
+		raw, err := d.Raw()
+		if err != nil {
+			return nil, false
+		}
+
+		elements = append(elements, []byte(raw))
+	}
+
+	if err := arrIter.Err(); err != nil {
+		return nil, false
+	}
+	if len(elements) == 0 {
+		return nil, false
+	}
+
+	return elements, true
 }
 
 func writeErr(w io.Writer, err string) {
