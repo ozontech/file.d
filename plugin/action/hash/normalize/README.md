@@ -26,7 +26,7 @@ We support a set of patterns out of the box.
 | 11 | uuid | `<uuid>` | 7c1811ed-e98f-4c9c-a9f9-58c757ff494f |
 | 12 | hash | `<hash>` | 48757ec9f04efe7faacec8722f3476339b125a6b6172b8a69ff3aa329e0bd0ff<br>a94a8fe5ccb19ba61c4c0873d391e987982fbbd3<br>098f6bcd4621d373cade4e832627b4f6 |
 | 13 | datetime | `<datetime>` | 2025-01-13T10:20:40.999999Z<br>2025-01-13T10:20:40+04:00<br>2025-01-13 10:20:40<br>2025-01-13<br>10:20:40 |
-| 14 | ip | `<ip>` | 1.2.3.4<br>01.102.103.104 |
+| 14 | ip | `<ip>` | **IPv4:** 1.2.3.4<br>**IPv6:** 2001:db8:3333:4444:5555:6666:1.2.3.4 |
 | 15 | duration | `<duration>` | -1m5s<br>1w2d3h4m5s6ms7us8ns |
 | 16 | hex | `<hex>` | 0x13eb85e69dfbc0758b12acdaae36287d<br>0X553026A59C |
 | 17 | float | `<float>` | 100.23<br>-4.56 |
