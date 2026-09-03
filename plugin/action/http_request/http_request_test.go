@@ -42,9 +42,67 @@ func TestGetAddrFromURL(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			addr, isTLS := getAddrFromURL(tt.url)
+			addr, isTLS, err := getAddrFromURL(tt.url)
 			assert.Equal(t, tt.wantAddr, addr)
 			assert.Equal(t, tt.wantTLS, isTLS)
+			if tt.wantAddr == "" {
+				assert.Error(t, err)
+			} else {
+				assert.Nil(t, err)
+			}
+		})
+	}
+}
+
+func TestGetRequiredParams(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		address  string
+		expected map[string]struct{}
+	}{
+		{
+			name:     "no params",
+			address:  "http://example.com/api",
+			expected: map[string]struct{}{},
+		},
+		{
+			name:     "single required param",
+			address:  "http://example.com/api/{{ .id }}",
+			expected: map[string]struct{}{"id": {}},
+		},
+		{
+			name:     "param with default - not required",
+			address:  "http://example.com/api/{{ .id | default \"unknown\" }}",
+			expected: map[string]struct{}{},
+		},
+		{
+			name:     "multiple params with default",
+			address:  "http://example.com/{{ .tenant | default \"default\" }}/{{ .user | default \"guest\" }}",
+			expected: map[string]struct{}{},
+		},
+		{
+			name:     "mixed required and optional",
+			address:  "http://example.com/api/{{ .id }}/items?filter={{ .filter | default \"all\" }}",
+			expected: map[string]struct{}{"id": {}},
+		},
+		{
+			name:     "multiple required params",
+			address:  "http://example.com/{{ .tenant }}/{{ .user }}/profile",
+			expected: map[string]struct{}{"tenant": {}, "user": {}},
+		},
+		{
+			name:     "path with required",
+			address:  "http://example.com/{{ .id }}/profile",
+			expected: map[string]struct{}{"id": {}},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := getRequiredParams(tt.address)
+			assert.Equal(t, tt.expected, result)
 		})
 	}
 }
@@ -98,7 +156,7 @@ func makeTestPlugin(t *testing.T, config *Config) *Plugin {
 	p.Start(parsedConfig, params)
 
 	// Override the client so it talks plain HTTP instead of TLS.
-	addr, _ := getAddrFromURL(p.config.Address)
+	addr, _, _ := getAddrFromURL(p.config.Address)
 	p.client = &fasthttp.HostClient{
 		Addr:         addr,
 		ReadTimeout:  p.config.Timeout_,
@@ -479,8 +537,8 @@ func TestDo_GETMethod(t *testing.T) {
 	mu.Unlock()
 }
 
-func TestDo_MissingParam(t *testing.T) {
-	// When a param doesn't exist in the event, it gets the empty string value
+func TestDo_EmptyParamDiscards(t *testing.T) {
+	// When a param used in address template is empty/missing, event is discarded
 	var mu sync.Mutex
 	requestURI := ""
 
@@ -495,7 +553,7 @@ func TestDo_MissingParam(t *testing.T) {
 	require.NoError(t, waitForServer(addr))
 
 	p := makeTestPlugin(t, &Config{
-		Address:      addr + "/{{ .id }}",
+		Address:      addr + "/{{ .id | default \"missing\" }}",
 		Method:       "POST",
 		ContentType:  "application/json",
 		Params:       map[string]string{"id": "nonexistent_field", "extra": "extra_field"},
@@ -509,8 +567,43 @@ func TestDo_MissingParam(t *testing.T) {
 	assert.Equal(t, pipeline.ActionPass, result)
 
 	mu.Lock()
-	// extra_field is not in a URL placeholder so it becomes a query param
+	assert.Contains(t, requestURI, "/missing")
 	assert.Contains(t, requestURI, "extra=hello")
+	mu.Unlock()
+}
+
+func TestDo_MissingRequiredParamWithoutDefaultDiscards(t *testing.T) {
+	var mu sync.Mutex
+	requests := 0
+
+	server, addr := startTestServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/{{ .id }}" {
+			mu.Lock()
+			requests++
+			mu.Unlock()
+		}
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`ok`))
+	}))
+	defer server.Close()
+	require.NoError(t, waitForServer(addr))
+
+	p := makeTestPlugin(t, &Config{
+		Address:      addr + "/{{ .id }}",
+		Method:       "GET",
+		ContentType:  "application/json",
+		Params:       map[string]string{"id": "field.id"},
+		SuccessCodes: []int{200},
+		Timeout:      cfg.Duration("5s"),
+		Retention:    cfg.Duration("10ms"),
+	})
+
+	event := makeEvent(t, `{"other": "value"}`)
+	result := p.Do(event)
+	assert.Equal(t, pipeline.ActionDiscard, result)
+
+	mu.Lock()
+	assert.Equal(t, 0, requests, "no HTTP request must be sent for a discarded event")
 	mu.Unlock()
 }
 
