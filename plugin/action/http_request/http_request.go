@@ -2,9 +2,12 @@ package http_request
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"net/url"
+	"regexp"
 	"slices"
+	"strings"
 	"text/template"
 	"time"
 
@@ -18,10 +21,11 @@ import (
 	"github.com/valyala/fasthttp"
 
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
 /*{ introduction
-Sends HTTP requests with event data as body. Writes response body to the configured response_field. Supports retry with exponential backoff, custom headers, URL templating.
+Makes HTTP requests with URL templating, query params, and custom headers. Writes response to event field. Supports retry with exponential backoff.
 }*/
 
 /*{ examples
@@ -42,7 +46,6 @@ pipelines:
           retention: 100ms
           timeout: 5s
 ```
-```
 
 ### example of request to server:
 ```GET http://example.com/api/id_value?user_id=user```
@@ -56,9 +59,12 @@ type Plugin struct {
 	requestsMetric  *metric.CounterVec
 	latencyMetric   *metric.Histogram
 	backoffStrategy backoff.BackOff
-	paramFields     map[string][]string // pre-parsed field selectors for params
-	addressTmpl     *template.Template  // compiled URL template
+	paramFields     map[string][]string
+	requiredParams  map[string]struct{}
+	addressTmpl     *template.Template
 	buf             bytes.Buffer
+	ctx             context.Context
+	cancel          context.CancelFunc
 }
 
 // ! config-params
@@ -170,21 +176,15 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 	p.config = config.(*Config)
 	p.logger = params.Logger.Desugar()
 
-	addr, isTLS := getAddrFromURL(p.config.Address)
+	addr, isTLS, err := getAddrFromURL(p.config.Address)
+	if err != nil {
+		p.logger.Fatal("invalid address", zap.String("address", p.config.Address), zap.Error(err))
+	}
 	p.client = &fasthttp.HostClient{
 		Addr:         addr,
 		ReadTimeout:  p.config.Timeout_,
 		WriteTimeout: p.config.Timeout_,
 		IsTLS:        isTLS,
-	}
-
-	if p.config.ForceHTTP2 {
-		if err := http2.ConfigureClient(p.client, http2.ClientOpts{}); err != nil {
-			p.logger.Warn("Server does not support HTTP/2",
-				zap.String("address", p.client.Addr),
-				zap.Error(err),
-			)
-		}
 	}
 
 	var tlsConfig *cfg.TLSConfig
@@ -199,7 +199,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 				p.logger.Fatal("can't append CA root", zap.Error(err))
 			}
 		}
-		if tlsConfig.ClientCert != "" || tlsConfig.ClientKey != "" {
+		if tlsConfig.ClientCert != "" && tlsConfig.ClientKey != "" {
 			if err := tlsBuilder.AppendX509KeyPair(tlsConfig.ClientCert, tlsConfig.ClientKey); err != nil {
 				p.logger.Fatal("can't append X509 key pair", zap.Error(err))
 			}
@@ -210,11 +210,21 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 		p.client.TLSConfig = tlsBuilder.Build()
 	}
 
+	if p.config.ForceHTTP2 {
+		if err := http2.ConfigureClient(p.client, http2.ClientOpts{}); err != nil {
+			p.logger.Warn("Server does not support HTTP/2",
+				zap.String("address", p.client.Addr),
+				zap.Error(err),
+			)
+		}
+	}
+
 	p.registerMetrics(params.MetricCtl, p.config.MetricPrefix)
 
 	p.backoffStrategy = p.newBackoffStrategy()
 
-	// Pre-parse field selectors for params
+	p.ctx, p.cancel = context.WithCancel(context.Background())
+
 	p.paramFields = make(map[string][]string, len(p.config.Params))
 	for name, fieldSelector := range p.config.Params {
 		p.paramFields[name] = cfg.ParseFieldSelector(fieldSelector)
@@ -230,12 +240,14 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 		},
 	}).Parse(p.config.Address))
 	p.addressTmpl = tmpl
+
+	p.requiredParams = getRequiredParams(p.config.Address)
 }
 
-func getAddrFromURL(rawURL string) (string, bool) {
+func getAddrFromURL(rawURL string) (string, bool, error) {
 	u, err := url.Parse(rawURL)
 	if err != nil {
-		return "", false
+		return "", false, fmt.Errorf("invalid URL: %w", err)
 	}
 
 	host := u.Hostname()
@@ -251,20 +263,39 @@ func getAddrFromURL(rawURL string) (string, bool) {
 		}
 	}
 
-	return host + ":" + port, isTLS
+	return host + ":" + port, isTLS, nil
+}
+
+var addressParamRegex = regexp.MustCompile(`\{\{\s*\.(\w+)`)
+
+func getRequiredParams(address string) map[string]struct{} {
+	required := make(map[string]struct{})
+	matches := addressParamRegex.FindAllStringSubmatchIndex(address, -1)
+	for _, m := range matches {
+		if len(m) >= 4 {
+			fieldStart := m[2]
+			fieldEnd := m[3]
+			fieldName := address[fieldStart:fieldEnd]
+			afterField := strings.TrimSpace(address[fieldEnd:])
+			if strings.HasPrefix(afterField, "|") {
+				continue
+			}
+			required[fieldName] = struct{}{}
+		}
+	}
+	return required
 }
 
 func (p *Plugin) Stop() {
+	if p.cancel != nil {
+		p.cancel()
+	}
 	if p.client != nil {
 		p.client.CloseIdleConnections()
 	}
 }
 
 func (p *Plugin) registerMetrics(ctl *metric.Ctl, prefix string) {
-	if ctl == nil {
-		return
-	}
-
 	var requestsMetricName string
 	var latencyMetricName string
 	if prefix == "" {
@@ -290,21 +321,25 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 		params[name] = value
 	}
 
+	// Check if required params are empty (no default filter)
+	for fieldName := range p.requiredParams {
+		if params[fieldName] == "" {
+			return p.handleConfigError("required template field is empty",
+				zapcore.WarnLevel,
+				zap.String("field", fieldName),
+				zap.String("address", p.config.Address),
+			)
+		}
+	}
+
 	// Build the address using template execution
 	p.buf.Reset()
 	if err := p.addressTmpl.Execute(&p.buf, params); err != nil {
-		if p.config.FailOnError {
-			p.logger.Fatal("failed to execute URL template",
-				zap.String("address", p.config.Address),
-				zap.Error(err),
-			)
-		} else {
-			p.logger.Error("failed to execute URL template",
-				zap.String("address", p.config.Address),
-				zap.Error(err),
-			)
-			return pipeline.ActionDiscard
-		}
+		return p.handleConfigError("failed to execute URL template",
+			zapcore.ErrorLevel,
+			zap.String("address", p.config.Address),
+			zap.Error(err),
+		)
 	}
 	address := p.buf.String()
 
@@ -370,7 +405,7 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 		return nil
 	}
 
-	err := backoff.Retry(operation, p.backoffStrategy)
+	err := backoff.Retry(operation, backoff.WithContext(p.backoffStrategy, p.ctx))
 	latency := time.Since(startTime)
 	p.latencyMetric.Observe(latency.Seconds())
 
@@ -383,6 +418,19 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 	}
 
 	return pipeline.ActionPass
+}
+
+func (p *Plugin) handleConfigError(msg string, level zapcore.Level, fields ...zap.Field) pipeline.ActionResult {
+	if p.config.FailOnError {
+		p.logger.Fatal(msg, fields...)
+	}
+	switch level {
+	case zapcore.ErrorLevel:
+		p.logger.Error(msg, fields...)
+	default:
+		p.logger.Warn(msg, fields...)
+	}
+	return pipeline.ActionDiscard
 }
 
 func (p *Plugin) newBackoffStrategy() backoff.BackOff {
