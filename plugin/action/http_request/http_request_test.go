@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cenkalti/backoff/v4"
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
@@ -30,21 +31,234 @@ func TestGetAddrFromURL(t *testing.T) {
 		url      string
 		wantAddr string
 		wantTLS  bool
+		wantErr  bool
 	}{
-		{"https with port", "https://example.com:8443", "example.com:8443", true},
-		{"https without port", "https://example.com", "example.com:443", true},
-		{"http without port", "http://example.com", "example.com:80", false},
-		{"http with port", "http://example.com:8080", "example.com:8080", false},
-		{"with path", "https://api.example.com/v1/data", "api.example.com:443", true},
-		{"invalid url", "://invalid", "", false},
-		{"empty string", "", ":80", false},
+		{"https with port", "https://example.com:8443", "example.com:8443", true, false},
+		{"https without port", "https://example.com", "example.com:443", true, false},
+		{"http without port", "http://example.com", "example.com:80", false, false},
+		{"http with port", "http://example.com:8080", "example.com:8080", false, false},
+		{"with path", "https://api.example.com/v1/data", "api.example.com:443", true, false},
+		{"uppercase scheme", "HTTPS://example.com", "example.com:443", true, false},
+		{"ipv6 with port", "https://[::1]:8443", "[::1]:8443", true, false},
+		{"ipv6 without port", "http://[::1]", "[::1]:80", false, false},
+		{"invalid url", "://invalid", "", false, true},
+		{"empty string", "", "", false, true},
+		{"unsupported scheme", "ftp://example.com", "", false, true},
+		{"missing scheme", "example.com/api", "", false, true},
+		{"empty host", "http://", "", false, true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			addr, isTLS := getAddrFromURL(tt.url)
+			addr, isTLS, err := getAddrFromURL(tt.url)
+			if tt.wantErr {
+				assert.Error(t, err)
+				assert.Empty(t, addr)
+				assert.False(t, isTLS)
+				return
+			}
+			assert.NoError(t, err)
 			assert.Equal(t, tt.wantAddr, addr)
 			assert.Equal(t, tt.wantTLS, isTLS)
+		})
+	}
+}
+
+func TestValidateTLSConfig(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		config  *cfg.TLSConfig
+		wantErr bool
+	}{
+		{name: "nil config"},
+		{name: "empty config", config: &cfg.TLSConfig{}},
+		{name: "cert and key", config: &cfg.TLSConfig{ClientCert: "cert.pem", ClientKey: "key.pem"}},
+		{name: "cert without key", config: &cfg.TLSConfig{ClientCert: "cert.pem"}, wantErr: true},
+		{name: "key without cert", config: &cfg.TLSConfig{ClientKey: "key.pem"}, wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateTLSConfig(tt.config)
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestValidateRetryConfig(t *testing.T) {
+	t.Parallel()
+
+	configWith := func(mutate func(*Config)) *Config {
+		c := &Config{
+			Retry:                       10,
+			Timeout_:                    time.Second,
+			Retention_:                  time.Millisecond,
+			RetentionExponentMultiplier: 2,
+			MaxElapsedTime_:             time.Minute,
+		}
+		mutate(c)
+		return c
+	}
+
+	tests := []struct {
+		name    string
+		config  *Config
+		wantErr bool
+	}{
+		{name: "defaults", config: configWith(func(*Config) {})},
+		{name: "zero retry", config: configWith(func(c *Config) { c.Retry = 0 })},
+		{name: "negative retry", config: configWith(func(c *Config) { c.Retry = -1 })},
+		{name: "zero max elapsed time", config: configWith(func(c *Config) { c.MaxElapsedTime_ = 0 })},
+		{name: "negative max elapsed time", config: configWith(func(c *Config) { c.MaxElapsedTime_ = -time.Second }), wantErr: true},
+		{name: "zero timeout", config: configWith(func(c *Config) { c.Timeout_ = 0 }), wantErr: true},
+		{name: "negative timeout", config: configWith(func(c *Config) { c.Timeout_ = -time.Second }), wantErr: true},
+		{name: "zero retention", config: configWith(func(c *Config) { c.Retention_ = 0 }), wantErr: true},
+		{name: "negative retention", config: configWith(func(c *Config) { c.Retention_ = -time.Millisecond }), wantErr: true},
+		{name: "zero multiplier", config: configWith(func(c *Config) { c.RetentionExponentMultiplier = 0 }), wantErr: true},
+		{name: "negative multiplier", config: configWith(func(c *Config) { c.RetentionExponentMultiplier = -2 }), wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateRetryConfig(tt.config)
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestNewBackoffStrategyUnlimitedRetries(t *testing.T) {
+	t.Parallel()
+
+	p := &Plugin{config: &Config{
+		Retry:                       -1,
+		Retention_:                  time.Millisecond,
+		RetentionExponentMultiplier: 2,
+		MaxElapsedTime_:             0,
+	}}
+
+	b := p.newBackoffStrategy()
+	b.Reset()
+	for i := 0; i < 1000; i++ {
+		require.NotEqual(t, backoff.Stop, b.NextBackOff())
+	}
+}
+
+func TestValidateForceHTTP2(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		forceHTTP2 bool
+		isTLS      bool
+		wantErr    bool
+	}{
+		{name: "disabled with http", forceHTTP2: false, isTLS: false},
+		{name: "disabled with https", forceHTTP2: false, isTLS: true},
+		{name: "enabled with https", forceHTTP2: true, isTLS: true},
+		{name: "enabled with http", forceHTTP2: true, isTLS: false, wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateForceHTTP2(tt.forceHTTP2, tt.isTLS)
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestGetRequiredParams(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		address  string
+		expected map[string]struct{}
+	}{
+		{
+			name:     "no params",
+			address:  "http://example.com/api",
+			expected: map[string]struct{}{},
+		},
+		{
+			name:     "single required param",
+			address:  "http://example.com/api/{{ .id }}",
+			expected: map[string]struct{}{"id": {}},
+		},
+		{
+			name:     "param with default - not required",
+			address:  "http://example.com/api/{{ .id | default \"unknown\" }}",
+			expected: map[string]struct{}{},
+		},
+		{
+			name:     "multiple params with default",
+			address:  "http://example.com/{{ .tenant | default \"default\" }}/{{ .user | default \"guest\" }}",
+			expected: map[string]struct{}{},
+		},
+		{
+			name:     "mixed required and optional",
+			address:  "http://example.com/api/{{ .id }}/items?filter={{ .filter | default \"all\" }}",
+			expected: map[string]struct{}{"id": {}},
+		},
+		{
+			name:     "multiple required params",
+			address:  "http://example.com/{{ .tenant }}/{{ .user }}/profile",
+			expected: map[string]struct{}{"tenant": {}, "user": {}},
+		},
+		{
+			name:     "path with required",
+			address:  "http://example.com/{{ .id }}/profile",
+			expected: map[string]struct{}{"id": {}},
+		},
+		{
+			name:     "other filter is still required",
+			address:  `http://example.com/{{ .id | printf "%s" }}`,
+			expected: map[string]struct{}{"id": {}},
+		},
+		{
+			name:     "printf param is required",
+			address:  `http://example.com/{{ printf "%s" .id }}`,
+			expected: map[string]struct{}{"id": {}},
+		},
+		{
+			name:     "param with default and other filter - not required",
+			address:  `http://example.com/{{ .id | printf "%s" | default "unknown" }}`,
+			expected: map[string]struct{}{},
+		},
+		{
+			name:     "default as leading function - not required",
+			address:  "http://example.com/{{ default \"unknown\" .id }}",
+			expected: map[string]struct{}{},
+		},
+		{
+			name:     "param in if condition is required",
+			address:  "http://example.com/{{ if .id }}{{ .id }}{{ end }}",
+			expected: map[string]struct{}{"id": {}},
+		},
+		{
+			name:     "param used with and without default is required",
+			address:  "http://example.com/{{ .id | default \"unknown\" }}/{{ .id }}",
+			expected: map[string]struct{}{"id": {}},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := getRequiredParams(newAddressTemplate(tt.address))
+			assert.Equal(t, tt.expected, result)
 		})
 	}
 }
@@ -98,12 +312,13 @@ func makeTestPlugin(t *testing.T, config *Config) *Plugin {
 	p.Start(parsedConfig, params)
 
 	// Override the client so it talks plain HTTP instead of TLS.
-	addr, _ := getAddrFromURL(p.config.Address)
+	addr, _, _ := getAddrFromURL(p.config.Address)
 	p.client = &fasthttp.HostClient{
-		Addr:         addr,
-		ReadTimeout:  p.config.Timeout_,
-		WriteTimeout: p.config.Timeout_,
-		IsTLS:        false,
+		Addr:                   addr,
+		ReadTimeout:            p.config.Timeout_,
+		WriteTimeout:           p.config.Timeout_,
+		IsTLS:                  false,
+		DisablePathNormalizing: true,
 	}
 
 	return p
@@ -158,13 +373,6 @@ func TestDo_SuccessfulRequest(t *testing.T) {
 }
 
 func TestDo_NonSuccessStatusCode(t *testing.T) {
-	// The non-success status code path is exercised indirectly via
-	// isSuccessStatusCode unit tests. The Do() method always returns
-	// ActionPass, so integration testing of the retry loop on a 500
-	// is impractical because the exponential backoff runs for ~15 minutes.
-	//
-	// This test verifies that when a request would fail fast (server down)
-	// the plugin still returns ActionPass.
 	server, addr := startTestServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadGateway)
 		_, _ = w.Write([]byte(`{}`))
@@ -216,6 +424,73 @@ func TestDo_WithURLParams(t *testing.T) {
 
 	mu.Lock()
 	assert.Contains(t, requestURI, "/123/profile")
+	mu.Unlock()
+}
+
+func TestDo_URLTemplateEscaping(t *testing.T) {
+	var mu sync.Mutex
+	requestURI := ""
+
+	server, addr := startTestServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		requestURI = r.RequestURI
+		mu.Unlock()
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`ok`))
+	}))
+	defer server.Close()
+	require.NoError(t, waitForServer(addr))
+
+	p := makeTestPlugin(t, &Config{
+		Address:      addr + "/api/{{ .id }}",
+		Method:       "GET",
+		ContentType:  "application/json",
+		Params:       map[string]string{"id": "user_id"},
+		SuccessCodes: []int{200},
+		Timeout:      cfg.Duration("5s"),
+		Retention:    cfg.Duration("10ms"),
+	})
+
+	event := makeEvent(t, `{"user_id":"a/b?c&d=e #f"}`)
+	result := p.Do(event)
+	assert.Equal(t, pipeline.ActionPass, result)
+
+	mu.Lock()
+	assert.Contains(t, requestURI, "/api/a%2Fb%3Fc%26d%3De%20%23f")
+	assert.NotContains(t, requestURI, "a/b?c")
+	mu.Unlock()
+}
+
+func TestDo_URLTemplateDefaultEscaping(t *testing.T) {
+	var mu sync.Mutex
+	requestURI := ""
+
+	server, addr := startTestServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		requestURI = r.RequestURI
+		mu.Unlock()
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`ok`))
+	}))
+	defer server.Close()
+	require.NoError(t, waitForServer(addr))
+
+	p := makeTestPlugin(t, &Config{
+		Address:      addr + "/api/{{ .id | default \"a/b c\" }}",
+		Method:       "GET",
+		ContentType:  "application/json",
+		Params:       map[string]string{"id": "missing_id"},
+		SuccessCodes: []int{200},
+		Timeout:      cfg.Duration("5s"),
+		Retention:    cfg.Duration("10ms"),
+	})
+
+	event := makeEvent(t, `{}`)
+	result := p.Do(event)
+	assert.Equal(t, pipeline.ActionPass, result)
+
+	mu.Lock()
+	assert.Contains(t, requestURI, "/api/a%2Fb%20c")
 	mu.Unlock()
 }
 
@@ -358,10 +633,6 @@ func TestDo_WithEventThroughPipelineMock(t *testing.T) {
 }
 
 func TestDo_ServerTimeout(t *testing.T) {
-	// The timeout + retry loop would take ~15 minutes because the
-	// plugin uses backoff.DefaultMaxElapsedTime.  Instead, we test
-	// that a pre-closed server (immediate connection refused) still
-	// results in ActionPass.
 	server, addr := startTestServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		time.Sleep(5 * time.Second)
 		w.WriteHeader(http.StatusOK)
@@ -479,8 +750,8 @@ func TestDo_GETMethod(t *testing.T) {
 	mu.Unlock()
 }
 
-func TestDo_MissingParam(t *testing.T) {
-	// When a param doesn't exist in the event, it gets the empty string value
+func TestDo_EmptyParamUsesDefault(t *testing.T) {
+	// When a param used in the address template is empty/missing, its default is used.
 	var mu sync.Mutex
 	requestURI := ""
 
@@ -495,7 +766,7 @@ func TestDo_MissingParam(t *testing.T) {
 	require.NoError(t, waitForServer(addr))
 
 	p := makeTestPlugin(t, &Config{
-		Address:      addr + "/{{ .id }}",
+		Address:      addr + "/{{ .id | default \"missing\" }}",
 		Method:       "POST",
 		ContentType:  "application/json",
 		Params:       map[string]string{"id": "nonexistent_field", "extra": "extra_field"},
@@ -509,8 +780,43 @@ func TestDo_MissingParam(t *testing.T) {
 	assert.Equal(t, pipeline.ActionPass, result)
 
 	mu.Lock()
-	// extra_field is not in a URL placeholder so it becomes a query param
+	assert.Contains(t, requestURI, "/missing")
 	assert.Contains(t, requestURI, "extra=hello")
+	mu.Unlock()
+}
+
+func TestDo_MissingRequiredParamWithoutDefaultDiscards(t *testing.T) {
+	var mu sync.Mutex
+	requests := 0
+
+	server, addr := startTestServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/{{ .id }}" {
+			mu.Lock()
+			requests++
+			mu.Unlock()
+		}
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`ok`))
+	}))
+	defer server.Close()
+	require.NoError(t, waitForServer(addr))
+
+	p := makeTestPlugin(t, &Config{
+		Address:      addr + "/{{ .id }}",
+		Method:       "GET",
+		ContentType:  "application/json",
+		Params:       map[string]string{"id": "field.id"},
+		SuccessCodes: []int{200},
+		Timeout:      cfg.Duration("5s"),
+		Retention:    cfg.Duration("10ms"),
+	})
+
+	event := makeEvent(t, `{"other": "value"}`)
+	result := p.Do(event)
+	assert.Equal(t, pipeline.ActionDiscard, result)
+
+	mu.Lock()
+	assert.Equal(t, 0, requests, "no HTTP request must be sent for a discarded event")
 	mu.Unlock()
 }
 
@@ -528,16 +834,18 @@ func TestConfigDefaults(t *testing.T) {
 	assert.Equal(t, 10, c.Retry)
 	assert.Equal(t, "50ms", string(c.Retention))
 	assert.Equal(t, 2, c.RetentionExponentMultiplier)
+	assert.Equal(t, "1m", string(c.MaxElapsedTime))
 }
 
 func TestConfigParsing(t *testing.T) {
 	c := &Config{
-		Address:      "https://example.com/api",
-		Method:       "PATCH",
-		ContentType:  "application/xml",
-		SuccessCodes: []int{200, 204},
-		Timeout:      cfg.Duration("10s"),
-		Retention:    cfg.Duration("100ms"),
+		Address:        "https://example.com/api",
+		Method:         "PATCH",
+		ContentType:    "application/xml",
+		SuccessCodes:   []int{200, 204},
+		Timeout:        cfg.Duration("10s"),
+		Retention:      cfg.Duration("100ms"),
+		MaxElapsedTime: cfg.Duration("30s"),
 	}
 
 	parsed := test.NewConfig(c, nil)
@@ -547,6 +855,7 @@ func TestConfigParsing(t *testing.T) {
 	assert.Equal(t, "PATCH", pcfg.Method)
 	assert.Equal(t, 10*time.Second, pcfg.Timeout_)
 	assert.Equal(t, 100*time.Millisecond, pcfg.Retention_)
+	assert.Equal(t, 30*time.Second, pcfg.MaxElapsedTime_)
 	assert.Equal(t, []int{200, 204}, pcfg.SuccessCodes)
 	assert.Equal(t, "application/xml", pcfg.ContentType)
 }

@@ -1,5 +1,5 @@
 extractors:
-  config-params: '"config-params" /json:\"([a-z_]+)\"/ #2 /default:\"([^"]+)\"/ /(required):\"true\"/  /options:\"([^"]+)\"/'
+  config-params: '"config-params" /json:\"([a-z0-9_]+)\"/ #2 /default:\"([^"]+)\"/ /(required):\"true\"/  /options:\"([^"]+)\"/'
   fn-list: '"fn-list" #4 /Plugin\)\s(.+)\s{/'
   match-modes: '"match-modes" /MatchMode(.*),/ /\"(.*)\"/'
   do-if-node: '"do-if-node" /Node(\w+)\s/'

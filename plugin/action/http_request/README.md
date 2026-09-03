@@ -1,5 +1,5 @@
 # HTTP request plugin
-Sends HTTP requests with event data as body. Writes response body to the configured response_field. Supports retry with exponential backoff, custom headers, URL templating.
+Makes HTTP requests with URL templating, query params, and custom headers. Writes response to event field. Supports retry with exponential backoff.
 
 ## Example
 ```yaml
@@ -19,16 +19,21 @@ pipelines:
           retention: 100ms
           timeout: 5s
 ```
-```
 
 ### example of request to server:
-```GET http://example.com/api/id_value?user_id=user```
+```GET http://example.com/api/id_value?id=id_value&user_id=user```
+
+All params are added to the query string, even if they are also used in the address template.
+In this example `id` is sent both in the path and in the query string.
 
 
 ## Config params
 **`params`** *`map[string]string`* 
 
-Query parameters to add to the request.
+Parameters to use in the address template and in the query string.
+Each parameter is available in the `address` template as `{{ .name }}`
+and is also added to the query string, even if it is already used in the template.
+Parameter values are URL-escaped before being substituted into the address.
 
 <br>
 
@@ -40,14 +45,14 @@ HTTP method to use.
 
 **`address`** *`string`* *`required`* 
 
-URL address to send requests to.
+URL address to send requests to. Only `http` and `https` schemes are supported.
 Example: `http://localhost:8080/api/v1/events`
 
 <br>
 
 **`timeout`** *`cfg.Duration`* *`default=5s`* 
 
-Timeout for the HTTP request.
+Timeout for the HTTP request. Must be positive.
 
 <br>
 
@@ -63,6 +68,14 @@ Field name to store the HTTP response body.
 
 <br>
 
+**`force_http2`** *`bool`* *`default=false`* 
+
+Force HTTP/2 for the request. Only supported for https addresses.
+If the server doesn't support HTTP/2 or the connection can't be
+established, the client falls back to HTTP/1.1.
+
+<br>
+
 **`headers`** *`map[string]string`* 
 
 Custom headers to add to the HTTP request.
@@ -72,6 +85,7 @@ Custom headers to add to the HTTP request.
 **`retry`** *`int`* *`default=10`* 
 
 Number of retry attempts for failed HTTP requests.
+A negative value means unlimited attempts, bounded by `max_elapsed_time`.
 Uses exponential backoff strategy between retries.
 If all retries fail, the event is passed through without being sent.
 
@@ -79,14 +93,21 @@ If all retries fail, the event is passed through without being sent.
 
 **`retention`** *`cfg.Duration`* *`default=50ms`* 
 
-Initial interval for exponential backoff between retries.
+Initial interval for exponential backoff between retries. Must be positive.
 
 <br>
 
 **`retention_exponentially_multiplier`** *`int`* *`default=2`* 
 
 Multiplier for exponential increase of retry interval.
-Each retry interval will be multiplied by this value.
+Each retry interval will be multiplied by this value. Must be positive.
+
+<br>
+
+**`max_elapsed_time`** *`cfg.Duration`* *`default=1m`* 
+
+Maximum total time spent retrying a single request, including the time
+spent executing requests. Zero disables the limit. Must be non-negative.
 
 <br>
 
@@ -106,6 +127,8 @@ TLS configuration for the HTTP client.
 * **`client_key`** *`string`* - path or content of a PEM-encoded client key file
 * **`insecure`** *`bool`* - if set, the client will skip SSL/TLS verification
 
+`client_cert` and `client_key` must be set together.
+
 <br>
 
 **`metric_prefix`** *`string`* 
@@ -113,6 +136,13 @@ TLS configuration for the HTTP client.
 Prefix added to metric names for better organization.
 Useful when running multiple instances to avoid metric name collisions.
 Leave empty for default metric naming.
+
+<br>
+
+**`fail_on_error`** *`bool`* *`default=false`* 
+
+If set to false, errors will be logged instead of causing a fatal failure.
+Useful for non-critical pipelines where you want to avoid stopping the entire pipeline on template errors.
 
 <br>
 

@@ -8,6 +8,12 @@ The event field to decode. Must be a string.
 
 <br>
 
+**`re2`** *`string`* *`required`* 
+
+Re2 expression to use for parsing.
+
+<br>
+
 **`prefix`** *`string`* 
 
 A prefix to add to decoded object keys.

@@ -369,7 +369,7 @@ It calculates the hash for one of the specified event fields and adds a new fiel
 
 [More details...](plugin/action/hash/README.md)
 ## http_request
-Sends HTTP requests with event data as body. Writes response body to the configured response_field. Supports retry with exponential backoff, custom headers, URL templating.
+Makes HTTP requests with URL templating, query params, and custom headers. Writes response to event field. Supports retry with exponential backoff.
 
 [More details...](plugin/action/http_request/README.md)
 ## join
