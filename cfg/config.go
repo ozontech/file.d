@@ -737,7 +737,7 @@ func SetDefaultValues(data any) error {
 					if err != nil {
 						return fmt.Errorf("default value for field %s should be %s, got=%s: %w", tField.Name, vFieldKind, defaultValue, err)
 					}
-					vField.SetInt(int64(val))
+					vField.SetInt(val)
 				}
 			case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 				if vField.Uint() == 0 {
@@ -745,7 +745,7 @@ func SetDefaultValues(data any) error {
 					if err != nil {
 						return fmt.Errorf("default value for field %s should be %s, got=%s: %w", tField.Name, vFieldKind, defaultValue, err)
 					}
-					vField.SetUint(uint64(val))
+					vField.SetUint(val)
 				}
 			case reflect.Float32, reflect.Float64:
 				if vField.Float() == 0 {
@@ -753,7 +753,7 @@ func SetDefaultValues(data any) error {
 					if err != nil {
 						return fmt.Errorf("default value for field %s should be %s, got=%s: %w", tField.Name, vFieldKind, defaultValue, err)
 					}
-					vField.SetFloat(float64(val))
+					vField.SetFloat(val)
 				}
 			case reflect.Slice:
 				if vField.Len() == 0 {
@@ -791,8 +791,8 @@ func CompileRegex(s string) (*regexp.Regexp, error) {
 	return regexp.Compile(s[1 : len(s)-1])
 }
 
-func mergeYAMLs(a, b map[interface{}]interface{}) map[interface{}]interface{} {
-	merged := make(map[interface{}]interface{})
+func mergeYAMLs(a, b map[any]any) map[any]any {
+	merged := make(map[any]any)
 	for k, v := range a {
 		merged[k] = v
 	}
