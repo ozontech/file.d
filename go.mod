@@ -30,7 +30,7 @@ require (
 	github.com/jackc/pgx/v4 v4.18.3
 	github.com/klauspost/compress v1.18.4
 	github.com/minio/minio-go v6.0.14+incompatible
-	github.com/ozontech/insane-json v0.1.9
+	github.com/ozontech/insane-json v0.1.10
 	github.com/pierrec/lz4/v4 v4.1.25
 	github.com/prometheus/client_golang v1.16.0
 	github.com/prometheus/client_model v0.3.0

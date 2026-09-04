@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/ozontech/file.d/cfg"
+	"github.com/ozontech/file.d/encoder"
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
@@ -36,6 +37,7 @@ type Plugin struct {
 	controller   pipeline.OutputPluginController
 
 	client      KafkaClient
+	encoder     encoder.Encoder
 	batcher     *pipeline.RetriableBatcher
 	router      *pipeline.Router
 	tokenSource xoauth.TokenSource
@@ -115,6 +117,30 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
+	// > Configure event serialization before sending.
+	// > Includes:
+	// > 1) `type` - codec to use for serializing events (`json` by default):
+	// > * `json` - serializes the full event as a JSON object.
+	// > * `raw`  - extracts a single field and sends its value as-is (unquoted
+	// >   for string fields, encoded JSON otherwise). If the field is missing an
+	// >   empty value is sent and a warning is logged.
+	// > 2) `params` - encoder parameters, keyed by encoder type:
+	// > * `json` - none.
+	// > * `raw`:
+	// >   * `field` - event field to extract (default `message`); supports
+	// >     nested paths such as `log.message`.
+	// >
+	// > Example sending only the `message` field as a raw value:
+	// > ```yaml
+	// > encoding:
+	// >   type: raw
+	// >   params:
+	// >     field: message
+	// > ```
+	Encoding encoder.EncodingConfig `json:"encoding" child:"true"` // *
+
+	// > @3@4@5@6
+	// >
 	// > Compression codec
 	Compression string `json:"compression" default:"none" options:"none|gzip|snappy|lz4|zstd"` // *
 
@@ -178,12 +204,20 @@ type Config struct {
 	// >
 	// > `OAuthConfig` params:
 	// > * **`token`** *`string`* - static token
-	// > ---
+	// >
 	// > * **`client_id`** *`string`* - client ID
 	// > * **`client_secret`** *`string`* - client secret
 	// > * **`token_url`** *`string`* - resource server's token endpoint URL
 	// > * **`scopes`** *`[]string`* - optional requested permissions
 	// > * **`auth_style`** *`string`* *`default=params`* *`options=params|header`* - specifies how the endpoint wants the client ID & client secret sent
+	// >
+	// > * **`tls`** *`TLSConfig`* - tls config
+	// >
+	// > `TLSConfig` params:
+	// > * **`ca_cert`** *`string`* - path or content of a PEM-encoded CA file
+	// > * **`client_cert`** *`string`* - path or content of a PEM-encoded client certificate file
+	// > * **`client_key`** *`string`* - path or content of a PEM-encoded client key file
+	// > * **`insecure`** *`bool`* - if set, the token issuer will skip SSL/TLS verification
 	SaslOAuth cfg.KafkaClientOAuthConfig `json:"sasl_oauth" child:"true"` // *
 
 	// > @3@4@5@6
@@ -269,12 +303,17 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 		p.logger.Fatal("'retention' can't be <1")
 	}
 
+	var err error
+	p.encoder, err = encoder.NewEncoder(p.config.Encoding)
+	if err != nil {
+		p.logger.Fatal("can't create encoder", zap.Error(err))
+	}
+
 	p.logger.Info("starting",
 		zap.Int("workers_count", p.config.WorkersCount_),
 		zap.Int("batch_size", p.config.BatchSize_),
 	)
 
-	var err error
 	p.tokenSource, err = cfg.GetKafkaClientOAuthTokenSource(p.ctx, p.config)
 	if err != nil {
 		p.logger.Fatal("can't create oauth token source", zap.Error(err))
@@ -358,7 +397,12 @@ func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) err
 	defer cancel()
 
 	batch.ForEach(func(event *pipeline.Event) {
-		outBuf, start = event.Encode(outBuf)
+		start = len(outBuf)
+		var err error
+		outBuf, err = p.encoder.Encode(event, outBuf)
+		if err != nil {
+			p.logger.Warn("can't encode event, sending empty value", zap.Error(err))
+		}
 
 		topic := p.config.DefaultTopic
 		if p.config.UseTopicField {

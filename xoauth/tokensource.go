@@ -52,7 +52,10 @@ func NewReuseTokenSource(ctx context.Context, cfg *Config) (TokenSource, error) 
 		return nil, err
 	}
 
-	ti := newHTTPTokenIssuer(cfg)
+	ti, err := newHTTPTokenIssuer(cfg)
+	if err != nil {
+		return nil, err
+	}
 	return newReuseTokenSource(ctx, ti)
 }
 

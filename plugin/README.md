@@ -308,6 +308,13 @@ For example,
 This will log the first 10 events in a one second interval as-is.
 Following that, it will allow through every 5th event in that interval.
 
+If it is needed to log every entry, logger without sampling can be used,
+
+```yaml
+- type: debug
+  interval: 0s
+```
+
 
 [More details...](plugin/action/debug/README.md)
 ## decode
@@ -759,6 +766,49 @@ If the value of the JSON field is not an array of objects, then the event will b
 It discards the events if pipeline throughput gets higher than a configured threshold.
 
 [More details...](plugin/action/throttle/README.md)
+## transform
+It transforms events with programs written in a small expression language.
+A single `transform` action can rename, reshape, parse and delete fields — work that
+otherwise takes a chain of single-purpose actions.
+
+**Example:**
+```yaml
+pipelines:
+  example_pipeline:
+    ...
+    actions:
+    - type: transform
+      source: |
+        # parse lines like "INFO 2025-05-25 11:11:11,222 [shard 1] compaction - done"
+        m = capture(.log, r'^(?P<level>\S+)\s+(?P<time>\S+ \S+)\s+\[(?P<shard>[^\]]+)\]\s+(?P<operation>\S+)\s+-\s+(?P<message>.+)$')
+        if m != null {
+          .level = m.level
+          .time = m.time
+          .shard = m.shard
+          .operation = m.operation
+          .message = m.message
+          del .log
+        }
+    ...
+```
+
+The event `{"log":"INFO 2025-05-25 11:11:11,222 [shard 1] compaction - done"}` becomes:
+```json
+{
+  "level": "INFO",
+  "time": "2025-05-25 11:11:11,222",
+  "shard": "shard 1",
+  "operation": "compaction",
+  "message": "done"
+}
+```
+
+The program is compiled once at pipeline start; an invalid program fails fast at startup.
+A runtime error (e.g. a type error on a particular event) stops the program for that
+event only: the error is logged and the event continues down the pipeline, keeping
+the fields that were set before the error.
+
+[More details...](plugin/action/transform/README.md)
 
 # Outputs
 ## clickhouse

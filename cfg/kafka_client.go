@@ -52,6 +52,8 @@ type KafkaClientOAuthConfig struct {
 	TokenURL     string   `json:"token_url"`
 	Scopes       []string `json:"scopes" slice:"true"`
 	AuthStyle    string   `json:"auth_style" default:"params" options:"params|header"`
+
+	TLS TLSConfig `json:"tls" child:"true"`
 }
 
 func (c *KafkaClientOAuthConfig) isStatic() bool {
@@ -64,6 +66,10 @@ func (c *KafkaClientOAuthConfig) isDynamic() bool {
 
 func (c *KafkaClientOAuthConfig) isValid() bool {
 	return c.isStatic() || c.isDynamic()
+}
+
+func (c *KafkaClientOAuthConfig) isTLS() bool {
+	return c.TLS.CACert != "" || c.TLS.ClientCert != "" || c.TLS.ClientKey != "" || c.TLS.Insecure
 }
 
 func GetKafkaClientOAuthTokenSource(ctx context.Context, cfg KafkaClientConfig) (xoauth.TokenSource, error) {
@@ -89,13 +95,23 @@ func GetKafkaClientOAuthTokenSource(ctx context.Context, cfg KafkaClientConfig) 
 		authStyle = xoauth.AuthStyleInHeader
 	}
 
-	return xoauth.NewReuseTokenSource(ctx, &xoauth.Config{
+	xcfg := &xoauth.Config{
 		ClientID:     saslOAuth.ClientID,
 		ClientSecret: saslOAuth.ClientSecret,
 		TokenURL:     saslOAuth.TokenURL,
 		Scopes:       saslOAuth.Scopes,
 		AuthStyle:    authStyle,
-	})
+	}
+	if saslOAuth.isTLS() {
+		xcfg.TLS = &xoauth.TLSConfig{
+			CACert:     saslOAuth.TLS.CACert,
+			ClientCert: saslOAuth.TLS.ClientCert,
+			ClientKey:  saslOAuth.TLS.ClientKey,
+			Insecure:   saslOAuth.TLS.Insecure,
+		}
+	}
+
+	return xoauth.NewReuseTokenSource(ctx, xcfg)
 }
 
 func GetKafkaClientOptions(c KafkaClientConfig, l *zap.Logger, tokenSource xoauth.TokenSource) []kgo.Opt {
