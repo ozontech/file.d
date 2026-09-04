@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -21,7 +22,6 @@ import (
 	"github.com/ozontech/file.d/test"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
-	"go.uber.org/atomic"
 	"go.uber.org/zap"
 )
 
@@ -29,7 +29,7 @@ const targetFile = "filetests/log.log"
 
 var (
 	dir, _   = filepath.Split(targetFile)
-	fileName atomic.String
+	fileName atomic.Value // stores string
 )
 
 func testFactory(objStoreF objStoreFactory) (pipeline.AnyPlugin, pipeline.AnyConfig) {
@@ -56,7 +56,7 @@ func fPutObjectOk(ctx context.Context, bucketName, objectName, filePath string, 
 		}
 	}
 	fileName.Store(fmt.Sprintf("%s/%s", bucketName, "mockLog.txt"))
-	f, err := os.OpenFile(fileName.Load(), os.O_CREATE|os.O_APPEND|os.O_RDWR, os.FileMode(0o777))
+	f, err := os.OpenFile(fileName.Load().(string), os.O_CREATE|os.O_APPEND|os.O_RDWR, os.FileMode(0o777))
 
 	if err != nil {
 		logger.Panicf("could not open or create f: %s, error: %s", fileName.Load(), err.Error())
@@ -87,7 +87,7 @@ func (put *putWithErr) fPutObjectErr(ctx context.Context, bucketName, objectName
 		}
 
 		fileName.Store(fmt.Sprintf("%s/%s", bucketName, "mockLog.txt"))
-		f, err := os.OpenFile(fileName.Load(), os.O_CREATE|os.O_APPEND|os.O_RDWR, os.FileMode(0o777))
+		f, err := os.OpenFile(fileName.Load().(string), os.O_CREATE|os.O_APPEND|os.O_RDWR, os.FileMode(0o777))
 		if err != nil {
 			logger.Panicf("could not open or create file: %s, error: %s", fileName, err.Error())
 		}
@@ -172,7 +172,7 @@ func TestStart(t *testing.T) {
 
 	test.SendPack(t, p, tests.firstPack)
 	time.Sleep(time.Second)
-	size1 := test.CheckNotZero(t, fileName.Load(), "s3 data is missed after first pack")
+	size1 := test.CheckNotZero(t, fileName.Load().(string), "s3 data is missed after first pack")
 
 	// check deletion upload log files
 	match := test.GetMatches(t, pattern)
@@ -188,7 +188,7 @@ func TestStart(t *testing.T) {
 	assert.Equal(t, 1, len(match))
 	test.CheckZero(t, match[0], "log file is not empty")
 
-	size2 := test.CheckNotZero(t, fileName.Load(), "s3 data missed after second pack")
+	size2 := test.CheckNotZero(t, fileName.Load().(string), "s3 data missed after second pack")
 	assert.True(t, size2 > size1)
 
 	// failed during writing
@@ -352,7 +352,7 @@ func TestStartWithMultiBuckets(t *testing.T) {
 
 	test.SendPack(t, p, tests.firstPack)
 	time.Sleep(time.Second)
-	size1 := test.CheckNotZero(t, fileName.Load(), "s3 data is missed after first pack")
+	size1 := test.CheckNotZero(t, fileName.Load().(string), "s3 data is missed after first pack")
 
 	// check deletion upload log files
 	for _, pattern := range patterns {
@@ -372,7 +372,7 @@ func TestStartWithMultiBuckets(t *testing.T) {
 		test.CheckZero(t, match[0], "log file is not empty")
 	}
 
-	size2 := test.CheckNotZero(t, fileName.Load(), "s3 data missed after second pack")
+	size2 := test.CheckNotZero(t, fileName.Load().(string), "s3 data missed after second pack")
 	assert.True(t, size2 > size1)
 
 	// failed during writing
@@ -611,8 +611,8 @@ func TestStartWithSendProblems(t *testing.T) {
 	test.CheckZero(t, matches[0], "log file is not empty after restart sending")
 
 	// check mock file is not empty and contains more than 3 raws
-	test.CheckNotZero(t, fileName.Load(), "s3 file is empty")
-	f, err := os.Open(fileName.Load())
+	test.CheckNotZero(t, fileName.Load().(string), "s3 file is empty")
+	f, err := os.Open(fileName.Load().(string))
 
 	assert.NoError(t, err)
 	defer f.Close()
@@ -626,6 +626,6 @@ func TestStartWithSendProblems(t *testing.T) {
 }
 
 func isNoSentToS3() bool {
-	_, err := os.Stat(fileName.Load())
+	_, err := os.Stat(fileName.Load().(string))
 	return err != nil && os.IsNotExist(err)
 }

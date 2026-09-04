@@ -4,6 +4,7 @@ import (
 	"math/rand"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/ozontech/file.d/cfg"
@@ -13,7 +14,6 @@ import (
 	"github.com/ozontech/file.d/plugin/input/fake"
 	"github.com/ozontech/file.d/plugin/output/devnull"
 	"github.com/prometheus/client_golang/prometheus"
-	"go.uber.org/atomic"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -40,7 +40,8 @@ func RunCase(testCase *Case, inputInfo *pipeline.InputPluginInfo, eventCount int
 }
 
 func startCasePipeline(act func(pipeline *pipeline.Pipeline), out func(event *pipeline.Event), eventCount int, inputInfo *pipeline.InputPluginInfo, pipelineOpts ...string) *pipeline.Pipeline {
-	x := atomic.NewInt32(int32(eventCount))
+	x := &atomic.Int32{}
+	x.Store(int32(eventCount))
 
 	pipelineOpts = append(pipelineOpts, "passive")
 	p := NewPipeline(nil, pipelineOpts...)
@@ -59,7 +60,7 @@ func startCasePipeline(act func(pipeline *pipeline.Pipeline), out func(event *pi
 	})
 
 	outputPlugin.SetOutFn(func(event *pipeline.Event) {
-		x.Dec()
+		x.Add(-1)
 		if out != nil {
 			out(event)
 		}

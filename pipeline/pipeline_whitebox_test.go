@@ -1,6 +1,7 @@
 package pipeline
 
 import (
+	"sync/atomic"
 	"testing"
 
 	"github.com/ozontech/file.d/decoder"
@@ -8,7 +9,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/atomic"
 	"go.uber.org/zap"
 )
 
@@ -35,7 +35,8 @@ func TestPipelineStreamEvent(t *testing.T) {
 
 	streamID := StreamID(123123)
 	procs := int32(7)
-	p.procCount = atomic.NewInt32(procs)
+	p.procCount = &atomic.Int32{}
+	p.procCount.Store(procs)
 	p.input = &TestInputPlugin{}
 	event := newEvent()
 	event.SourceID = SourceID(streamID)

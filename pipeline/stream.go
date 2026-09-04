@@ -2,10 +2,10 @@ package pipeline
 
 import (
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ozontech/file.d/logger"
-	"go.uber.org/atomic"
 )
 
 // stream is a queue of events
@@ -179,7 +179,7 @@ func (s *stream) tryUnblock() bool {
 	}
 
 	if s.awaySeq != s.commitSeq.Load() {
-		logger.Panicf("why events are different? away event id=%d, commit event id=%d", s.awaySeq, s.commitSeq)
+		logger.Panicf("why events are different? away event id=%d, commit event id=%d", s.awaySeq, s.commitSeq.Load())
 	}
 
 	timeoutEvent := newTimeoutEvent(s)

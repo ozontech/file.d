@@ -3,10 +3,10 @@ package xoauth
 import (
 	"context"
 	"fmt"
+	"sync/atomic"
 	"time"
 
 	"github.com/ozontech/file.d/logger"
-	"go.uber.org/atomic"
 )
 
 // tokenIssuer issues token for specific token grant type flow

@@ -2,6 +2,7 @@ package set_time
 
 import (
 	"fmt"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -11,7 +12,6 @@ import (
 	"github.com/ozontech/file.d/xtime"
 	insaneJSON "github.com/ozontech/insane-json"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/atomic"
 )
 
 func TestPlugin_Do(t *testing.T) {
@@ -139,7 +139,7 @@ func TestE2E_Plugin(t *testing.T) {
 	counter := atomic.Int32{}
 	output.SetOutFn(func(e *pipeline.Event) {
 		require.NotEqual(t, "", e.Root.Dig("timestamp").AsString(), "wrong out event")
-		counter.Dec()
+		counter.Add(-1)
 	})
 
 	counter.Add(1)

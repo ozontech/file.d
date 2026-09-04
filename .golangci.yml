@@ -23,7 +23,14 @@ linters:
     - unused
     - usestdlibvars
     - whitespace
+    - depguard
   settings:
+    depguard:
+      rules:
+        denied-deps:
+          deny:
+            - pkg: go.uber.org/atomic
+              desc: use `sync/atomic` instead
     dupl:
       threshold: 120
     forbidigo:

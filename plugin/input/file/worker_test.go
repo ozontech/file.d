@@ -7,6 +7,7 @@ import (
 	"path"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -17,7 +18,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/atomic"
 	"go.uber.org/zap"
 )
 
@@ -109,7 +109,7 @@ func TestWorkerWork(t *testing.T) {
 				lastEventSeq:   0,
 				isVirgin:       false,
 				isDone:         false,
-				shouldSkip:     *atomic.NewBool(false),
+				shouldSkip:     atomic.Bool{},
 				mu:             &sync.Mutex{},
 			}
 			ctl := metric.NewCtl("test", prometheus.NewRegistry(), 0, 0)
@@ -288,7 +288,7 @@ func TestWorkerWorkMultiData(t *testing.T) {
 
 			job := &Job{
 				file:       f,
-				shouldSkip: *atomic.NewBool(false),
+				shouldSkip: atomic.Bool{},
 				offsets:    pipeline.SliceMap{},
 				mu:         &sync.Mutex{},
 			}
@@ -518,7 +518,7 @@ func TestWorkerRemoveAfter(t *testing.T) {
 				lastEventSeq:   0,
 				isVirgin:       false,
 				isDone:         false,
-				shouldSkip:     *atomic.NewBool(false),
+				shouldSkip:     atomic.Bool{},
 				mu:             &sync.Mutex{},
 			}
 
