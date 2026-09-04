@@ -731,13 +731,29 @@ func SetDefaultValues(data any) error {
 				if vField.String() == "" {
 					vField.SetString(defaultValue)
 				}
-			case reflect.Int:
+			case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 				if vField.Int() == 0 { // like in vField.IsZero
-					val, err := strconv.Atoi(defaultValue)
+					val, err := strconv.ParseInt(defaultValue, 10, vField.Type().Bits())
 					if err != nil {
-						return fmt.Errorf("default value for field %s should be int, got=%s: %w", tField.Name, defaultValue, err)
+						return fmt.Errorf("default value for field %s should be %s, got=%s: %w", tField.Name, vFieldKind, defaultValue, err)
 					}
 					vField.SetInt(int64(val))
+				}
+			case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+				if vField.Uint() == 0 {
+					val, err := strconv.ParseUint(defaultValue, 10, vField.Type().Bits())
+					if err != nil {
+						return fmt.Errorf("default value for field %s should be %s, got=%s: %w", tField.Name, vFieldKind, defaultValue, err)
+					}
+					vField.SetUint(uint64(val))
+				}
+			case reflect.Float32, reflect.Float64:
+				if vField.Float() == 0 {
+					val, err := strconv.ParseFloat(defaultValue, vField.Type().Bits())
+					if err != nil {
+						return fmt.Errorf("default value for field %s should be %s, got=%s: %w", tField.Name, vFieldKind, defaultValue, err)
+					}
+					vField.SetFloat(float64(val))
 				}
 			case reflect.Slice:
 				if vField.Len() == 0 {
