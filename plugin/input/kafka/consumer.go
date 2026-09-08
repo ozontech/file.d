@@ -2,11 +2,13 @@ package kafka
 
 import (
 	"context"
+	"errors"
 	"sync"
 
 	"github.com/ozontech/file.d/metric"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/pipeline/metadata"
+	"github.com/twmb/franz-go/pkg/kerr"
 	"github.com/twmb/franz-go/pkg/kgo"
 	"go.uber.org/zap"
 )
@@ -87,9 +89,15 @@ func (s *splitConsume) consume(ctx context.Context, cl *kgo.Client) {
 		}
 
 		if errs := fetches.Errors(); len(errs) > 0 {
+			unknownMemberID := false
 			for _, err := range errs {
 				s.consumeErrorsMetric.Inc()
 				s.logger.Error("can't consume from kafka", zap.Error(err.Err))
+				unknownMemberID = unknownMemberID || isUnknownMemberID(err.Err)
+			}
+			if unknownMemberID {
+				s.logger.Error("stopping kafka consumer after unknown member id")
+				return
 			}
 		}
 
@@ -103,6 +111,11 @@ func (s *splitConsume) consume(ctx context.Context, cl *kgo.Client) {
 		})
 		cl.AllowRebalance()
 	}
+}
+
+func isUnknownMemberID(err error) bool {
+	var kafkaErr *kerr.Error
+	return errors.As(err, &kafkaErr) && kafkaErr.Code == kerr.UnknownMemberID.Code
 }
 
 type pconsumer struct {

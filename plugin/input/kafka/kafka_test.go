@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/twmb/franz-go/pkg/kerr"
 	"github.com/twmb/franz-go/pkg/kgo"
 )
 
@@ -30,4 +31,10 @@ func TestAssembleOffset(t *testing.T) {
 
 	assert.Equal(t, message.LeaderEpoch, epochOffset.Epoch, "values aren't equal")
 	assert.Equal(t, message.Offset+1, epochOffset.Offset, "values aren't equal")
+}
+
+func TestIsUnknownMemberID(t *testing.T) {
+	assert.True(t, isUnknownMemberID(kerr.UnknownMemberID))
+	assert.True(t, isUnknownMemberID(&kgo.ErrGroupSession{Err: kerr.UnknownMemberID}))
+	assert.False(t, isUnknownMemberID(kerr.IllegalGeneration))
 }
