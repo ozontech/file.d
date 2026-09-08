@@ -66,8 +66,9 @@ func TestSetFastPathMatchesJSONPath(t *testing.T) {
 			require.NoError(t, err)
 			defer insaneJSON.Release(b)
 
-			want := setViaJSON(t, a, "out", v)
-			got := setViaTarget(t, b, "out", v)
+			out := fmt.Sprintf("out %d", i)
+			want := setViaJSON(t, a, out, v)
+			got := setViaTarget(t, b, out, v)
 			require.Equal(t, want, got)
 			require.True(t, json.Valid([]byte(got)), "produced invalid JSON: %s", got)
 		})
@@ -120,7 +121,7 @@ func TestSetFastPathMatchesJSONPath(t *testing.T) {
 // escapeString emits \ufffd for an invalid rune, but the shouldEscape check in
 // front of it lets a string through untouched when it holds no quote, backslash
 // or control byte. So the fast path keeps the original bytes -- which is what the
-// rest of file.d does with log data -- while the JSON path sanitises them.
+// rest of file.d does with log data -- while the JSON path sanitizes them.
 // Both are well-formed JSON structure; neither loses the event.
 func TestSetFastPathInvalidUTF8(t *testing.T) {
 	const bad = "bad\xff\xfeutf8"
