@@ -52,6 +52,10 @@ func (e *TimestampLit) Eval(_ EvalContext) (Value, error) {
 	return TimestampValue{V: e.Parsed}, nil
 }
 
+func (e *ConstExpr) Eval(_ EvalContext) (Value, error) {
+	return e.V, nil
+}
+
 func (e *IdentExpr) Eval(ctx EvalContext) (Value, error) {
 	if val, ok := ctx.GetVar(e.Name); ok {
 		return val, nil
@@ -189,9 +193,9 @@ func (e *BinaryExpr) Eval(ctx EvalContext) (Value, error) {
 
 	switch e.Op {
 	case "==":
-		return BoolValue{V: left.Equal(right)}, nil
+		return BoolValue{V: resolve(left).Equal(resolve(right))}, nil
 	case "!=":
-		return BoolValue{V: !left.Equal(right)}, nil
+		return BoolValue{V: !resolve(left).Equal(resolve(right))}, nil
 	case "+":
 		return evalAdd(e.Pos(), resolve(left), resolve(right))
 	case "-", "*", "/", "%":
