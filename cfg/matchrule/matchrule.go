@@ -160,31 +160,26 @@ func (r *Rule) match(raw []byte) bool {
 	return false
 }
 
-type Cond byte
+type Cond string
+
+const (
+	CondAnd Cond = "and"
+	CondOr  Cond = "or"
+)
 
 var _ json.Unmarshaler = (*Cond)(nil)
 
-func (c *Cond) UnmarshalJSON(i []byte) error {
-	switch {
-	case bytes.Equal(i, condAndBytes):
+func (c *Cond) UnmarshalJSON(data []byte) error {
+	switch string(data) {
+	case "and":
 		*c = CondAnd
-	case bytes.Equal(i, condOrBytes):
+	case "or":
 		*c = CondOr
 	default:
-		return fmt.Errorf("unknown condition %s", string(i))
+		return fmt.Errorf("unknown condition %s", data)
 	}
 	return nil
 }
-
-const (
-	CondAnd Cond = iota
-	CondOr
-)
-
-var (
-	condAndBytes = []byte(`"and"`)
-	condOrBytes  = []byte(`"or"`)
-)
 
 type RuleSet struct {
 	// > @3@4@5@6

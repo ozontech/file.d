@@ -749,7 +749,7 @@ func SetDefaultValues(data any) error {
 					}
 					vField.SetInt(val)
 				}
-			case reflect.Uint, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+			case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 				if vField.Uint() == 0 {
 					val, err := strconv.ParseUint(defaultValue, 10, vField.Type().Bits())
 					if err != nil {
