@@ -171,9 +171,9 @@ var _ json.Unmarshaler = (*Cond)(nil)
 
 func (c *Cond) UnmarshalJSON(data []byte) error {
 	switch string(data) {
-	case "and":
+	case `"and"`:
 		*c = CondAnd
-	case "or":
+	case `"or"`:
 		*c = CondOr
 	default:
 		return fmt.Errorf("unknown condition %s", data)
