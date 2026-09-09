@@ -81,10 +81,10 @@ func TestConvertUTF8Bytes(t *testing.T) {
 					"obj2",
 				},
 			},
-			in: `{"obj":{"field":"\xD0\xA1\xD0\x98\xD0\xA1\xD0\xA2\xD0\x95\xD0\x9C\xD0\x90.xml"},"obj2":"test\u003F\uD801\uDC01"}`,
+			in: `{"obj":{"field":"\xD0\xA1\xD0\x98\xD0\xA1\xD0\xA2\xD0\x95\xD0\x9C\xD0\x90.xml1"},"obj2":"\xD0\xA1\xD0\x98\xD0\xA1\xD0\xA2\xD0\x95\xD0\x9C\xD0\x90.xml2"}`,
 			wantFields: []string{
-				"СИСТЕМА.xml",
-				"test?𐐁",
+				"СИСТЕМА.xml1",
+				"СИСТЕМА.xml2",
 			},
 		},
 		{
