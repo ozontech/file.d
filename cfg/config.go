@@ -305,7 +305,17 @@ func tryApplyFunc(app funcApplier, field *simplejson.Json) (string, bool) {
 }
 
 func DecodeConfig(config any, configJson []byte) error {
-	err := SetDefaultValues(config)
+	object, err := simplejson.NewJson(configJson)
+	if err != nil {
+		return err
+	}
+
+	err = preallocSlicesFromJSON(reflect.ValueOf(config), object)
+	if err != nil {
+		return err
+	}
+
+	err = SetDefaultValues(config)
 	if err != nil {
 		return err
 	}
@@ -731,13 +741,29 @@ func SetDefaultValues(data any) error {
 				if vField.String() == "" {
 					vField.SetString(defaultValue)
 				}
-			case reflect.Int:
+			case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 				if vField.Int() == 0 { // like in vField.IsZero
-					val, err := strconv.Atoi(defaultValue)
+					val, err := strconv.ParseInt(defaultValue, 10, vField.Type().Bits())
 					if err != nil {
-						return fmt.Errorf("default value for field %s should be int, got=%s: %w", tField.Name, defaultValue, err)
+						return fmt.Errorf("default value for field %s should be %s, got=%s: %w", tField.Name, vFieldKind, defaultValue, err)
 					}
-					vField.SetInt(int64(val))
+					vField.SetInt(val)
+				}
+			case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+				if vField.Uint() == 0 {
+					val, err := strconv.ParseUint(defaultValue, 10, vField.Type().Bits())
+					if err != nil {
+						return fmt.Errorf("default value for field %s should be %s, got=%s: %w", tField.Name, vFieldKind, defaultValue, err)
+					}
+					vField.SetUint(val)
+				}
+			case reflect.Float32, reflect.Float64:
+				if vField.Float() == 0 {
+					val, err := strconv.ParseFloat(defaultValue, vField.Type().Bits())
+					if err != nil {
+						return fmt.Errorf("default value for field %s should be %s, got=%s: %w", tField.Name, vFieldKind, defaultValue, err)
+					}
+					vField.SetFloat(val)
 				}
 			case reflect.Slice:
 				if vField.Len() == 0 {
@@ -775,8 +801,70 @@ func CompileRegex(s string) (*regexp.Regexp, error) {
 	return regexp.Compile(s[1 : len(s)-1])
 }
 
-func mergeYAMLs(a, b map[interface{}]interface{}) map[interface{}]interface{} {
-	merged := make(map[interface{}]interface{})
+// preallocSlicesFromJSON pre-sizes []struct config fields from the raw JSON
+// and applies tag defaults to each element.
+func preallocSlicesFromJSON(v reflect.Value, object *simplejson.Json) error {
+	if object == nil {
+		return nil
+	}
+
+	switch v.Kind() {
+	case reflect.Pointer:
+		if v.IsNil() {
+			return nil
+		}
+		return preallocSlicesFromJSON(v.Elem(), object)
+	case reflect.Struct:
+		t := v.Type()
+		for i := range t.NumField() {
+			tField := t.Field(i)
+			if !tField.IsExported() {
+				continue
+			}
+
+			// before: `json:"something,omitempty"`
+			key, _, _ := strings.Cut(tField.Tag.Get("json"), ",")
+			// after: `json:"something"`
+			child, ok := object.CheckGet(key)
+			if !ok {
+				continue
+			}
+
+			if err := preallocSlicesFromJSON(v.Field(i), child); err != nil {
+				return err
+			}
+		}
+	case reflect.Slice:
+		arr, err := object.Array()
+		if err != nil {
+			return nil
+		}
+
+		elemType := v.Type().Elem()
+		// only prealloc for slices whose elements type may carry defaults.
+		if elemType.Kind() != reflect.Struct {
+			return nil
+		}
+
+		newSlice := reflect.MakeSlice(v.Type(), len(arr), len(arr))
+		for i := range len(arr) {
+			item := newSlice.Index(i)
+			if err := SetDefaultValues(item.Addr().Interface()); err != nil {
+				return err
+			}
+			if err := preallocSlicesFromJSON(item, object.GetIndex(i)); err != nil {
+				return err
+			}
+		}
+
+		v.Set(newSlice)
+	}
+
+	return nil
+}
+
+func mergeYAMLs(a, b map[any]any) map[any]any {
+	merged := make(map[any]any)
 	for k, v := range a {
 		merged[k] = v
 	}
