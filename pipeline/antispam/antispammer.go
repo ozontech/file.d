@@ -30,6 +30,7 @@ type Antispammer struct {
 	sourcesThresholds   map[string]int
 	exceptions          Exceptions
 	rules               Rules
+	bannedSourcesSample *BannedSourcesSampleOptions
 
 	logger *zap.Logger
 
@@ -37,12 +38,15 @@ type Antispammer struct {
 	activeMetric    *metric.Gauge
 	banMetric       *metric.GaugeVec
 	exceptionMetric *metric.CounterVec
+	sampledMetric   *metric.CounterVec
 }
 
 type source struct {
-	counter   *atomic.Int32
-	timestamp *atomic.Int64
-	name      string
+	counter       *atomic.Int32
+	timestamp     *atomic.Int64
+	sampleUntil   *atomic.Int64
+	sampleCounter *atomic.Int64
+	name          string
 }
 
 type Options struct {
@@ -51,9 +55,19 @@ type Options struct {
 	UnbanIterations     int
 	Exceptions          Exceptions
 	Rules               Rules
+	BannedSourcesSample *BannedSourcesSampleOptions
 
 	Logger            *zap.Logger
 	MetricsController *metric.Ctl
+}
+
+type BannedSourcesSampleOptions struct {
+	Interval            time.Duration
+	First               int64
+	Thereafter          int64
+	SampledField        string
+	SampledMetricName   string
+	SampledMetricLabels []string
 }
 
 func NewAntispammer(o *Options) *Antispammer {
@@ -85,15 +99,31 @@ func NewAntispammer(o *Options) *Antispammer {
 		),
 	}
 
+	if o.BannedSourcesSample != nil {
+		a.bannedSourcesSample = o.BannedSourcesSample
+		o.Logger.Info("sampling of banned sources is enabled",
+			zap.Duration("interval", o.BannedSourcesSample.Interval),
+			zap.Int64("first", o.BannedSourcesSample.First),
+			zap.Int64("thereafter", o.BannedSourcesSample.Thereafter),
+		)
+
+		if o.BannedSourcesSample.SampledMetricName != "" {
+			a.sampledMetric = o.MetricsController.RegisterCounterVec(
+				o.BannedSourcesSample.SampledMetricName,
+				"How many events from banned sources were let through by the sampler",
+				o.BannedSourcesSample.SampledMetricLabels...,
+			)
+		}
+	}
 	// not enabled by default
 	a.activeMetric.Set(0)
 
 	return a
 }
 
-func (a *Antispammer) IsSpam(id string, name string, isNewSource bool, event []byte, timeEvent time.Time, meta map[string]string) bool {
+func (a *Antispammer) IsSpam(id string, name string, isNewSource bool, event []byte, timeEvent time.Time, meta map[string]string) (spam, sampled bool) {
 	if a.rules == nil && a.threshold == -1 {
-		return false
+		return false, false
 	}
 
 	threshold := a.threshold
@@ -108,7 +138,7 @@ func (a *Antispammer) IsSpam(id string, name string, isNewSource bool, event []b
 				if e.Name != "" {
 					a.exceptionMetric.WithLabelValues(e.Name).Inc()
 				}
-				return false
+				return false, false
 			}
 		}
 	} else {
@@ -124,9 +154,9 @@ func (a *Antispammer) IsSpam(id string, name string, isNewSource bool, event []b
 			switch rule.Threshold {
 			case thresholdUnlimited:
 				a.exceptionMetric.WithLabelValues(rule.Name).Inc()
-				return false
+				return false, false
 			case thresholdBlocked:
-				return true
+				return true, false
 			}
 
 			threshold = rule.Threshold
@@ -136,9 +166,9 @@ func (a *Antispammer) IsSpam(id string, name string, isNewSource bool, event []b
 
 	switch threshold {
 	case thresholdUnlimited:
-		return false
+		return false, false
 	case thresholdBlocked:
-		return true
+		return true, false
 	}
 
 	a.mu.RLock()
@@ -153,9 +183,11 @@ func (a *Antispammer) IsSpam(id string, name string, isNewSource bool, event []b
 			src = newSrc
 		} else {
 			src = source{
-				counter:   &atomic.Int32{},
-				name:      name,
-				timestamp: &atomic.Int64{},
+				counter:       &atomic.Int32{},
+				timestamp:     &atomic.Int64{},
+				sampleUntil:   &atomic.Int64{},
+				sampleCounter: &atomic.Int64{},
+				name:          name,
 			}
 			src.timestamp.Add(timeEventSeconds)
 			a.sources[id] = src
@@ -166,7 +198,7 @@ func (a *Antispammer) IsSpam(id string, name string, isNewSource bool, event []b
 
 	if isNewSource {
 		src.counter.Swap(0)
-		return false
+		return false, false
 	}
 
 	x := src.counter.Load()
@@ -186,7 +218,13 @@ func (a *Antispammer) IsSpam(id string, name string, isNewSource bool, event []b
 		)
 	}
 
-	return x >= int32(threshold)
+	if x >= int32(threshold) {
+		if a.samplerAllow(src) {
+			return true, true
+		}
+		return true, false
+	}
+	return false, false
 }
 
 func (a *Antispammer) Maintenance() {
@@ -213,6 +251,8 @@ func (a *Antispammer) Maintenance() {
 		if isMore && x < threshold {
 			a.banMetric.WithLabelValues(source.name).Dec()
 			a.logger.Info("source has been unbanned", zap.Any("id", sourceID))
+			source.sampleCounter.Store(0)
+			source.sampleUntil.Store(0)
 		}
 
 		if x >= threshold {
@@ -250,6 +290,39 @@ func (a *Antispammer) Dump() string {
 	})
 
 	return out
+}
+
+func (a *Antispammer) SampledMetric() *metric.CounterVec {
+	return a.sampledMetric
+}
+
+func (a *Antispammer) samplerAllow(src source) bool {
+	cfg := a.bannedSourcesSample
+	if cfg == nil {
+		return false
+	}
+
+	now := time.Now().UnixNano()
+	for {
+		end := src.sampleUntil.Load()
+		if now < end {
+			break
+		}
+		if src.sampleUntil.CompareAndSwap(end, now+cfg.Interval.Nanoseconds()) {
+			src.sampleCounter.Store(0)
+			break
+		}
+	}
+
+	val := src.sampleCounter.Inc()
+	if val <= cfg.First {
+		return true
+	}
+	if cfg.Thereafter == 0 {
+		return false
+	}
+
+	return (val-cfg.First)%cfg.Thereafter == 0
 }
 
 type Exception struct {

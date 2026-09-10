@@ -172,6 +172,7 @@ type AntispamSettings struct {
 	Rules               antispam.Rules
 	Exceptions          antispam.Exceptions
 	MaintenanceInterval time.Duration
+	BannedSourcesSample *antispam.BannedSourcesSampleOptions
 }
 
 type PoolType string
@@ -221,6 +222,7 @@ func New(name string, settings *Settings, registry *prometheus.Registry, lg *zap
 			MetricsController:   metricCtl,
 			Rules:               settings.Antispam.Rules,
 			Exceptions:          settings.Antispam.Exceptions,
+			BannedSourcesSample: settings.Antispam.BannedSourcesSample,
 		}),
 		metricCtl: metricCtl,
 
@@ -400,8 +402,9 @@ func (p *Pipeline) GetOutput() OutputPlugin {
 // In decodes message and passes it to event stream.
 func (p *Pipeline) In(sourceID SourceID, sourceName string, offsets Offsets, bytes []byte, isNewSource bool, meta metadata.MetaData) (seqID uint64) {
 	var (
-		ok     bool
-		cutoff bool
+		ok              bool
+		cutoff          bool
+		antispamSampled bool
 	)
 	// don't process mud.
 	bytes, cutoff, ok = p.checkInputBytes(bytes, sourceName, meta)
@@ -476,10 +479,11 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offsets Offsets, byt
 				p.Error(fmt.Sprintf("cannot parse raw time %s: %v", row.Time, err))
 			}
 		}
-		isSpam := p.antispamer.IsSpam(checkSourceID, checkSourceName, isNewSource, bytes, eventTime, meta)
-		if isSpam {
+		isSpam, sampled := p.antispamer.IsSpam(checkSourceID, checkSourceName, isNewSource, bytes, eventTime, meta)
+		if isSpam && !sampled {
 			return EventSeqIDError
 		}
+		antispamSampled = sampled
 	}
 
 	p.inputEvents.Inc()
@@ -549,6 +553,24 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offsets Offsets, byt
 	}
 	if cutoff && p.settings.CutOffEventByLimitField != "" {
 		event.Root.AddFieldNoAlloc(event.Root, p.settings.CutOffEventByLimitField).MutateToBool(true)
+	}
+	if antispamSampled {
+		cfg := p.settings.Antispam.BannedSourcesSample
+		if cfg.SampledField != "" {
+			event.Root.AddFieldNoAlloc(event.Root, cfg.SampledField).MutateToBool(true)
+		}
+
+		if sm := p.antispamer.SampledMetric(); sm != nil {
+			values := make([]string, 0, len(cfg.SampledMetricLabels))
+			for _, path := range cfg.SampledMetricLabels {
+				v := "not_set"
+				if node := event.Root.Dig(path); node != nil {
+					v = node.AsString()
+				}
+				values = append(values, v)
+			}
+			sm.WithLabelValues(values...).Inc()
+		}
 	}
 
 	event.Offset = offsets.current
