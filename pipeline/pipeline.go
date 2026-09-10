@@ -24,28 +24,24 @@ import (
 )
 
 const (
-	DefaultAntispamThreshold             = -1
-	DefaultSourceNameMetaField           = ""
-	DefaultDecoder                       = "auto"
-	DefaultIsStrict                      = false
-	DefaultStreamField                   = "stream"
-	DefaultCapacity                      = 1024
-	DefaultAvgInputEventSize             = 4 * 1024
-	DefaultMaxInputEventSize             = 0
-	DefaultCutOffEventByLimit            = false
-	DefaultCutOffEventByLimitField       = ""
-	DefaultJSONNodePoolSize              = 16
-	DefaultMaintenanceInterval           = time.Second * 5
-	DefaultEventTimeout                  = time.Second * 30
-	DefaultFieldValue                    = "not_set"
-	DefaultStreamName                    = StreamName("not_set")
-	DefaultMetricHoldDuration            = time.Minute * 30
-	DefaultMetaCacheSize                 = 1024
-	DefaultMetricMaxLabelValueLength     = 0
-	DefaultBannedSourcesSampleInterval   = time.Second * 3     // idk
-	DefaultBannedSourcesSampleFirst      = 3                   // too
-	DefaultBannedSourcesSampleThereafter = 0                   // and too
-	DefaultBannedSourcesSampleField      = "_antispam_sampled" // may be just _sampled ?
+	DefaultAntispamThreshold         = -1
+	DefaultSourceNameMetaField       = ""
+	DefaultDecoder                   = "auto"
+	DefaultIsStrict                  = false
+	DefaultStreamField               = "stream"
+	DefaultCapacity                  = 1024
+	DefaultAvgInputEventSize         = 4 * 1024
+	DefaultMaxInputEventSize         = 0
+	DefaultCutOffEventByLimit        = false
+	DefaultCutOffEventByLimitField   = ""
+	DefaultJSONNodePoolSize          = 16
+	DefaultMaintenanceInterval       = time.Second * 5
+	DefaultEventTimeout              = time.Second * 30
+	DefaultFieldValue                = "not_set"
+	DefaultStreamName                = StreamName("not_set")
+	DefaultMetricHoldDuration        = time.Minute * 30
+	DefaultMetaCacheSize             = 1024
+	DefaultMetricMaxLabelValueLength = 0
 
 	EventSeqIDError = uint64(0)
 
@@ -560,7 +556,9 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offsets Offsets, byt
 	}
 	if antispamSampled {
 		cfg := p.settings.Antispam.BannedSourcesSample
-		event.Root.AddFieldNoAlloc(event.Root, cfg.SampledField).MutateToBool(true)
+		if cfg.SampledField != "" {
+			event.Root.AddFieldNoAlloc(event.Root, cfg.SampledField).MutateToBool(true)
+		}
 
 		if sm := p.antispamer.SampledMetric(); sm != nil {
 			values := make([]string, 0, len(cfg.SampledMetricLabels))

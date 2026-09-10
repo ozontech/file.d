@@ -26,7 +26,7 @@ type Antispammer struct {
 	threshold           int
 	maintenanceInterval time.Duration
 	mu                  sync.RWMutex
-	sources             map[string]*source
+	sources             map[string]source
 	sourcesThresholds   map[string]int
 	exceptions          Exceptions
 	rules               Rules
@@ -42,13 +42,11 @@ type Antispammer struct {
 }
 
 type source struct {
-	counter   *atomic.Int32
-	timestamp *atomic.Int64
-	name      string
-
-	sampleMu      sync.Mutex
-	sampleUntil   time.Time
-	sampleCounter int
+	counter       *atomic.Int32
+	timestamp     *atomic.Int64
+	sampleUntil   *atomic.Int64
+	sampleCounter *atomic.Int64
+	name          string
 }
 
 type Options struct {
@@ -65,8 +63,8 @@ type Options struct {
 
 type BannedSourcesSampleOptions struct {
 	Interval            time.Duration
-	First               int
-	Thereafter          int
+	First               int64
+	Thereafter          int64
 	SampledField        string
 	SampledMetricName   string
 	SampledMetricLabels []string
@@ -83,7 +81,7 @@ func NewAntispammer(o *Options) *Antispammer {
 		unbanIterations:     o.UnbanIterations,
 		threshold:           o.Threshold,
 		maintenanceInterval: o.MaintenanceInterval,
-		sources:             make(map[string]*source),
+		sources:             make(map[string]source),
 		sourcesThresholds:   make(map[string]int),
 		exceptions:          o.Exceptions,
 		rules:               o.Rules,
@@ -103,10 +101,10 @@ func NewAntispammer(o *Options) *Antispammer {
 
 	if o.BannedSourcesSample != nil {
 		a.bannedSourcesSample = o.BannedSourcesSample
-		o.Logger.Info("antispam banned sources sample enabled",
+		o.Logger.Info("sampling of banned sources is enabled",
 			zap.Duration("interval", o.BannedSourcesSample.Interval),
-			zap.Int("first", o.BannedSourcesSample.First),
-			zap.Int("thereafter", o.BannedSourcesSample.Thereafter),
+			zap.Int64("first", o.BannedSourcesSample.First),
+			zap.Int64("thereafter", o.BannedSourcesSample.Thereafter),
 		)
 
 		if o.BannedSourcesSample.SampledMetricName != "" {
@@ -184,10 +182,12 @@ func (a *Antispammer) IsSpam(id string, name string, isNewSource bool, event []b
 		if newSrc, has := a.sources[id]; has {
 			src = newSrc
 		} else {
-			src = &source{
-				counter:   &atomic.Int32{},
-				name:      name,
-				timestamp: &atomic.Int64{},
+			src = source{
+				counter:       &atomic.Int32{},
+				timestamp:     &atomic.Int64{},
+				sampleUntil:   &atomic.Int64{},
+				sampleCounter: &atomic.Int64{},
+				name:          name,
 			}
 			src.timestamp.Add(timeEventSeconds)
 			a.sources[id] = src
@@ -251,10 +251,8 @@ func (a *Antispammer) Maintenance() {
 		if isMore && x < threshold {
 			a.banMetric.WithLabelValues(source.name).Dec()
 			a.logger.Info("source has been unbanned", zap.Any("id", sourceID))
-			source.sampleMu.Lock()
-			source.sampleUntil = time.Time{}
-			source.sampleCounter = 0
-			source.sampleMu.Unlock()
+			source.sampleCounter.Store(0)
+			source.sampleUntil.Store(0)
 		}
 
 		if x >= threshold {
@@ -294,34 +292,37 @@ func (a *Antispammer) Dump() string {
 	return out
 }
 
-func (a *Antispammer) samplerAllow(src *source) bool {
+func (a *Antispammer) SampledMetric() *metric.CounterVec {
+	return a.sampledMetric
+}
+
+func (a *Antispammer) samplerAllow(src source) bool {
 	cfg := a.bannedSourcesSample
 	if cfg == nil {
 		return false
 	}
 
-	src.sampleMu.Lock()
-	defer src.sampleMu.Unlock()
-
-	now := time.Now()
-	if now.After(src.sampleUntil) {
-		src.sampleUntil = now.Add(cfg.Interval)
-		src.sampleCounter = 0
+	now := time.Now().UnixNano()
+	for {
+		end := src.sampleUntil.Load()
+		if now < end {
+			break
+		}
+		if src.sampleUntil.CompareAndSwap(end, now+cfg.Interval.Nanoseconds()) {
+			src.sampleCounter.Store(0)
+			break
+		}
 	}
 
-	src.sampleCounter++
-	if src.sampleCounter <= cfg.First {
+	val := src.sampleCounter.Inc()
+	if val <= cfg.First {
 		return true
 	}
 	if cfg.Thereafter == 0 {
 		return false
 	}
 
-	return (src.sampleCounter-cfg.First)%cfg.Thereafter == 0
-}
-
-func (a *Antispammer) SampledMetric() *metric.CounterVec {
-	return a.sampledMetric
+	return (val-cfg.First)%cfg.Thereafter == 0
 }
 
 type Exception struct {
