@@ -34,8 +34,7 @@ func TestAntispam(t *testing.T) {
 	startTime := time.Now()
 	checkSpam := func(i int) bool {
 		eventTime := startTime.Add(time.Duration(i) * maintenanceInterval / 2)
-		spam, _ := antispamer.IsSpam("1", "test", false, []byte(`{}`), eventTime, nil)
-		return spam
+		return antispamer.IsSpam("1", "test", false, []byte(`{}`), eventTime, nil) == Drop
 	}
 
 	for i := 1; i < threshold; i++ {
@@ -65,8 +64,7 @@ func TestAntispamAfterRestart(t *testing.T) {
 	startTime := time.Now()
 	checkSpam := func(i int) bool {
 		eventTime := startTime.Add(time.Duration(i) * maintenanceInterval)
-		spam, _ := antispamer.IsSpam("1", "test", false, []byte(`{}`), eventTime, nil)
-		return spam
+		return antispamer.IsSpam("1", "test", false, []byte(`{}`), eventTime, nil) == Drop
 	}
 
 	for i := 1; i < threshold; i++ {
@@ -214,8 +212,8 @@ func TestAntispamRules(t *testing.T) {
 	}
 
 	checkSpam := func(expected bool, source, event string, meta map[string]string) {
-		spam, _ := antispamer.IsSpam(source, source, false, []byte(event), now, meta)
-		r.Equal(expected, spam)
+		got := antispamer.IsSpam(source, source, false, []byte(event), now, meta)
+		r.Equal(expected, got)
 	}
 
 	checkSpam(true, "test_source_name", `{"level":"info","message":test"}`, nil)

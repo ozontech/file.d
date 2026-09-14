@@ -79,11 +79,11 @@ Flag indicating whether to check source name. If set to `true` source name will 
 
 <br>
 
-## Banned sources sample
+## Sampler
 
-By default when a source hits the antispam threshold it is banned and all its subsequent logs are silently dropped until unban. That makes debugging a constantly blocked service impossible. The optional block `banned_sources_sample` enables a per-source sampler that lets a small share of banned logs through. Each banned source has its own sampler state: in every `interval` window the first `first` logs pass, then every `thereafter`-th log passes, the rest are dropped. Each passed event can be marked with a boolean field so you can tell sampled events apart from default ones.
+By default when a source hits the antispam threshold it is banned and all its subsequent logs are silently dropped until unban. That makes debugging a constantly blocked service impossible. The optional block `sampler` enables a per-source sampler that lets a small share of banned logs through. Each banned source has its own sampler state: in every `interval` window the first `first` logs pass, then every `thereafter`-th log passes, the rest are dropped. Each passed event can be marked with a boolean field so you can tell sampled events apart from default ones.
 
-### Sample parameters
+### Sampler parameters
 
 **`interval`** *`duration`* *`required`*
 
@@ -103,20 +103,20 @@ After `first` events in the window have passed, every `thereafter`-th event is l
 
 <br>
 
-**`sampled_field`** *`string`*
+**`marker_field`** *`string`*
 
-Field to add to log if it was let through the banned sampler. E.g. with `sampled_field: _antispam_sampled`, if the log was sampled, the output
-event will have field `"_antispam_sampled":true`. Only works if the `banned_sources_sample` block is set. Useful for marking sampled logs.
+Field to add to log if it was let through the banned sampler. E.g. with `marker_field: _antispam_sampled`, if the log was sampled, the output
+event will have field `"_antispam_sampled":true`. Only works if the `sampler` block is set. Useful for marking sampled logs.
 
 <br>
 
-**`sampled_metric_name`** *`string`*
+**`metric_name`** *`string`*
 
 Name of the metric registered for events that passed through the banned sampler.
 
 <br>
 
-**`sampled_metric_labels`** *`[]string`*
+**`metric_labels`** *`[]string`*
 
 Lists the log fields to add to the metric. Blank list means no labels.
 
