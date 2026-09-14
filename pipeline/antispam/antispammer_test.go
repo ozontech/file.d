@@ -212,7 +212,7 @@ func TestAntispamRules(t *testing.T) {
 	}
 
 	checkSpam := func(expected bool, source, event string, meta map[string]string) {
-		got := antispamer.IsSpam(source, source, false, []byte(event), now, meta)
+		got := antispamer.IsSpam(source, source, false, []byte(event), now, meta) == Drop
 		r.Equal(expected, got)
 	}
 
