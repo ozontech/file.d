@@ -481,7 +481,7 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offsets Offsets, byt
 		}
 
 		switch p.antispamer.IsSpam(checkSourceID, checkSourceName, isNewSource, bytes, eventTime, meta) {
-		case antispam.Drop:
+		case antispam.Dropped:
 			return EventSeqIDError
 		case antispam.Sampled:
 			antispamSampled = true

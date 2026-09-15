@@ -1,7 +1,9 @@
 package antispam
 
 import (
+	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/ozontech/file.d/cfg/matchrule"
@@ -34,7 +36,7 @@ func TestAntispam(t *testing.T) {
 	startTime := time.Now()
 	checkSpam := func(i int) bool {
 		eventTime := startTime.Add(time.Duration(i) * maintenanceInterval / 2)
-		return antispamer.IsSpam("1", "test", false, []byte(`{}`), eventTime, nil) == Drop
+		return antispamer.IsSpam("1", "test", false, []byte(`{}`), eventTime, nil) == Dropped
 	}
 
 	for i := 1; i < threshold; i++ {
@@ -64,7 +66,7 @@ func TestAntispamAfterRestart(t *testing.T) {
 	startTime := time.Now()
 	checkSpam := func(i int) bool {
 		eventTime := startTime.Add(time.Duration(i) * maintenanceInterval)
-		return antispamer.IsSpam("1", "test", false, []byte(`{}`), eventTime, nil) == Drop
+		return antispamer.IsSpam("1", "test", false, []byte(`{}`), eventTime, nil) == Dropped
 	}
 
 	for i := 1; i < threshold; i++ {
@@ -212,7 +214,7 @@ func TestAntispamRules(t *testing.T) {
 	}
 
 	checkSpam := func(expected bool, source, event string, meta map[string]string) {
-		got := antispamer.IsSpam(source, source, false, []byte(event), now, meta) == Drop
+		got := antispamer.IsSpam(source, source, false, []byte(event), now, meta) == Dropped
 		r.Equal(expected, got)
 	}
 
@@ -228,4 +230,71 @@ func TestAntispamRules(t *testing.T) {
 
 	checkSpam(false, "test", `{"level":"info","message":test"}`, nil)
 	checkSpam(true, "test", `{"level":"info","message":test"}`, nil)
+}
+
+func TestIsSampled(t *testing.T) {
+	type samplerStep struct {
+		timeSleep time.Duration
+		want      bool
+	}
+
+	cases := []struct {
+		name    string
+		sampler *Sampler
+		steps   []samplerStep
+	}{
+		{
+			name:    "first_only",
+			sampler: &Sampler{Interval: time.Hour, First: 3},
+			steps: []samplerStep{
+				{want: true}, {want: true}, {want: true}, {want: false}, {want: false},
+			},
+		},
+		{
+			name:    "thereafter_only",
+			sampler: &Sampler{Interval: time.Hour, Thereafter: 2},
+			steps: []samplerStep{
+				{want: false}, // 1 % 2 != 0
+				{want: true},  // 2 % 2 == 0
+				{want: false}, // 3 % 2 != 0
+			},
+		},
+		{
+			name:    "first_and_thereafter",
+			sampler: &Sampler{Interval: time.Hour, First: 2, Thereafter: 3},
+			steps: []samplerStep{
+				{want: true},  // 1
+				{want: true},  // 2
+				{want: false}, // (3-2)% 3 != 0
+				{want: false}, // (4-2) % 3 != 0
+				{want: true},  // (5-2) % 3 == 0
+				{want: false}, // (6-2) % 3 != 0
+			},
+		},
+		{
+			name:    "window_rotation",
+			sampler: &Sampler{Interval: time.Second, First: 2},
+			steps: []samplerStep{
+				{want: true}, {want: true}, {want: false},
+				{timeSleep: 2 * time.Second, want: true}, {want: true}, {want: false},
+			},
+		},
+	}
+
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			synctest.Test(t, func(t *testing.T) {
+				src := source{
+					sampleUntil:   &atomic.Int64{},
+					sampleCounter: &atomic.Int64{},
+				}
+				for _, step := range tt.steps {
+					if step.timeSleep > 0 {
+						time.Sleep(step.timeSleep)
+					}
+					require.Equal(t, step.want, tt.sampler.isSampled(src))
+				}
+			})
+		})
+	}
 }

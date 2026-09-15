@@ -81,7 +81,7 @@ Flag indicating whether to check source name. If set to `true` source name will 
 
 ## Sampler
 
-By default when a source hits the antispam threshold it is banned and all its subsequent logs are silently dropped until unban. That makes debugging a constantly blocked service impossible. The optional block `sampler` enables a per-source sampler that lets a small share of banned logs through. Each banned source has its own sampler state: in every `interval` window the first `first` logs pass, then every `thereafter`-th log passes, the rest are dropped. Each passed event can be marked with a boolean field so you can tell sampled events apart from default ones.
+By default when a source hits the antispam threshold it is banned and all its subsequent events are silently dropped until unban. That makes debugging a constantly blocked service impossible. The optional block `sampler` enables a per-source sampler that lets a small share of banned events through. Each banned source has its own sampler state: in every `interval` window the first `first` events pass, then every `thereafter`-th log passes, the rest are dropped. Each passed event can be marked with a boolean field so you can tell sampled events apart from default ones.
 
 ### Sampler parameters
 
@@ -106,7 +106,7 @@ After `first` events in the window have passed, every `thereafter`-th event is l
 **`marker_field`** *`string`*
 
 Field to add to log if it was let through the banned sampler. E.g. with `marker_field: _antispam_sampled`, if the log was sampled, the output
-event will have field `"_antispam_sampled":true`. Only works if the `sampler` block is set. Useful for marking sampled logs.
+event will have field `"_antispam_sampled":true`. Only works if the `sampler` block is set. Useful for marking sampled events.
 
 <br>
 
