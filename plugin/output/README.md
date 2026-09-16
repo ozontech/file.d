@@ -71,6 +71,10 @@ It sends the event batches to postgres db using pgx.
 Supports [dead queue](/plugin/output/README.md#dead-queue).
 
 [More details...](plugin/output/postgres/README.md)
+## prometheus
+It sends metrics to Prometheus using the remote write API. The plugin receives metric events from the pipeline (e.g., from the event_to_metrics action plugin) and forwards them to a Prometheus-compatible endpoint.
+
+[More details...](plugin/output/prometheus/README.md)
 ## s3
 Sends events to s3 output of one or multiple buckets.
 `bucket` is default bucket for events. Addition buckets can be described in `multi_buckets` section, example down here.
