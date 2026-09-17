@@ -34,6 +34,8 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 	antispamMaintenanceInterval := pipeline.DefaultMaintenanceInterval
 	var antispamExceptions antispam.Exceptions
 	var antispamRules antispam.Rules
+	var splitJSONArrayField []string
+	splitJSONArray := pipeline.DefaultSplitJSONArray
 
 	metricHoldDuration := pipeline.DefaultMetricHoldDuration
 	metricMaxLabelValueLength := pipeline.DefaultMetricMaxLabelValueLength
@@ -146,6 +148,11 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 			metricHoldDuration = i
 		}
 
+		splitJSONArray = settings.Get("split_json_array").MustBool()
+		if str := settings.Get("split_json_array_field").MustString(); str != "" {
+			splitJSONArrayField = cfg.ParseFieldSelector(str)
+		}
+
 		metricMaxLabelValueLength = metrics.Get("max_label_value_length").MustInt()
 		if metricMaxLabelValueLength < 0 {
 			logger.Warn("negative max_label_value_length value, metric label truncation is disabled")
@@ -173,6 +180,8 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 		EventTimeout:        eventTimeout,
 		StreamField:         streamField,
 		IsStrict:            isStrict,
+		SplitJSONArray:      splitJSONArray,
+		SplitJSONArrayField: splitJSONArrayField,
 		Pool:                pipeline.PoolType(pool),
 		Metric: &pipeline.MetricSettings{
 			HoldDuration:        metricHoldDuration,

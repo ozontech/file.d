@@ -303,3 +303,68 @@ func TestSuggestDecoder(t *testing.T) {
 		})
 	}
 }
+
+func TestExtractJSONArrElements(t *testing.T) {
+	tests := []struct {
+		name      string
+		input     string
+		fieldPath []string
+		wantSplit bool
+		wantElems []string
+	}{
+		{
+			name:      "root array of objects",
+			input:     `[{"message1":"value1"},{"message2":"value2"},{"message3":"value3"}]`,
+			wantSplit: true,
+			wantElems: []string{
+				`{"message1":"value1"}`,
+				`{"message2":"value2"}`,
+				`{"message3":"value3"}`,
+			},
+		},
+		{
+			name:      "nested array but non-splited",
+			input:     `{"data":[{"message1":"value1"},{"message2":"value2"},{"message3":"value3"}], "other-field": "other-value"}`,
+			wantSplit: false,
+		},
+		{
+			name:      "nested array by single-level fieldPath",
+			input:     `{"data":[{"message1":"value1"},{"message2":"value2"},{"message3":"value3"}], "other-field": "other-value"}`,
+			wantSplit: true,
+			fieldPath: []string{"data"},
+			wantElems: []string{
+				`{"message1":"value1"}`,
+				`{"message2":"value2"}`,
+				`{"message3":"value3"}`,
+			},
+		},
+		{
+			name:      "nested array by multi-level fieldPath",
+			input:     `{"something":{"data":[{"message1":"value1"},{"message2":"value2"},{"message3":"value3"}]}, "other-field": "other-value"}`,
+			wantSplit: true,
+			fieldPath: []string{"something", "data"},
+			wantElems: []string{
+				`{"message1":"value1"}`,
+				`{"message2":"value2"}`,
+				`{"message3":"value3"}`,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			elems, split := extractJSONArrElements([]byte(tt.input), tt.fieldPath)
+			require.Equal(t, tt.wantSplit, split)
+			if !tt.wantSplit {
+				return
+			}
+
+			require.Equal(t, len(tt.wantElems), len(elems))
+			for i := range tt.wantElems {
+				require.JSONEq(t, tt.wantElems[i], string(elems[i]))
+			}
+		})
+	}
+}
