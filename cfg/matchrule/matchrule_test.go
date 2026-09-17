@@ -165,3 +165,43 @@ func TestException_Match(t *testing.T) {
 
 	require.True(t, e.Match([]byte("ok")))
 }
+
+func TestCond_UnmarshalJSON(t *testing.T) {
+	cases := []struct {
+		name    string
+		input   string
+		want    Cond
+		wantErr bool
+	}{
+		{
+			name:  "and",
+			input: `"and"`,
+			want:  CondAnd,
+		},
+		{
+			name:  "or",
+			input: `"or"`,
+			want:  CondOr,
+		},
+		{
+			name:    "unknown_value",
+			input:   `"AND"`,
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			var c Cond
+			err := c.UnmarshalJSON([]byte(tt.input))
+			if tt.wantErr {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, tt.want, c)
+			}
+		})
+	}
+}
