@@ -382,7 +382,7 @@ func Factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 	p.insertErrorsMetric = ctl.RegisterCounter("output_clickhouse_errors_total", "Total clickhouse insert errors")
 	p.queriesCountMetric = ctl.RegisterCounter("output_clickhouse_queries_count_total", "How many queries sent by clickhouse output plugin")
-	p.bannedEndpointsMetric = ctl.RegisterGauge("output_clickhouse_banned_endpoints_count", "Current number of endpoints banned by circuit breaker")
+	p.bannedEndpointsMetric = ctl.RegisterGauge("output_clickhouse_banned_endpoints", "Current number of endpoints banned by circuit breaker")
 	p.bannedEndpointsMetric.Set(0)
 }
 

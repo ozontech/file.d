@@ -320,7 +320,7 @@ func (p *Plugin) Out(event *pipeline.Event) {
 func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 	p.sendErrorMetric = ctl.RegisterCounterVec("output_http_send_error_total", "Total HTTP send errors", "status_code")
 	p.bannedEndpointsMetric = ctl.RegisterGauge(
-		"output_http_banned_endpoints_count",
+		"output_http_banned_endpoints",
 		"Current number of endpoints banned by circuit breaker",
 	)
 	p.bannedEndpointsMetric.Set(0)

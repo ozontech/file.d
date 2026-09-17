@@ -152,13 +152,13 @@ func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
 		if node == nil || !node.IsString() {
 			continue
 		}
-		p.convert(node)
+		p.convert(event.Root, node)
 	}
 
 	return pipeline.ActionPass
 }
 
-func (p *Plugin) convert(node *insaneJSON.Node) {
+func (p *Plugin) convert(root *insaneJSON.Root, node *insaneJSON.Node) {
 	p.buf = p.buf[:0]
 
 	nodeStr := node.AsString()
@@ -288,5 +288,5 @@ func (p *Plugin) convert(node *insaneJSON.Node) {
 		nodeStr = nodeStr[idx+1:]
 	}
 
-	node.MutateToString(pipeline.ByteToStringUnsafe(p.buf))
+	node.MutateToBytesCopy(root, p.buf)
 }
