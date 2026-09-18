@@ -58,6 +58,15 @@ func TestDocExamplesCompile(t *testing.T) {
 		`.message = after(.log, " - ")`,
 		`.level = before(.log, " ")`,
 		`.shard = between(.log, "[", "]")`,
+		`m = capture(.message, r'(\w+):.*', numeric_groups: true)
+		if m != null {
+		  .level = m["1"]
+		}`,
+		`.ids = find_all(.log, r'id=(\w+)', group: 1)`,
+		`.extracted = join(find_all(.message, r're\d+', limit: 2), ",")`,
+		`.message = trim_right(.message, "\n")`,
+		`.head = slice(.message, 0, end: 10)
+		.tail = slice(.message, -5)`,
 	}
 
 	for i, src := range snippets {

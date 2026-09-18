@@ -35,6 +35,21 @@ func resolveArgs(t *testing.T, fn Function, positional []core.Value, named map[s
 	return c.Resolve(positional, named)
 }
 
+// callFn invokes fn the way the interpreter does: arguments are bound through
+// the compiled signature, so omitted named parameters get their declared
+// defaults instead of being absent from the map.
+func callFn(fn Function, positional []core.Value, named map[string]core.Value) (core.Value, error) {
+	c, err := compile(fn)
+	if err != nil {
+		return nil, err
+	}
+	resolved, err := c.Resolve(positional, named)
+	if err != nil {
+		return nil, err
+	}
+	return c.Call(resolved)
+}
+
 func TestJoinKinds(t *testing.T) {
 	t.Parallel()
 

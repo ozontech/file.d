@@ -10,11 +10,15 @@ import (
 )
 
 func callCapture(value, pattern string) (core.Value, error) {
+	return callCaptureNamed(value, pattern, nil)
+}
+
+func callCaptureNamed(value, pattern string, named map[string]core.Value) (core.Value, error) {
 	re := regexp.MustCompile(pattern)
-	return capture{}.Call(map[string]core.Value{
-		"value":   core.StringValue{V: value},
-		"pattern": core.RegexValue{V: re},
-	})
+	return callFn(capture{}, []core.Value{
+		core.StringValue{V: value},
+		core.RegexValue{V: re},
+	}, named)
 }
 
 func TestCapture(t *testing.T) {
@@ -75,5 +79,63 @@ func TestCapture(t *testing.T) {
 
 		assert.Equal(t, core.StringValue{V: "abc"}, obj.V["letters"])
 		assert.Len(t, obj.V, 1, "unnamed group must not appear in the result")
+	})
+}
+
+func TestCaptureNumericGroups(t *testing.T) {
+	t.Parallel()
+
+	enabled := map[string]core.Value{"numeric_groups": core.BoolValue{V: true}}
+
+	t.Run("positional_groups_are_keyed_by_index", func(t *testing.T) {
+		t.Parallel()
+
+		// modify README: ${message|re("service=(\S+) exec took (\d+\.?\d*(?:ms|s|m|h))",-1,[2],",")}
+		got, err := callCaptureNamed(
+			"service=service-test-1 exec took 200ms",
+			`service=(\S+) exec took (\d+\.?\d*(?:ms|s|m|h))`,
+			enabled,
+		)
+		require.NoError(t, err)
+		obj, ok := got.(core.ObjectValue)
+		require.True(t, ok)
+
+		assert.Equal(t, core.StringValue{V: "service=service-test-1 exec took 200ms"}, obj.V["0"],
+			`"0" is the whole match`)
+		assert.Equal(t, core.StringValue{V: "service-test-1"}, obj.V["1"])
+		assert.Equal(t, core.StringValue{V: "200ms"}, obj.V["2"])
+	})
+
+	t.Run("named_groups_are_keyed_both_ways", func(t *testing.T) {
+		t.Parallel()
+
+		got, err := callCaptureNamed("abc123", `(?P<letters>[a-z]+)(\d+)`, enabled)
+		require.NoError(t, err)
+		obj, ok := got.(core.ObjectValue)
+		require.True(t, ok)
+
+		assert.Equal(t, core.StringValue{V: "abc"}, obj.V["letters"])
+		assert.Equal(t, core.StringValue{V: "abc"}, obj.V["1"])
+		assert.Equal(t, core.StringValue{V: "123"}, obj.V["2"], "unnamed groups become reachable")
+	})
+
+	t.Run("off_by_default", func(t *testing.T) {
+		t.Parallel()
+
+		got, err := callCapture("abc123", `(?P<letters>[a-z]+)(\d+)`)
+		require.NoError(t, err)
+		obj, ok := got.(core.ObjectValue)
+		require.True(t, ok)
+
+		assert.NotContains(t, obj.V, "0")
+		assert.NotContains(t, obj.V, "1")
+	})
+
+	t.Run("no_match_still_returns_null", func(t *testing.T) {
+		t.Parallel()
+
+		got, err := callCaptureNamed("nothing here", `^(INFO)$`, enabled)
+		require.NoError(t, err)
+		assert.Equal(t, core.NullValue{}, got)
 	})
 }
