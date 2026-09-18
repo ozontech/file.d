@@ -17,6 +17,10 @@ Mount config from /my-config.yaml and start `file.d` with this config: <br>
 
 Do not forget to set [the actual tag](https://github.com/ozontech/file.d/pkgs/container/file.d) of the image.
 
+The Docker images run as the non-root UID/GID `65532:65532`. Make sure that mounted
+configuration, offset, input, and output paths are readable or writable by this identity
+as required by the selected plugins.
+
 ## Helm-chart
 
 [Helm-chart](/charts/filed/README.md) and examples for Minikube
