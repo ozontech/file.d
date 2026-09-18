@@ -499,9 +499,9 @@ func TestTokenNormalizerCustom(t *testing.T) {
 				},
 			},
 			inputs: []string{
-				`2006/01/02 15:04:05 error occurred, client: 10.125.172.251, upstream: "http://10.117.246.15:84/download", host: "mpm-youtube-downloader-38.name.com:84"`,
+				`2006/01/02 15:04:05 error occurred, client: 10.125.172.251, upstream: "http://10.117.246.15:84/download", host: "mpm-youtube-downloader-38.name.com:84", part/offset: 10117/2461584`,
 			},
-			want: "<nginx_datetime> error occurred, client: <ip>, upstream: <double_quoted>, host: <double_quoted>",
+			want: "<nginx_datetime> error occurred, client: <ip>, upstream: <double_quoted>, host: <double_quoted>, part/offset: <int>/<int>",
 		},
 		{
 			name:    "empty_patterns",
@@ -560,6 +560,7 @@ func genBenchInput(count int) []byte {
 		"0x13eb85e69dfbc0758b12acdaae36287d",                               // hex
 		"-4.56",                                                            // float
 		"123",                                                              // int
+		"truE faLse",
 	}
 
 	var sb strings.Builder
