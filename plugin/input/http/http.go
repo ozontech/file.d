@@ -417,8 +417,10 @@ func (p *Plugin) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		p.errorsTotal.Inc()
 		p.logger.Warn("auth failed",
 			zap.String("user_agent", r.UserAgent()),
-			zap.Any("headers", r.Header),
 			zap.String("remote_addr", r.RemoteAddr),
+			zap.String("method", r.Method),
+			zap.String("path", r.URL.Path),
+			zap.Bool("has_auth", r.Header.Get(p.config.Auth.Header) != ""),
 		)
 		http.Error(w, "auth failed", http.StatusUnauthorized)
 		return
