@@ -19,7 +19,7 @@ func (f *TrimToFilter) Apply(src []byte, _ []byte) []byte {
 	}
 	if f.mode == trimModeAll || f.mode == trimModeRight {
 		if idx := bytes.LastIndex(src, f.cutset); idx != -1 {
-			src = src[:idx+1]
+			src = src[:idx+len(f.cutset)]
 		}
 	}
 	return src
