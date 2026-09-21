@@ -36,7 +36,11 @@ func TestAntispam(t *testing.T) {
 	startTime := time.Now()
 	checkSpam := func(i int) bool {
 		eventTime := startTime.Add(time.Duration(i) * maintenanceInterval / 2)
-		return antispamer.IsSpam("1", "test", false, []byte(`{}`), eventTime, nil) == Dropped
+		return antispamer.IsSpam(
+			SourceData{ID: "1", Name: "test"},
+			EventData{Bytes: []byte(`{}`), Time: eventTime},
+			nil,
+		) == Dropped
 	}
 
 	for i := 1; i < threshold; i++ {
@@ -66,7 +70,11 @@ func TestAntispamAfterRestart(t *testing.T) {
 	startTime := time.Now()
 	checkSpam := func(i int) bool {
 		eventTime := startTime.Add(time.Duration(i) * maintenanceInterval)
-		return antispamer.IsSpam("1", "test", false, []byte(`{}`), eventTime, nil) == Dropped
+		return antispamer.IsSpam(
+			SourceData{ID: "1", Name: "test"},
+			EventData{Bytes: []byte(`{}`), Time: eventTime},
+			nil,
+		) == Dropped
 	}
 
 	for i := 1; i < threshold; i++ {
@@ -128,7 +136,11 @@ func TestAntispamExceptions(t *testing.T) {
 	antispamer.exceptions.Prepare()
 
 	checkSpam := func(source, event string, wantMetric map[string]float64) {
-		antispamer.IsSpam("1", source, true, []byte(event), now, nil)
+		_ = antispamer.IsSpam(
+			SourceData{ID: "1", Name: source, IsNew: true},
+			EventData{Bytes: []byte(event), Time: now},
+			nil,
+		)
 		for k, v := range wantMetric {
 			r.Equal(v, antispamer.exceptionMetric.WithLabelValues(k).ToFloat64())
 		}
@@ -214,7 +226,11 @@ func TestAntispamRules(t *testing.T) {
 	}
 
 	checkSpam := func(expected bool, source, event string, meta map[string]string) {
-		got := antispamer.IsSpam(source, source, false, []byte(event), now, meta) == Dropped
+		got := antispamer.IsSpam(
+			SourceData{ID: source, Name: source},
+			EventData{Bytes: []byte(event), Time: now},
+			meta,
+		) == Dropped
 		r.Equal(expected, got)
 	}
 
@@ -230,6 +246,76 @@ func TestAntispamRules(t *testing.T) {
 
 	checkSpam(false, "test", `{"level":"info","message":test"}`, nil)
 	checkSpam(true, "test", `{"level":"info","message":test"}`, nil)
+}
+
+func TestAntispamPartial(t *testing.T) {
+	threshold := 3
+	unbanIterations := 1
+	maintenanceInterval := time.Second
+
+	antispammer := newAntispammer(threshold, unbanIterations, maintenanceInterval)
+
+	type data struct {
+		sourceID  string
+		isPartial bool
+		want      SpamResult
+	}
+
+	cases := []struct {
+		name  string
+		chain []data
+	}{
+		{
+			name: "only_partial",
+			chain: []data{
+				// passed
+				{sourceID: "1", isPartial: true},
+				{sourceID: "1", isPartial: true},
+				{sourceID: "1", isPartial: false},
+
+				// passed
+				{sourceID: "1", isPartial: true},
+				{sourceID: "1", isPartial: false},
+
+				// dropped
+				{sourceID: "1", isPartial: true, want: Dropped},
+				{sourceID: "1", isPartial: false, want: Dropped},
+			},
+		},
+
+		{
+			name: "mix",
+			chain: []data{
+				// passed
+				{sourceID: "2", isPartial: false},
+
+				// passed
+				{sourceID: "2", isPartial: false},
+
+				// dropped
+				{sourceID: "2", isPartial: true, want: Dropped},
+				{sourceID: "2", isPartial: false, want: Dropped},
+
+				// dropped
+				{sourceID: "2", isPartial: false, want: Dropped},
+			},
+		},
+	}
+
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			for _, c := range tt.chain {
+				got := antispammer.IsSpam(
+					SourceData{ID: c.sourceID},
+					EventData{IsPartial: c.isPartial},
+					nil,
+				)
+				require.Equal(t, c.want, got)
+			}
+		})
+	}
 }
 
 func TestIsSampled(t *testing.T) {

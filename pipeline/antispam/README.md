@@ -6,6 +6,23 @@ In some systems services might explode with logs due to different circumstances.
 
 The main entity is `Antispammer`. It counts input data from the sources (e.g. if data comes from [file input plugin](/plugin/input/file/README.md), source can be filename) and decides whether to ban it or not. For each source it counts how many logs it has got, in other words the counter for the source is incremented for each incoming log. When the counter is greater or equal to the threshold value, the source is banned and its counter is set to `unbanIterations * threshold` (where `unbanIterations = 4`). The source remains banned until its counter falls below the `threshold`. Additionally, during each maintenance interval, if the counter is found to be greater than `unbanIterations * threshold`, it is also reset to this maximum value. The counter value is then decremented by the threshold once per maintenance interval.
 
+## Partial events
+
+Due to the fact that only a part of the final event is processed for partial events, there are some limitations. 
+Rules/exceptions are checked only for the first partial event from the chain, 
+and all subsequent events will have the same state (banned or not) as the first one.
+
+Recommendations for using rules/exceptions with partial events:
+- use `source_name` or `meta`;
+- for `event` content use `do_if` with `prefix` operator.
+
+> This is only possible if the event was written in `CRI` format and has `Partial` status. 
+> For other encoding formats this is not relevant as they always come in full.
+>
+> The event is `Partial` if it is larger than the driver configuration. 
+> For example, for `containerd` this setting is called `max_container_log_line_size`: 
+> https://github.com/containerd/containerd/blob/f7f2be732159a411eae46b78bfdb479b133a823b/pkg/cri/config/config.go#L263-L266
+
 ## Rules
 
 Antispammer has rules which can be applied by checking source name, field in metadata map or log as raw bytes contents. Antispammer iterates through the rules, checks the event and applies the first matching rule.
@@ -17,8 +34,6 @@ If event does not match any rule it will be limited with common threshold.
 
 Name of the rule. If set to nonempty string, adds label value for the `name` label in the `antispam_exceptions` metric.
 
-<br>
-
 **`threshold`** **`int`**
 
 Common threshold applied to events that don't match any rule.
@@ -27,14 +42,13 @@ Values:
 - `0` - discard all logs;
 - `> 0` - normal threshold value.
 
-<br>
-
 **`do_if`**
 
 Condition tree. Checks if the event matches the rule(see [doc](/pipeline/doif/README.md)).
 
 > **Note:**
-> In the current implementation for this specific context, only the following Do If node types are supported:
+>
+> In the current implementation for this specific context, only the following `DoIf` node types are supported:
 > * **`field_op`**
 > * **`logical_op`**
 >
@@ -43,13 +57,11 @@ Condition tree. Checks if the event matches the rule(see [doc](/pipeline/doif/RE
 > * `event` — the event content.
 > * `meta.field_name` — where `field_name` is a field name within the `meta` object.
 
-<br>
-
 ## Exceptions
 
 Antispammer has some exception rules which can be applied by checking source name or log as raw bytes contents. If the log is matched by the rules it is not accounted for in the antispammer. It might be helpful for the logs from critical infrastructure services which must not be banned at all.
 
-> ⚠ DEPRECATED. Use `rules` instead.
+> **⚠ DEPRECATED**. Use `rules` instead.
 
 ### Exception parameters
 
@@ -59,25 +71,17 @@ The exception parameters are the extension of [RuleSet](/cfg/matchrule/README.md
 
 The name of the ruleset of the exception. If set to nonempty string, adds label value for the `name` label in the `antispam_exceptions` metric.
 
-<br>
-
 **`cond`** *`string`* *`default=and`* *`options=and|or`*
 
 Logical conditional operation to combine rules with. If set to `and` exception will only match when all rules are matched. If set to `or` exception will match when at least one of the rules is matched.
 
-<br>
-
-**`rules`** *`[]`Rule*
+**`rules`** *`[]Rule`*
 
 List of rules to check the log against.
-
-<br>
 
 **`check_source_name`** *`bool`* *`default=false`*
 
 Flag indicating whether to check source name. If set to `true` source name will be checked against all rules. If set to `false` log as raw bytes content will be checked against all rules.
-
-<br>
 
 ## Sampler
 
@@ -89,35 +93,23 @@ By default when a source hits the antispam threshold it is banned and all its su
 
 Sampler window per source.
 
-<br>
-
 **`first`** *`int`*
 
 Number of events from a banned source that always pass at the start of each `interval` window.
 
-<br>
-
 **`thereafter`** *`int`*
 
 After `first` events in the window have passed, every `thereafter`-th event is let through. Set to zero to drop everything past `first`.
-
-<br>
 
 **`marker_field`** *`string`*
 
 Field to add to log if it was let through the banned sampler. E.g. with `marker_field: _antispam_sampled`, if the log was sampled, the output
 event will have field `"_antispam_sampled":true`. Only works if the `sampler` block is set. Useful for marking sampled events.
 
-<br>
-
 **`metric_name`** *`string`*
 
 Name of the metric registered for events that passed through the banned sampler.
 
-<br>
-
 **`metric_labels`** *`[]string`*
 
 Lists the log fields to add to the metric. Blank list means no labels.
-
-<br>
