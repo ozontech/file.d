@@ -34,6 +34,7 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 	antispamMaintenanceInterval := pipeline.DefaultMaintenanceInterval
 	var antispamExceptions antispam.Exceptions
 	var antispamRules antispam.Rules
+	var antispamSampler *antispam.Sampler
 
 	metricHoldDuration := pipeline.DefaultMetricHoldDuration
 	metricMaxLabelValueLength := pipeline.DefaultMetricMaxLabelValueLength
@@ -126,6 +127,11 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 			logger.Fatalf("extract antispam rules: %s", err)
 		}
 
+		antispamSampler, err = extractAntispamSampler(antispamSettings)
+		if err != nil {
+			logger.Fatalf("extract antispam sampler: %s", err)
+		}
+
 		sourceNameMetaField = settings.Get("source_name_meta_field").MustString()
 		isStrict = settings.Get("is_strict").MustBool()
 
@@ -167,6 +173,7 @@ func extractPipelineParams(settings *simplejson.Json) *pipeline.Settings {
 			Rules:               antispamRules,
 			Exceptions:          antispamExceptions,
 			MaintenanceInterval: antispamMaintenanceInterval,
+			Sampler:             antispamSampler,
 		},
 		SourceNameMetaField: sourceNameMetaField,
 		MaintenanceInterval: maintenanceInterval,
@@ -240,6 +247,47 @@ func extractAntispamRules(settings *simplejson.Json, antispamMaintenanceInterval
 	}
 
 	return rules, nil
+}
+
+func extractAntispamSampler(settings *simplejson.Json) (*antispam.Sampler, error) {
+	sampleJSON, ok := settings.CheckGet("sampler")
+	if !ok {
+		return nil, nil
+	}
+
+	intervalStr := sampleJSON.Get("interval").MustString()
+	if intervalStr == "" {
+		return nil, fmt.Errorf("interval is required")
+	}
+	interval, err := time.ParseDuration(intervalStr)
+	if err != nil {
+		return nil, fmt.Errorf("parse interval: %w", err)
+	}
+	if interval <= 0 {
+		return nil, fmt.Errorf("interval must be > 0, got %s", interval)
+	}
+
+	first := sampleJSON.Get("first").MustInt64()
+	if first < 0 {
+		return nil, fmt.Errorf("first must be >= 0, got %d", first)
+	}
+
+	thereafter := sampleJSON.Get("thereafter").MustInt64()
+	if thereafter < 0 {
+		return nil, fmt.Errorf("thereafter must be >= 0, got %d", thereafter)
+	}
+	if first == 0 && thereafter == 0 {
+		return nil, fmt.Errorf("at least one of first/thereafter must be > 0")
+	}
+
+	return &antispam.Sampler{
+		Interval:     interval,
+		First:        first,
+		Thereafter:   thereafter,
+		MarkerField:  sampleJSON.Get("marker_field").MustString(),
+		MetricName:   sampleJSON.Get("metric_name").MustString(),
+		MetricLabels: sampleJSON.Get("metric_labels").MustStringArray(),
+	}, nil
 }
 
 func extractMatchMode(actionJSON *simplejson.Json) pipeline.MatchMode {
