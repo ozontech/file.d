@@ -356,6 +356,21 @@ func TestParseSubstitution(t *testing.T) {
 			wantErr:      true,
 		},
 		{
+			name:         "err_trim_filter_empty_cutset_all",
+			substitution: `test ${field|trim("all","")} test2`,
+			wantErr:      true,
+		},
+		{
+			name:         "err_trim_filter_empty_cutset_left",
+			substitution: `test ${field|trim("left","")} test2`,
+			wantErr:      true,
+		},
+		{
+			name:         "err_trim_filter_empty_cutset_right",
+			substitution: `test ${field|trim("right","")} test2`,
+			wantErr:      true,
+		},
+		{
 			name:         "trim_to_filter_ok",
 			substitution: `test ${field|trim_to("left","{")} test2`,
 			data: [][]string{
@@ -403,6 +418,21 @@ func TestParseSubstitution(t *testing.T) {
 		{
 			name:         "err_trim_to_filter_invalid_second_arg",
 			substitution: `test ${field|trim_to("all",'invalid')} test2`,
+			wantErr:      true,
+		},
+		{
+			name:         "err_trim_to_filter_empty_cutset_all",
+			substitution: `test ${field|trim_to("all","")} test2`,
+			wantErr:      true,
+		},
+		{
+			name:         "err_trim_to_filter_empty_cutset_left",
+			substitution: `test ${field|trim_to("left","")} test2`,
+			wantErr:      true,
+		},
+		{
+			name:         "err_trim_to_filter_empty_cutset_right",
+			substitution: `test ${field|trim_to("right","")} test2`,
 			wantErr:      true,
 		},
 		{
@@ -595,20 +625,8 @@ func TestFilterApply(t *testing.T) {
 			want:         `message`,
 		},
 		{
-			name:         "trim_to_right_empty_delimiter",
-			substitution: `${field|trim_to("right","")}`,
-			data:         `message`,
-			want:         `message`,
-		},
-		{
-			name:         "trim_to_all_empty_delimiter",
-			substitution: `${field|trim_to("all","")}`,
-			data:         `message`,
-			want:         `message`,
-		},
-		{
-			name:         "trim_to_empty_input_and_delimiter",
-			substitution: `${field|trim_to("right","")}`,
+			name:         "trim_to_empty_input",
+			substitution: `${field|trim_to("right","END")}`,
 			data:         ``,
 			want:         ``,
 		},
