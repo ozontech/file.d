@@ -9,19 +9,19 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func callCapture(value, pattern string) (core.Value, error) {
-	return callCaptureNamed(value, pattern, nil)
+func callParseRegex(value, pattern string) (core.Value, error) {
+	return callParseRegexNamed(value, pattern, nil)
 }
 
-func callCaptureNamed(value, pattern string, named map[string]core.Value) (core.Value, error) {
+func callParseRegexNamed(value, pattern string, named map[string]core.Value) (core.Value, error) {
 	re := regexp.MustCompile(pattern)
-	return callFn(capture{}, []core.Value{
+	return callFn(parseRegex{}, []core.Value{
 		core.StringValue{V: value},
 		core.RegexValue{V: re},
 	}, named)
 }
 
-func TestCapture(t *testing.T) {
+func TestParseRegex(t *testing.T) {
 	t.Parallel()
 
 	t.Run("scylla_line", func(t *testing.T) {
@@ -30,7 +30,7 @@ func TestCapture(t *testing.T) {
 		line := `INFO 2025-05-25 18:18:18,180 [shard 4:comp] compaction - [Compact xxxx] Compacted 4 sstables`
 		pattern := `^(?P<level>\S+)\s+(?P<date>\d{4}-\d{2}-\d{2})\s+(?P<time>[\d:,]+)\s+\[(?P<shard>[^\]]*)\]\s+(?P<operation>\S+)\s+-\s+(?P<message>.*)$`
 
-		got, err := callCapture(line, pattern)
+		got, err := callParseRegex(line, pattern)
 		require.NoError(t, err)
 		obj, ok := got.(core.ObjectValue)
 		require.True(t, ok)
@@ -49,7 +49,7 @@ func TestCapture(t *testing.T) {
 		line := `INFO [3-19] 2025-05-25 11:11:11,999 NoSpamLogger.java:104 - /11.111.111.111:2222 failed to connect`
 		pattern := `^(?P<level>\S+)\s+\[(?P<operation>[^\]]*)\]\s+(?P<date>\d{4}-\d{2}-\d{2})\s+(?P<time>[\d:,]+)\s+\S+\s+-\s+(?P<message>.*)$`
 
-		got, err := callCapture(line, pattern)
+		got, err := callParseRegex(line, pattern)
 		require.NoError(t, err)
 		obj, ok := got.(core.ObjectValue)
 		require.True(t, ok)
@@ -64,7 +64,7 @@ func TestCapture(t *testing.T) {
 	t.Run("no_match_returns_null", func(t *testing.T) {
 		t.Parallel()
 
-		got, err := callCapture("nothing here", `^(?P<level>INFO)$`)
+		got, err := callParseRegex("nothing here", `^(?P<level>INFO)$`)
 		require.NoError(t, err)
 		assert.Equal(t, core.NullValue{}, got)
 	})
@@ -72,7 +72,7 @@ func TestCapture(t *testing.T) {
 	t.Run("unnamed_groups_ignored", func(t *testing.T) {
 		t.Parallel()
 
-		got, err := callCapture("abc123", `(?P<letters>[a-z]+)(\d+)`)
+		got, err := callParseRegex("abc123", `(?P<letters>[a-z]+)(\d+)`)
 		require.NoError(t, err)
 		obj, ok := got.(core.ObjectValue)
 		require.True(t, ok)
@@ -82,7 +82,7 @@ func TestCapture(t *testing.T) {
 	})
 }
 
-func TestCaptureNumericGroups(t *testing.T) {
+func TestParseRegexNumericGroups(t *testing.T) {
 	t.Parallel()
 
 	enabled := map[string]core.Value{"numeric_groups": core.BoolValue{V: true}}
@@ -91,7 +91,7 @@ func TestCaptureNumericGroups(t *testing.T) {
 		t.Parallel()
 
 		// modify README: ${message|re("service=(\S+) exec took (\d+\.?\d*(?:ms|s|m|h))",-1,[2],",")}
-		got, err := callCaptureNamed(
+		got, err := callParseRegexNamed(
 			"service=service-test-1 exec took 200ms",
 			`service=(\S+) exec took (\d+\.?\d*(?:ms|s|m|h))`,
 			enabled,
@@ -109,7 +109,7 @@ func TestCaptureNumericGroups(t *testing.T) {
 	t.Run("named_groups_are_keyed_both_ways", func(t *testing.T) {
 		t.Parallel()
 
-		got, err := callCaptureNamed("abc123", `(?P<letters>[a-z]+)(\d+)`, enabled)
+		got, err := callParseRegexNamed("abc123", `(?P<letters>[a-z]+)(\d+)`, enabled)
 		require.NoError(t, err)
 		obj, ok := got.(core.ObjectValue)
 		require.True(t, ok)
@@ -122,7 +122,7 @@ func TestCaptureNumericGroups(t *testing.T) {
 	t.Run("off_by_default", func(t *testing.T) {
 		t.Parallel()
 
-		got, err := callCapture("abc123", `(?P<letters>[a-z]+)(\d+)`)
+		got, err := callParseRegex("abc123", `(?P<letters>[a-z]+)(\d+)`)
 		require.NoError(t, err)
 		obj, ok := got.(core.ObjectValue)
 		require.True(t, ok)
@@ -134,7 +134,7 @@ func TestCaptureNumericGroups(t *testing.T) {
 	t.Run("no_match_still_returns_null", func(t *testing.T) {
 		t.Parallel()
 
-		got, err := callCaptureNamed("nothing here", `^(INFO)$`, enabled)
+		got, err := callParseRegexNamed("nothing here", `^(INFO)$`, enabled)
 		require.NoError(t, err)
 		assert.Equal(t, core.NullValue{}, got)
 	})

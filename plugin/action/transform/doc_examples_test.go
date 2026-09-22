@@ -12,7 +12,7 @@ import (
 func TestDocExamplesCompile(t *testing.T) {
 	snippets := []string{
 		// introduction example
-		`m = capture(.log, r'^(?P<level>\S+)\s+(?P<time>\S+ \S+)\s+\[(?P<shard>[^\]]+)\]\s+(?P<operation>\S+)\s+-\s+(?P<message>.+)$')
+		`m = parse_regex(.log, r'^(?P<level>\S+)\s+(?P<time>\S+ \S+)\s+\[(?P<shard>[^\]]+)\]\s+(?P<operation>\S+)\s+-\s+(?P<message>.+)$')
 		if m != null {
 		  .level = m.level
 		  .time = m.time
@@ -27,11 +27,11 @@ func TestDocExamplesCompile(t *testing.T) {
 		`.a.b.c = 1`,
 		`del .user.password`,
 		// variables
-		"name = .user.name\nparts = capture(.log, r'...')\n.out = name",
+		"name = .user.name\nparts = parse_regex(.log, r'...')\n.out = name",
 		"x = parts.level\narr = [1]\narr[0] = 1\nobj = {}\nobj.key = \"value\"",
 		`a = b = 1`,
 		// operators
-		`.msg = "code is " + string(.code)`,
+		`.msg = "code is " + to_string(.code)`,
 		// control flow
 		`if .status >= 500 {
 		  .severity = "crit"
@@ -50,7 +50,7 @@ func TestDocExamplesCompile(t *testing.T) {
 		}`,
 		// functions
 		`.level = upcase(.level)`,
-		`m = capture(.log, r'^(?P<level>\S+)\s+(?P<message>.+)$')
+		`m = parse_regex(.log, r'^(?P<level>\S+)\s+(?P<message>.+)$')
 		if m != null {
 		  .level = m.level
 		  .message = m.message
@@ -58,13 +58,14 @@ func TestDocExamplesCompile(t *testing.T) {
 		`.message = after(.log, " - ")`,
 		`.level = before(.log, " ")`,
 		`.shard = between(.log, "[", "]")`,
-		`m = capture(.message, r'(\w+):.*', numeric_groups: true)
+		`m = parse_regex(.message, r'(\w+):.*', numeric_groups: true)
 		if m != null {
 		  .level = m["1"]
 		}`,
-		`.ids = find_all(.log, r'id=(\w+)', group: 1)`,
-		`.extracted = join(find_all(.message, r're\d+', limit: 2), ",")`,
+		`.ids = parse_regex_all(.log, r'id=(\w+)', group: 1)`,
+		`.extracted = join(parse_regex_all(.message, r're\d+', limit: 2), ",")`,
 		`.message = trim_right(.message, "\n")`,
+		`.message = trim_to_right(trim_to_left(.message, "{"), "}")`,
 		`.head = slice(.message, 0, end: 10)
 		.tail = slice(.message, -5)`,
 	}

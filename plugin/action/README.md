@@ -594,7 +594,7 @@ pipelines:
     - type: transform
       source: |
         # parse lines like "INFO 2025-05-25 11:11:11,222 [shard 1] compaction - done"
-        m = capture(.log, r'^(?P<level>\S+)\s+(?P<time>\S+ \S+)\s+\[(?P<shard>[^\]]+)\]\s+(?P<operation>\S+)\s+-\s+(?P<message>.+)$')
+        m = parse_regex(.log, r'^(?P<level>\S+)\s+(?P<time>\S+ \S+)\s+\[(?P<shard>[^\]]+)\]\s+(?P<operation>\S+)\s+-\s+(?P<message>.+)$')
         if m != null {
           .level = m.level
           .time = m.time

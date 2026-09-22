@@ -6,20 +6,21 @@ import (
 	"github.com/ozontech/file.d/plugin/action/transform/core"
 )
 
-// find_all collects every match of a pattern in a string and returns them as an
-// array. It is the multi-occurrence counterpart of capture: capture describes
-// one match by its groups, find_all describes many matches by a single group.
+// parse_regex_all collects every match of a pattern in a string and returns
+// them as an array. It is the multi-occurrence counterpart of parse_regex:
+// parse_regex describes one match by its groups, parse_regex_all describes many
+// matches by a single group.
 //
-//	find_all(.log, r'\d+')                     -> ["1", "42"]
-//	join(find_all(.log, r're\d+', limit: 2), ",") -> "re1,re2"
+//	parse_regex_all(.log, r'\d+')                     -> ["1", "42"]
+//	join(parse_regex_all(.log, r're\d+', limit: 2), ",") -> "re1,re2"
 //
 // When nothing matches an empty array is returned, so the result is always safe
 // to iterate or join.
-type findAll struct{}
+type parseRegexAll struct{}
 
-func (findAll) Name() string { return "find_all" }
+func (parseRegexAll) Name() string { return "parse_regex_all" }
 
-func (findAll) Params() []Parameter {
+func (parseRegexAll) Params() []Parameter {
 	return []Parameter{
 		{
 			Name:          "value",
@@ -46,7 +47,7 @@ func (findAll) Params() []Parameter {
 	}
 }
 
-func (findAll) Call(args map[string]core.Value) (core.Value, error) {
+func (parseRegexAll) Call(args map[string]core.Value) (core.Value, error) {
 	value := args["value"].(core.StringValue).V
 	re := args["pattern"].(core.RegexValue).V
 	group := int(args["group"].(core.IntegerValue).V)

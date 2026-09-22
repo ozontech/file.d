@@ -16,16 +16,19 @@ func init() {
 	registry = newRegistry()
 
 	registry.mustRegister(upcase{})
-	registry.mustRegister(capture{})
+	registry.mustRegister(parseRegex{})
 	registry.mustRegister(toString{})
 	registry.mustRegister(after{})
 	registry.mustRegister(before{})
 	registry.mustRegister(between{})
-	registry.mustRegister(findAll{})
+	registry.mustRegister(parseRegexAll{})
 	registry.mustRegister(join{})
 	registry.mustRegister(trim{})
 	registry.mustRegister(trimLeft{})
 	registry.mustRegister(trimRight{})
+	registry.mustRegister(trimTo{})
+	registry.mustRegister(trimToLeft{})
+	registry.mustRegister(trimToRight{})
 	registry.mustRegister(slice{})
 }
 

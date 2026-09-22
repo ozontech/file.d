@@ -367,9 +367,9 @@ func TestLanguage(t *testing.T) {
 			},
 		},
 		{
-			name: "func_capture",
+			name: "func_parse_regex",
 			source: `
-			m = capture(.log, r'^(?P<level>\S+)\s+(?P<date>\d{4}-\d{2}-\d{2})\s+(?P<time>[\d:,]+)\s+\[(?P<shard>[^\]]*)\]\s+(?P<operation>\S+)\s+-\s+(?P<message>.*)$')
+			m = parse_regex(.log, r'^(?P<level>\S+)\s+(?P<date>\d{4}-\d{2}-\d{2})\s+(?P<time>[\d:,]+)\s+\[(?P<shard>[^\]]*)\]\s+(?P<operation>\S+)\s+-\s+(?P<message>.*)$')
 			if m != null {
 				.level = m.level
 				.date = m.date
@@ -402,9 +402,9 @@ func TestLanguage(t *testing.T) {
 			},
 		},
 		{
-			name: "func_string_template",
+			name: "func_to_string_template",
 			source: `
-			.note = "code is " + string(.code) + ", ok is " + string(.ok) + ", missing is '" + string(.nope) + "'"
+			.note = "code is " + to_string(.code) + ", ok is " + to_string(.ok) + ", missing is '" + to_string(.nope) + "'"
 		`,
 			events: []eventCase{
 				{

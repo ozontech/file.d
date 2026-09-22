@@ -12,7 +12,7 @@ pipelines:
     - type: transform
       source: |
         # parse lines like "INFO 2025-05-25 11:11:11,222 [shard 1] compaction - done"
-        m = capture(.log, r'^(?P<level>\S+)\s+(?P<time>\S+ \S+)\s+\[(?P<shard>[^\]]+)\]\s+(?P<operation>\S+)\s+-\s+(?P<message>.+)$')
+        m = parse_regex(.log, r'^(?P<level>\S+)\s+(?P<time>\S+ \S+)\s+\[(?P<shard>[^\]]+)\]\s+(?P<operation>\S+)\s+-\s+(?P<message>.+)$')
         if m != null {
           .level = m.level
           .time = m.time
@@ -106,9 +106,9 @@ In conditions `null` and `false` are falsy; every other value is truthy.
 Variables hold intermediate values and live for one event:
 
 ```
-name = .user.name             # read a field into a variable
-parts = capture(.log, r'...') # keep a function result
-.out = name                   # write it back to the event
+name = .user.name                 # read a field into a variable
+parts = parse_regex(.log, r'...') # keep a function result
+.out = name                       # write it back to the event
 ```
 
 Fields of object values are accessed with a dot or an index; both forms are
@@ -140,7 +140,7 @@ In order of increasing precedence:
 | `f()` `a[i]` `a.b` | call, index, member access |
 
 `+` concatenates only strings with strings — convert other values first:
-`"code " + string(.code)`.
+`"code " + to_string(.code)`.
 
 ### Control flow
 
@@ -174,17 +174,18 @@ are required; named arguments are optional and fall back to their defaults:
   .level = upcase(.level)    # "info" -> "INFO"
   ```
 
-+ `string(value)` — converts any value to its string representation; `null`
++ `to_string(value)` — converts any value to its string representation; `null`
   becomes an empty string. Use it to build strings from non-string fields:
   ```
-  .msg = "code is " + string(.code)
+  .msg = "code is " + to_string(.code)
   ```
 
-+ `capture(value, pattern, numeric_groups: false)` — matches the string against a
-  regular expression and returns an object of its named groups `(?P<name>...)`,
-  or `null` when the value does not match (unnamed groups are ignored):
++ `parse_regex(value, pattern, numeric_groups: false)` — matches the string
+  against a regular expression and returns an object of its named groups
+  `(?P<name>...)`, or `null` when the value does not match (unnamed groups are
+  ignored):
   ```
-  m = capture(.log, r'^(?P<level>\S+)\s+(?P<message>.+)$')
+  m = parse_regex(.log, r'^(?P<level>\S+)\s+(?P<message>.+)$')
   if m != null {
     .level = m.level
     .message = m.message
@@ -194,7 +195,7 @@ are required; named arguments are optional and fall back to their defaults:
   string — `"0"` is the whole match — which is how a pattern without named groups
   is read:
   ```
-  m = capture(.message, r'(\w+):.*', numeric_groups: true)
+  m = parse_regex(.message, r'(\w+):.*', numeric_groups: true)
   if m != null {
     .level = m["1"]
   }
@@ -218,18 +219,18 @@ are required; named arguments are optional and fall back to their defaults:
   .shard = between(.log, "[", "]")
   ```
 
-+ `find_all(value, pattern, group: 0, limit: -1)` — returns every match of
++ `parse_regex_all(value, pattern, group: 0, limit: -1)` — returns every match of
   `pattern` as an array, or an empty array when nothing matches. `group` selects
   a capture group (`0` is the whole match) and a negative `limit` collects all
   occurrences:
   ```
-  .ids = find_all(.log, r'id=(\w+)', group: 1)
+  .ids = parse_regex_all(.log, r'id=(\w+)', group: 1)
   ```
 
 + `join(value, separator)` — joins an array of strings into one string. Only
-  strings are joined; convert other values with `string()` first:
+  strings are joined; convert other values with `to_string()` first:
   ```
-  .extracted = join(find_all(.message, r're\d+', limit: 2), ",")   # "re1,re2"
+  .extracted = join(parse_regex_all(.message, r're\d+', limit: 2), ",")   # "re1,re2"
   ```
 
 + `trim(value, cutset)`, `trim_left(value, cutset)`,
@@ -238,6 +239,16 @@ are required; named arguments are optional and fall back to their defaults:
   removes every trailing `m` and `s`.
   ```
   .message = trim_right(.message, "\n")
+  ```
+
++ `trim_to(value, cutset)`, `trim_to_left(value, cutset)`,
+  `trim_to_right(value, cutset)` — cut the string back to a delimiter, keeping the
+  delimiter itself; the value is returned unchanged when it is not found. Here
+  `cutset` is a *substring*: the left side trims to its first occurrence, the
+  right side to its last one, so the outermost pair is kept:
+  ```
+  # 'some data {"took":"200ms"} some data' -> '{"took":"200ms"}'
+  .message = trim_to_right(trim_to_left(.message, "{"), "}")
   ```
 
 + `slice(value, start, end: null)` — returns the part of the string between two
