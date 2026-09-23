@@ -2,12 +2,16 @@ package metadata
 
 import (
 	"bytes"
+	"encoding/binary"
 	"fmt"
+	"math"
 	"regexp"
-	"strconv"
+	"sort"
 	"strings"
 	"sync"
 	"text/template"
+
+	"github.com/cespare/xxhash/v2"
 
 	"github.com/dominikbraun/graph"
 	"github.com/elliotchance/orderedmap/v2"
@@ -53,7 +57,7 @@ type MetaTemplater struct {
 	valueTypes   *orderedmap.OrderedMap[string, ValueType]
 	poolBuffer   sync.Pool
 	logger       *zap.Logger
-	cache        *lru.Cache[string, MetaData]
+	cache        *lru.Cache[uint64, MetaData]
 }
 
 func NewMetaTemplater(templates cfg.MetaTemplates, logger *zap.Logger, cacheSize int) *MetaTemplater {
@@ -129,7 +133,7 @@ func NewMetaTemplater(templates cfg.MetaTemplates, logger *zap.Logger, cacheSize
 		}
 	}
 
-	cache, err := lru.New[string, MetaData](cacheSize)
+	cache, err := lru.New[uint64, MetaData](cacheSize)
 	if err != nil {
 		panic(err)
 	}
@@ -212,35 +216,118 @@ func (m *MetaTemplater) Render(data Data) (MetaData, error) {
 	return meta, nil
 }
 
-func generateCacheKey(data map[string]any) string {
-	var builder strings.Builder
-	builder.Grow(len(data) * 16) // Preallocate memory for the builder (estimate)
+func generateCacheKey(data map[string]any) uint64 {
+	keys := make([]string, 0, len(data))
+	for k := range data {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
 
-	for k, v := range data {
-		switch v := v.(type) {
-		case string:
-			// Write the key and string value to the builder
-			builder.WriteString(k)
-			builder.WriteString(":")
-			builder.WriteString(v)
-			builder.WriteString("|")
-		case int:
-			// Write the key and integer value to the builder
-			builder.WriteString(k)
-			builder.WriteString(":")
-			builder.WriteString(strconv.Itoa(v))
-			builder.WriteString("|")
+	h := xxhash.New()
+	var numBuf [8]byte
+
+	for _, k := range keys {
+		// separator
+		h.WriteString(k)
+		h.Write([]byte{0})
+
+		writeValue(h, data[k], &numBuf)
+	}
+	return h.Sum64()
+}
+
+func writeValue(h *xxhash.Digest, v any, numBuf *[8]byte) {
+	if v == nil {
+		h.Write([]byte{0})
+		return
+	}
+
+	switch x := v.(type) {
+	case string:
+		h.Write([]byte{1})
+		h.WriteString(x)
+		h.Write([]byte{0})
+	case bool:
+		if x {
+			h.Write([]byte{2, 1})
+		} else {
+			h.Write([]byte{2, 0})
 		}
-		// If the value is not a string or int, skip it
+	case int:
+		h.Write([]byte{3})
+		binary.LittleEndian.PutUint64(numBuf[:], uint64(x))
+		h.Write(numBuf[:])
+	case int64:
+		h.Write([]byte{4})
+		binary.LittleEndian.PutUint64(numBuf[:], uint64(x))
+		h.Write(numBuf[:])
+	case float64:
+		h.Write([]byte{5})
+		binary.LittleEndian.PutUint64(numBuf[:], math.Float64bits(x))
+		h.Write(numBuf[:])
+	case int8:
+		h.Write([]byte{8})
+		numBuf[0] = byte(x)
+		h.Write(numBuf[:1])
+	case int16:
+		h.Write([]byte{9})
+		binary.LittleEndian.PutUint16(numBuf[:], uint16(x))
+		h.Write(numBuf[:2])
+	case int32:
+		h.Write([]byte{10})
+		binary.LittleEndian.PutUint32(numBuf[:], uint32(x))
+		h.Write(numBuf[:4])
+	case uint:
+		h.Write([]byte{11})
+		binary.LittleEndian.PutUint64(numBuf[:], uint64(x))
+		h.Write(numBuf[:])
+	case uint8:
+		h.Write([]byte{12})
+		numBuf[0] = x
+		h.Write(numBuf[:1])
+	case uint16:
+		h.Write([]byte{13})
+		binary.LittleEndian.PutUint16(numBuf[:], x)
+		h.Write(numBuf[:2])
+	case uint32:
+		h.Write([]byte{14})
+		binary.LittleEndian.PutUint32(numBuf[:], x)
+		h.Write(numBuf[:4])
+	case uint64:
+		h.Write([]byte{15})
+		binary.LittleEndian.PutUint64(numBuf[:], x)
+		h.Write(numBuf[:])
+	case float32:
+		h.Write([]byte{16})
+		binary.LittleEndian.PutUint32(numBuf[:], math.Float32bits(x))
+		h.Write(numBuf[:4])
+	case []any:
+		h.Write([]byte{6})
+		for _, item := range x {
+			writeValue(h, item, numBuf)
+		}
+		h.Write([]byte{0xFF})
+	case map[string]any:
+		h.Write([]byte{7})
+		binary.LittleEndian.PutUint64(numBuf[:], uint64(len(x)))
+		h.Write(numBuf[:])
+		writeMap(h, x, numBuf)
+	default:
+		h.Write([]byte{99})
+		fmt.Fprintf(h, "%v", x)
 	}
+}
 
-	// Convert the builder to a string
-	key := builder.String()
-
-	// Remove the last "|" character if needed
-	if key != "" {
-		key = key[:len(key)-1] // Slice to remove the last character
+func writeMap(h *xxhash.Digest, m map[string]any, numBuf *[8]byte) {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
 	}
+	sort.Strings(keys)
 
-	return key
+	for _, k := range keys {
+		h.WriteString(k)
+		h.Write([]byte{0})
+		writeValue(h, m[k], numBuf)
+	}
 }

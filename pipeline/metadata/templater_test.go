@@ -142,6 +142,24 @@ func TestTemplaterRender(t *testing.T) {
 				"broker":        "kafka1:9093",
 			},
 		},
+		{
+			name: "Cache key includes int32/int64 values (kafka-like)",
+			templates: cfg.MetaTemplates{
+				"topic":     "{{ .topic }}",
+				"partition": "partition_{{ .partition }}",
+				"offset":    "offset_{{ .offset }}",
+			},
+			data: map[string]any{
+				"topic":     "topic",
+				"partition": int32(1),
+				"offset":    int64(100),
+			},
+			expected: map[string]any{
+				"topic":     "topic",
+				"partition": "partition_1",
+				"offset":    "offset_100",
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -157,6 +175,49 @@ func TestTemplaterRender(t *testing.T) {
 			assert.Nil(t, err)
 			assert.Equal(t, fmt.Sprint(tt.expected), fmt.Sprint(result))
 		})
+	}
+}
+
+func TestMetaTemplaterCacheKey(t *testing.T) {
+	templater := NewMetaTemplater(
+		cfg.MetaTemplates{
+			"topic":     "{{ .topic }}",
+			"partition": "partition_{{ .partition }}",
+			"offset":    "offset_{{ .offset }}",
+		},
+		zap.NewExample(),
+		32,
+	)
+
+	// первая запись с partition=1, offset=100
+	first, err := templater.Render(metaInfoTest{
+		topic: "topic", partition: int32(1), offset: int64(100),
+	})
+	assert.Nil(t, err)
+
+	// вторая запись с partition=2, offset=200
+	second, err := templater.Render(metaInfoTest{
+		topic: "topic", partition: int32(2), offset: int64(200),
+	})
+	assert.Nil(t, err)
+
+	assert.Equal(t, "partition_1", first["partition"])
+	assert.Equal(t, "offset_100", first["offset"])
+	assert.Equal(t, "partition_2", second["partition"])
+	assert.Equal(t, "offset_200", second["offset"])
+}
+
+type metaInfoTest struct {
+	topic     string
+	partition int32
+	offset    int64
+}
+
+func (m metaInfoTest) GetData() map[string]any {
+	return map[string]any{
+		"topic":     m.topic,
+		"partition": m.partition,
+		"offset":    m.offset,
 	}
 }
 
