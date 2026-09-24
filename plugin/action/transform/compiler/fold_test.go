@@ -130,11 +130,11 @@ Assign
 		},
 		{
 			name: "regex literal folds after it is compiled",
-			src:  `m = capture(.log, r'(?P<a>\d+)')`,
+			src:  `m = parse_regex(.log, r'(?P<a>\d+)')`,
 			want: `
 Assign
   Ident(m)
-  Call(capture)
+  Call(parse_regex)
     Path(.log)
     Const(r'(?P<a>\d+)')`,
 		},

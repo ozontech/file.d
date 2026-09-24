@@ -208,7 +208,7 @@ func (v ArrayValue) String() string {
 }
 
 // Key order follows Go map iteration and is therefore not stable. This is on
-// the runtime path of string(value), so it does not pay for a sort; debug
+// the runtime path of to_string(value), so it does not pay for a sort; debug
 // output that needs a stable rendering uses dumpValue instead.
 func (v ObjectValue) String() string {
 	parts := make([]string, 0, len(v.V))

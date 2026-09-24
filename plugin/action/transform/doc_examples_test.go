@@ -1,12 +1,43 @@
 package transform
 
 import (
+	"fmt"
+	"os"
+	"strings"
 	"testing"
 
 	"github.com/ozontech/file.d/plugin/action/transform/compiler"
 	"github.com/ozontech/file.d/plugin/action/transform/stdlib"
 	"github.com/stretchr/testify/require"
 )
+
+// validate examples from both the documentation source and the generated README
+func TestReadmeExamplesCompile(t *testing.T) {
+	for _, path := range []string{"README.idoc.md", "README.md"} {
+		t.Run(path, func(t *testing.T) {
+			data, err := os.ReadFile(path)
+			require.NoError(t, err)
+
+			blocks := strings.Split(string(data), "```")
+			count := 0
+			for i := 1; i < len(blocks); i += 2 {
+				// unlabelled code blocks contain transform programs
+				if !strings.HasPrefix(blocks[i], "\n") {
+					continue
+				}
+				count++
+				t.Run(fmt.Sprintf("example_%d", count), func(t *testing.T) {
+					cmp, err := compiler.NewCompiler(blocks[i])
+					require.NoError(t, err)
+					exprs, err := cmp.Compile()
+					require.NoError(t, err)
+					require.NoError(t, compiler.ValidateCalls(exprs, stdlib.GetRegistry()))
+				})
+			}
+			require.Positive(t, count, "documentation must contain program examples")
+		})
+	}
+}
 
 // compile and validate every program snippet shown in the plugin documentation.
 func TestDocExamplesCompile(t *testing.T) {
