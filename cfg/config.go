@@ -726,11 +726,13 @@ func SetDefaultValues(data any) error {
 
 		defaultValue := tField.Tag.Get("default")
 		if defaultValue != "" {
-			if j, ok := vField.Addr().Interface().(json.Unmarshaler); ok {
-				if err := j.UnmarshalJSON([]byte(strconv.Quote(defaultValue))); err != nil {
-					return err
+			if vField.IsZero() {
+				if j, ok := vField.Addr().Interface().(json.Unmarshaler); ok {
+					if err := j.UnmarshalJSON([]byte(strconv.Quote(defaultValue))); err != nil {
+						return err
+					}
+					continue
 				}
-				continue
 			}
 			switch vFieldKind {
 			case reflect.Bool:
