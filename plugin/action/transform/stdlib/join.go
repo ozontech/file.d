@@ -9,10 +9,10 @@ import (
 
 // join concatenates an array of strings into one string:
 //
-//	join(find_all(.log, r're\d+'), ",")   -> "re1,re2"
+//	join(parse_regex_all(.log, r're\d+'), ",")   -> "re1,re2"
 //
 // Only strings are joined; like the + operator, other kinds must be converted
-// with string() first, so a surprising array does not silently produce a
+// with to_string() first, so a surprising array does not silently produce a
 // surprising field.
 type join struct{}
 

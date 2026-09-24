@@ -5,13 +5,13 @@ import (
 )
 
 // toString converts any value to its string representation, e.g. for building
-// strings from non-string fields: "code " + string(.code).
+// strings from non-string fields: "code " + to_string(.code).
 //
 // null converts to an empty string (not "null") so that templating over a
 // missing field yields the same empty result as the modify plugin.
 type toString struct{}
 
-func (toString) Name() string { return "string" }
+func (toString) Name() string { return "to_string" }
 
 func (toString) Params() []Parameter {
 	return []Parameter{
