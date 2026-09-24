@@ -66,7 +66,7 @@ func TestParseRegexAll(t *testing.T) {
 
 	t.Run("skips_groups_that_did_not_participate", func(t *testing.T) {
 		t.Parallel()
-		// Group 1 participates only in the "a" match, not in the "b" one.
+		// group 1 participates only in the "a" match, not in the "b" one
 		assert.Equal(t, []string{"a"},
 			callParseRegexAll(t, "a b", `(a)|(b)`, map[string]core.Value{"group": core.IntegerValue{V: 1}}))
 	})

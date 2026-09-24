@@ -48,7 +48,7 @@ func TestSlice(t *testing.T) {
 
 	t.Run("counts_characters_not_bytes", func(t *testing.T) {
 		t.Parallel()
-		// The modify plugin's cut counts bytes and would split these runes.
+		// the modify plugin's cut counts bytes and would split these runes
 		assert.Equal(t, "привет", call("привет мир", 0, 6))
 		assert.Equal(t, "мир", call("привет мир", -3))
 	})

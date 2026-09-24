@@ -5,7 +5,7 @@ import (
 )
 
 // toString converts any value to its string representation, e.g. for building
-// strings from non-string fields: "code " + to_string(.code).
+// strings from non-string fields: "code " + to_string(.code)
 //
 // null converts to an empty string (not "null") so that templating over a
 // missing field yields the same empty result as the modify plugin.

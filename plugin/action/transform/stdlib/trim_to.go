@@ -6,7 +6,7 @@ import (
 	"github.com/ozontech/file.d/plugin/action/transform/core"
 )
 
-// The trim_to family cuts a string back to a delimiter, keeping the delimiter
+// the trim_to family cuts a string back to a delimiter, keeping the delimiter
 // itself:
 //
 //	trim_to(.message, "{")        -> both ends
@@ -14,15 +14,15 @@ import (
 //	trim_to_right(.message, "}")  -> everything up to the last "}"
 //
 // cutset is a *substring*, not a set of characters - that is what separates this
-// family from trim. The left side searches the first occurrence and the right
-// side the last one, so trim_to_left(v, "{") + trim_to_right(v, "}") spans the
+// family from trim; the left side searches the first occurrence and the right
+// side the last one, so trim_to_right(trim_to_left(v, "{"), "}") spans the
 // outermost pair rather than stopping inside a nested one, which is what the
 // modify plugin's trim_to filter does and what extracting a JSON object out of a
-// log line needs.
+// log line needs
 //
-// When the delimiter is not found the value is returned unchanged, the same
+// when the delimiter is not found the value is returned unchanged, the same
 // forgiving behavior as the substring family, so a line in an unexpected format
-// passes through instead of being emptied.
+// passes through instead of being emptied
 
 type trimTo struct{}
 
@@ -57,7 +57,7 @@ func (trimToRight) Call(args map[string]core.Value) (core.Value, error) {
 	return core.StringValue{V: trimToRightOf(value, cutset)}, nil
 }
 
-// trimToLeftOf drops everything before the first occurrence of cutset.
+// trimToLeftOf drops everything before the first occurrence of cutset
 func trimToLeftOf(value, cutset string) string {
 	if idx := strings.Index(value, cutset); idx != -1 {
 		return value[idx:]
@@ -65,9 +65,9 @@ func trimToLeftOf(value, cutset string) string {
 	return value
 }
 
-// trimToRightOf drops everything after the last occurrence of cutset. The
-// delimiter is part of the result, hence idx+len(cutset) rather than idx+1:
-// a multi-byte delimiter must not be cut in half.
+// trimToRightOf drops everything after the last occurrence of cutset
+// the delimiter is part of the result, hence idx+len(cutset) rather than idx+1:
+// a multi-byte delimiter must not be cut in half
 func trimToRightOf(value, cutset string) string {
 	if idx := strings.LastIndex(value, cutset); idx != -1 {
 		return value[:idx+len(cutset)]

@@ -11,7 +11,7 @@ import (
 )
 
 // setViaJSON is what Set did before the scalar fast path: always serialize the
-// value and parse it back. It is the reference the fast path must match.
+// value and parse it back; it is the reference the fast path must match
 func setViaJSON(t *testing.T, root *insaneJSON.Root, field string, v core.Value) string {
 	t.Helper()
 	encoded, err := valueToJSON(v)
@@ -31,8 +31,8 @@ func setViaTarget(t *testing.T, root *insaneJSON.Root, field string, v core.Valu
 	return root.EncodeToString()
 }
 
-// Every value the language can assign must land in the event identically
-// whether it took the fast path or the JSON round trip.
+// every value the language can assign must land in the event identically
+// whether it took the fast path or the JSON round trip
 func TestSetFastPathMatchesJSONPath(t *testing.T) {
 	// literal values produced by the language itself
 	literals := []core.Value{
@@ -116,13 +116,13 @@ func TestSetFastPathMatchesJSONPath(t *testing.T) {
 	}
 }
 
-// A string carrying bytes that are not valid UTF-8 is the one case where the two
+// a string carrying bytes that are not valid UTF-8 is the one case where the two
 // paths still differ, and the split is inside insane-json rather than here:
 // escapeString emits \ufffd for an invalid rune, but the shouldEscape check in
 // front of it lets a string through untouched when it holds no quote, backslash
-// or control byte. So the fast path keeps the original bytes -- which is what the
-// rest of file.d does with log data -- while the JSON path sanitizes them.
-// Both are well-formed JSON structure; neither loses the event.
+// or control byte; so the fast path keeps the original bytes -- which is what the
+// rest of file.d does with log data -- while the JSON path sanitizes them
+// both are well-formed JSON structure; neither loses the event
 func TestSetFastPathInvalidUTF8(t *testing.T) {
 	const bad = "bad\xff\xfeutf8"
 
@@ -141,8 +141,8 @@ func TestSetFastPathInvalidUTF8(t *testing.T) {
 	require.Equal(t, "{\"keep\":1,\"out\":\"bad\xff\xfeutf8\"}", viaFast)
 }
 
-// Overwriting an existing field must behave the same on both paths, including
-// when a composite is replaced by a scalar and vice versa.
+// overwriting an existing field must behave the same on both paths, including
+// when a composite is replaced by a scalar and vice versa
 func TestSetFastPathOverwrite(t *testing.T) {
 	cases := []struct {
 		doc string

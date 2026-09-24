@@ -11,8 +11,8 @@ import (
 //	slice(.message, -5)           -> the last 5 characters
 //
 // start is inclusive, end is exclusive, and both may be negative to count from
-// the right. Positions outside the string are clamped instead of raising an
-// error, so a shorter-than-expected line passes through whole.
+// the right; positions outside the string are clamped instead of raising an
+// error, so a shorter-than-expected line passes through whole
 type slice struct{}
 
 func (slice) Name() string { return "slice" }
@@ -56,7 +56,7 @@ func (slice) Call(args map[string]core.Value) (core.Value, error) {
 }
 
 // clampIndex resolves a possibly negative position against length and pins the
-// result to [0, length].
+// result to [0, length]
 func clampIndex(i, length int) int {
 	if i < 0 {
 		i += length

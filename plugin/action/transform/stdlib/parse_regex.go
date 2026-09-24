@@ -7,13 +7,13 @@ import (
 )
 
 // parse_regex matches value against a regular expression and returns an object
-// of its named capture groups (keyed by group name). Unnamed groups are ignored.
-// When value does not match, it returns null so callers can guard the result
-// with `if m != null { ... }`.
+// of its named capture groups (keyed by group name); unnamed groups are ignored
+// when value does not match, it returns null so callers can guard the result
+// with `if m != null { ... }`
 //
-// With numeric_groups enabled every group is additionally keyed by its index as
+// with numeric_groups enabled every group is additionally keyed by its index as
 // a string - "0" is the whole match, "1" the first group and so on - which is
-// how a pattern without named groups is read: m["1"].
+// how a pattern without named groups is read: m["1"]
 type parseRegex struct{}
 
 func (parseRegex) Name() string { return "parse_regex" }
@@ -55,7 +55,7 @@ func (parseRegex) Call(args map[string]core.Value) (core.Value, error) {
 		if numericGroups {
 			groups[strconv.Itoa(i)] = core.StringValue{V: match[i]}
 		}
-		// names[0] is the whole match (always unnamed); unnamed groups have "".
+		// names[0] is the whole match (always unnamed); unnamed groups have ""
 		if i == 0 || name == "" {
 			continue
 		}

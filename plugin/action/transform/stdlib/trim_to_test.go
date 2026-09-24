@@ -3,24 +3,12 @@ package stdlib
 import (
 	"testing"
 
-	"github.com/ozontech/file.d/plugin/action/transform/core"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
-
-func trimToCaller(t *testing.T, fn Function) func(value, cutset string) string {
-	t.Helper()
-
-	return func(value, cutset string) string {
-		got, err := callFn(fn, []core.Value{str(value), str(cutset)}, nil)
-		require.NoError(t, err)
-		return got.(core.StringValue).V
-	}
-}
 
 func TestTrimTo(t *testing.T) {
 	t.Parallel()
-	call := trimToCaller(t, trimTo{})
+	call := trimCaller(t, trimTo{})
 
 	assert.Equal(t, "[data]", call("noise [data] noise", "[data]"))
 	assert.Equal(t, "|a|b|", call("noise |a|b| noise", "|"),
@@ -34,7 +22,7 @@ func TestTrimTo(t *testing.T) {
 
 func TestTrimToLeft(t *testing.T) {
 	t.Parallel()
-	call := trimToCaller(t, trimToLeft{})
+	call := trimCaller(t, trimToLeft{})
 
 	assert.Equal(t, "{a} tail", call("head {a} tail", "{"), "the delimiter is kept")
 	assert.Equal(t, "-> b -> c", call("a -> b -> c", "->"),
@@ -45,7 +33,7 @@ func TestTrimToLeft(t *testing.T) {
 
 func TestTrimToRight(t *testing.T) {
 	t.Parallel()
-	call := trimToCaller(t, trimToRight{})
+	call := trimCaller(t, trimToRight{})
 
 	assert.Equal(t, "head {a}", call("head {a} tail", "}"), "the delimiter is kept")
 	assert.Equal(t, "a -> b ->", call("a -> b -> c", "->"),
@@ -58,13 +46,13 @@ func TestTrimToRight(t *testing.T) {
 	assert.Equal(t, "", call("", ""), "empty input and empty cutset")
 }
 
-// The modify plugin's README example, which is the reason this family exists:
-// `${message|trim_to("left","{")|trim_to("right","}")}`.
+// the modify plugin's README example, which is the reason this family exists:
+// `${message|trim_to("left","{")|trim_to("right","}")}`
 func TestTrimToExtractsJSONObject(t *testing.T) {
 	t.Parallel()
 
-	left := trimToCaller(t, trimToLeft{})
-	right := trimToCaller(t, trimToRight{})
+	left := trimCaller(t, trimToLeft{})
+	right := trimCaller(t, trimToRight{})
 
 	const line = `some data {"service":"service-test-1","took":"200ms"} some data`
 
@@ -72,8 +60,8 @@ func TestTrimToExtractsJSONObject(t *testing.T) {
 		`{"service":"service-test-1","took":"200ms"}`,
 		right(left(line, "{"), "}"))
 
-	// The nested case is what the substring family cannot do: between() stops at
-	// the first closing brace, trim_to spans the outermost pair.
+	// the nested case is what the substring family cannot do: between() stops at
+	// the first closing brace, trim_to spans the outermost pair
 	assert.Equal(t,
 		`{"a":{"b":1}}`,
 		right(left(`some data {"a":{"b":1}} some data`, "{"), "}"))

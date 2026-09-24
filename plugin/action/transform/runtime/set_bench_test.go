@@ -9,7 +9,7 @@ import (
 
 const benchEvent = `{"log":"2025-05-25 11:11:11 INFO billing request processed in 42ms","k8s_node":"node-17","k8s_pod_label_app":"billing","@lt":""}`
 
-// The move-shaped assignments transform #1 performs on every event.
+// the move-shaped assignments transform #1 performs on every event
 func benchMoves(b *testing.B, root *insaneJSON.Root) {
 	seg := func(f string) core.Path {
 		return core.Path{Segments: []core.Segment{core.FieldSeg(f)}}

@@ -7,15 +7,15 @@ import (
 )
 
 // parse_regex_all collects every match of a pattern in a string and returns
-// them as an array. It is the multi-occurrence counterpart of parse_regex:
+// them as an array; it is the multi-occurrence counterpart of parse_regex:
 // parse_regex describes one match by its groups, parse_regex_all describes many
-// matches by a single group.
+// matches by a single group
 //
 //	parse_regex_all(.log, r'\d+')                     -> ["1", "42"]
 //	join(parse_regex_all(.log, r're\d+', limit: 2), ",") -> "re1,re2"
 //
-// When nothing matches an empty array is returned, so the result is always safe
-// to iterate or join.
+// when nothing matches an empty array is returned, so the result is always safe
+// to iterate or join
 type parseRegexAll struct{}
 
 func (parseRegexAll) Name() string { return "parse_regex_all" }
@@ -58,14 +58,14 @@ func (parseRegexAll) Call(args map[string]core.Value) (core.Value, error) {
 			"group %d is out of range: pattern has %d capture groups", group, re.NumSubexp())
 	}
 
-	// A negative limit means "all matches"; Go spells that -1 exactly.
+	// a negative limit means "all matches"; Go spells that -1 exactly
 	if limit < 0 {
 		limit = -1
 	}
 
-	// The index form is used rather than FindAllStringSubmatch so that a group
+	// the index form is used rather than FindAllStringSubmatch so that a group
 	// that did not participate in a match (-1) can be told apart from a group
-	// that matched an empty string, and skipped.
+	// that matched an empty string, and skipped
 	matches := re.FindAllStringSubmatchIndex(value, limit)
 
 	result := make([]core.Value, 0, len(matches))

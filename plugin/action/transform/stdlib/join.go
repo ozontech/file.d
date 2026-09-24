@@ -11,9 +11,9 @@ import (
 //
 //	join(parse_regex_all(.log, r're\d+'), ",")   -> "re1,re2"
 //
-// Only strings are joined; like the + operator, other kinds must be converted
+// only strings are joined; like the + operator, other kinds must be converted
 // with to_string() first, so a surprising array does not silently produce a
-// surprising field.
+// surprising field
 type join struct{}
 
 func (join) Name() string { return "join" }

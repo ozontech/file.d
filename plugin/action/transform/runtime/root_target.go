@@ -60,10 +60,10 @@ func (t *RootTarget) Set(path core.Path, value core.Value) error {
 		return fmt.Errorf("set %s: %w", formatSegments(path.Segments), err)
 	}
 
-	// A composite has to be serialized before the tree is touched below:
-	// AddFieldNoAlloc splices into the parent's node chain, and encoding a source
+	// a composite has to be serialized before the tree is touched below:
+	// calling AddFieldNoAlloc splices into the parent's node chain, and encoding a source
 	// node that lives under that same parent must happen while the chain is still
-	// intact.
+	// intact
 	scalar := isScalarValue(value)
 	var encoded string
 	if !scalar {
@@ -99,17 +99,17 @@ func (t *RootTarget) Set(path core.Path, value core.Value) error {
 }
 
 // isScalarValue reports whether value can be written with one of insane-json's
-// typed mutators, which only set a node's bits and data.
+// typed mutators, which only set a node's bits and data
 //
-// Everything else goes through valueToJSON plus MutateToJSON, which serializes
-// the value and parses it back. That round trip is what makes an assignment cost
+// everything else goes through valueToJSON plus MutateToJSON, which serializes
+// the value and parses it back; that round trip is what makes an assignment cost
 // a full encode and re-parse of the subtree, and it is also what draws nodes
-// from the root's decoder pool on every assignment.
+// from the root's decoder pool on every assignment
 //
-// A number read out of the event is deliberately not treated as scalar: the node
+// a number read out of the event is deliberately not treated as scalar: the node
 // keeps the literal exactly as it was written ("1.50", "1e3"), and rewriting it
-// through MutateToFloat would change what the event carries downstream. Numbers
-// produced by the language itself carry no literal, so they stay on the fast path.
+// through MutateToFloat would change what the event carries downstream
+// numbers produced by the language itself carry no literal, so they stay on the fast path
 func isScalarValue(v core.Value) bool {
 	switch val := v.(type) {
 	case core.NullValue, core.BoolValue, core.IntegerValue, core.FloatValue, core.StringValue:
@@ -121,7 +121,7 @@ func isScalarValue(v core.Value) bool {
 	return false
 }
 
-// setScalar writes a value that isScalarValue accepted.
+// setScalar writes a value that isScalarValue accepted
 func setScalar(node *insaneJSON.Node, v core.Value) {
 	switch val := v.(type) {
 	case core.NullValue:
@@ -267,16 +267,16 @@ func toInsaneJSONPath(segments []core.Segment, pathBuffer []string) []string {
 	return pathBuffer
 }
 
-// quoteJSON renders a string as a JSON string literal.
+// quoteJSON renders a string as a JSON string literal
 //
 // strconv.Quote is Go quoting, not JSON quoting: it escapes a control character
 // as \x01 and a byte that is not valid UTF-8 as \xff, neither of which JSON
-// accepts. Using it here put malformed JSON into the event whenever a log line
-// carried such a byte.
+// accepts; using it here put malformed JSON into the event whenever a log line
+// carried such a byte
 func quoteJSON(s string) string {
 	encoded, err := json.Marshal(s)
 	if err != nil {
-		// json.Marshal only fails on unsupported types, never on a string.
+		// json.Marshal only fails on unsupported types, never on a string
 		return strconv.Quote(s)
 	}
 	return string(encoded)

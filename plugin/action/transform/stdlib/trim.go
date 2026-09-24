@@ -6,16 +6,16 @@ import (
 	"github.com/ozontech/file.d/plugin/action/transform/core"
 )
 
-// The trim family strips characters from the ends of a string:
+// the trim family strips characters from the ends of a string:
 //
 //	trim(.message, " ")         -> both ends
 //	trim_left(.message, " ")    -> leading only
 //	trim_right(.message, "\n")  -> trailing only
 //
 // cutset is a *set of characters*, not a substring: trim_right(v, "ms") removes
-// every trailing "m" and "s", not the suffix "ms". Side is part of the function
+// every trailing "m" and "s", not the suffix "ms"; side is part of the function
 // name rather than a mode argument so that a typo is caught when the program is
-// compiled instead of on the first event that reaches it.
+// compiled instead of on the first event that reaches it
 
 type trim struct{}
 

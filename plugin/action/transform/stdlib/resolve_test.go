@@ -37,7 +37,7 @@ func resolveArgs(t *testing.T, fn Function, positional []core.Value, named map[s
 
 // callFn invokes fn the way the interpreter does: arguments are bound through
 // the compiled signature, so omitted named parameters get their declared
-// defaults instead of being absent from the map.
+// defaults instead of being absent from the map
 func callFn(fn Function, positional []core.Value, named map[string]core.Value) (core.Value, error) {
 	c, err := compile(fn)
 	if err != nil {

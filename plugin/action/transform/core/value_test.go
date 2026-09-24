@@ -10,7 +10,7 @@ import (
 
 // Debug output must not depend on Go map iteration order, so that the dump of a
 // folded constant is reproducible. Value.String() is deliberately unsorted -
-// it sits on the runtime path of to_string(value) - so the sort lives in dumpValue.
+// it sits on the runtime path of to_string(value) - so the sort lives in dumpValue
 func TestDumpConstIsStable(t *testing.T) {
 	t.Parallel()
 
