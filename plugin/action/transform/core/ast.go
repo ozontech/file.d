@@ -3,6 +3,7 @@ package core
 import (
 	"fmt"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 )
@@ -70,6 +71,11 @@ type TimestampLit struct {
 	Node
 	Value  string
 	Parsed time.Time
+}
+
+type ConstExpr struct {
+	Node
+	V Value
 }
 
 type IdentExpr struct {
@@ -166,6 +172,40 @@ type ForExpr struct {
 	Body  []Expr
 }
 
+// dumpValue renders a value for debug output, sorting object keys so that the
+// dump of a folded constant is stable across runs.
+//
+// Value.String() deliberately does not sort: it sits on the runtime path of
+// string(value), and debug output is the only place that needs a stable order.
+func dumpValue(v Value) string {
+	switch t := v.(type) {
+	case StringValue:
+		return fmt.Sprintf("%q", t.V)
+
+	case ArrayValue:
+		parts := make([]string, len(t.V))
+		for i, el := range t.V {
+			parts[i] = dumpValue(el)
+		}
+		return "[" + strings.Join(parts, ", ") + "]"
+
+	case ObjectValue:
+		keys := make([]string, 0, len(t.V))
+		for k := range t.V {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+
+		parts := make([]string, 0, len(t.V))
+		for _, k := range keys {
+			parts = append(parts, fmt.Sprintf("%q: %s", k, dumpValue(t.V[k])))
+		}
+		return "{" + strings.Join(parts, ", ") + "}"
+	}
+
+	return v.String()
+}
+
 // DumpAST returns a human-readable representation of the AST.
 // Use only for debug
 func DumpAST(expr Expr, depth int) string {
@@ -187,6 +227,8 @@ func DumpAST(expr Expr, depth int) string {
 		return fmt.Sprintf("%sRegexLit(%q)", pad, e.Pattern)
 	case *TimestampLit:
 		return fmt.Sprintf("%sTimestampLit(%q)", pad, e.Value)
+	case *ConstExpr:
+		return fmt.Sprintf("%sConst(%s)", pad, dumpValue(e.V))
 	case *IdentExpr:
 		return fmt.Sprintf("%sIdent(%s)", pad, e.Name)
 

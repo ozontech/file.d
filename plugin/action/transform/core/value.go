@@ -162,8 +162,13 @@ func (v TimestampValue) Equal(other Value) bool {
 	return ok && v.V.Equal(o.V)
 }
 
+// Equal compares the decoded node, not its text. Comparing String() forms made
+// an event field never equal an object or array literal, because a node renders
+// as raw JSON ({"a":1}) while an ObjectValue renders with spaces ({"a": 1}).
+// Resolving both sides also keeps equality type-aware, so the number 1 does not
+// equal the string "1".
 func (v JSONNodeValue) Equal(other Value) bool {
-	return v.String() == other.String()
+	return resolve(v).Equal(resolve(other))
 }
 
 func (NullValue) String() string { return "null" }
@@ -202,6 +207,9 @@ func (v ArrayValue) String() string {
 	return "[" + strings.Join(parts, ", ") + "]"
 }
 
+// Key order follows Go map iteration and is therefore not stable. This is on
+// the runtime path of string(value), so it does not pay for a sort; debug
+// output that needs a stable rendering uses dumpValue instead.
 func (v ObjectValue) String() string {
 	parts := make([]string, 0, len(v.V))
 	for k, val := range v.V {
