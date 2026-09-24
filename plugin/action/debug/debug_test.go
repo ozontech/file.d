@@ -28,6 +28,7 @@ func TestLogger(t *testing.T) {
 	}
 
 	const pipelineName = "logd"
+	const pipelineAction = pipelineName + "_0"
 	p.Start(&c, &pipeline.ActionPluginParams{
 		PluginDefaultParams: pipeline.PluginDefaultParams{
 			PipelineName: pipelineName,
@@ -36,7 +37,7 @@ func TestLogger(t *testing.T) {
 	})
 
 	loggerByPipelineMu.Lock()
-	_, ok := loggerByPipeline[pipelineName]
+	_, ok := loggerByPipelineAction[pipelineAction]
 	r.True(ok)
 	loggerByPipelineMu.Unlock()
 

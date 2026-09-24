@@ -308,6 +308,13 @@ For example,
 This will log the first 10 events in a one second interval as-is.
 Following that, it will allow through every 5th event in that interval.
 
+If it is needed to log every entry, logger without sampling can be used,
+
+```yaml
+- type: debug
+  interval: 0s
+```
+
 
 [More details...](plugin/action/debug/README.md)
 ## decode
@@ -331,6 +338,14 @@ pipelines:
 ```
 
 [More details...](plugin/action/discard/README.md)
+## event_to_metrics
+Transforms events into metric format
+
+This plugin extracts values and labels from event fields and restructures the event into an array of metrics containing `name`, `type`, `value`, `timestamp`, `ttl`, and `labels`.
+
+**Important:** This action should be the last one in the pipeline, as it consumes events and does not pass them further.
+
+[More details...](plugin/action/event_to_metrics/README.md)
 ## flatten
 It extracts the object keys and adds them into the root with some prefix. If the provided field isn't an object, an event will be skipped.
 
@@ -875,6 +890,10 @@ It sends the event batches to postgres db using pgx.
 Supports [dead queue](/plugin/output/README.md#dead-queue).
 
 [More details...](plugin/output/postgres/README.md)
+## prometheus
+It sends metrics to Prometheus using the remote write API. The plugin receives metric events from the pipeline (e.g., from the event_to_metrics action plugin) and forwards them to a Prometheus-compatible endpoint.
+
+[More details...](plugin/output/prometheus/README.md)
 ## s3
 Sends events to s3 output of one or multiple buckets.
 `bucket` is default bucket for events. Addition buckets can be described in `multi_buckets` section, example down here.

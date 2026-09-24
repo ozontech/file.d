@@ -27,6 +27,7 @@ func init() {
 	registry.mustRegister(trimLeft{})
 	registry.mustRegister(trimRight{})
 	registry.mustRegister(slice{})
+	registry.mustRegister(lookup{})
 }
 
 func GetRegistry() *Registry {

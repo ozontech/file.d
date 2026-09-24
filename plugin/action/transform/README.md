@@ -218,6 +218,7 @@ are required; named arguments are optional and fall back to their defaults:
   .shard = between(.log, "[", "]")
   ```
 
+<<<<<<< HEAD
 + `find_all(value, pattern, group: 0, limit: -1)` — returns every match of
   `pattern` as an array, or an empty array when nothing matches. `group` selects
   a capture group (`0` is the whole match) and a negative `limit` collects all
@@ -248,5 +249,23 @@ are required; named arguments are optional and fall back to their defaults:
   .head = slice(.message, 0, end: 10)   # first 10 characters
   .tail = slice(.message, -5)           # last 5 characters
   ```
+=======
++ `lookup(value, table, default: <unchanged>)` — translates a value through a
+  table of replacements. It turns enumeration codes into readable names without
+  a chain of `if`s:
+  ```
+  api_key = {"0": "produce", "1": "fetch", "2": "offsets"}
+  .kafka_request_api_key = lookup(.kafka_request_api_key, api_key)
+  ```
+  Keys are matched by their string form, so the number `0` and the string `"0"`
+  are the same key — JSON writes codes both ways. A value that is not in the
+  table is returned unchanged; pass `default:` to replace it instead:
+  ```
+  .severity = lookup(.status, {"500": "crit", "400": "warn"}, default: "ok")
+  ```
+  A table written as a literal is built once at startup, not per event, so a
+  large table costs no more than a small one. Keep it in a variable when the
+  same table is used more than once.
+>>>>>>> 87fa51e872031c72e14ea0ad867e7b604bd077e6
 
 <br>*Generated using [__insane-doc__](https://github.com/vitkovskii/insane-doc)*

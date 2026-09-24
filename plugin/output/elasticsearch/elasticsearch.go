@@ -334,7 +334,7 @@ func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 	p.sendErrorMetric = ctl.RegisterCounterVec("output_elasticsearch_send_error_total", "Total elasticsearch send errors", "status_code")
 	p.indexingErrorsMetric = ctl.RegisterCounter("output_elasticsearch_index_error_total", "Number of elasticsearch indexing errors")
 	p.bannedEndpointsMetric = ctl.RegisterGauge(
-		"output_elasticsearch_banned_endpoints_count",
+		"output_elasticsearch_banned_endpoints",
 		"Current number of endpoints banned by circuit breaker",
 	)
 	p.bannedEndpointsMetric.Set(0)

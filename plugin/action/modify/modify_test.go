@@ -17,6 +17,7 @@ func TestModify(t *testing.T) {
 		"my_object.field.subfield":         "${existing_field}",
 		"my_object.new_field.new_subfield": "new_subfield_value",
 		"not_exists":                       "${not_existing_field}",
+		"from_two_fields":                  "${existing_field} | ${another_field}",
 	}, nil)
 	p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, config, pipeline.MatchModeAnd, nil, false))
 	wg := &sync.WaitGroup{}
@@ -27,10 +28,11 @@ func TestModify(t *testing.T) {
 		assert.Equal(t, "existing_value", e.Root.Dig("my_object", "field", "subfield").AsString(), "wrong event field")
 		assert.Equal(t, "new_subfield_value", e.Root.Dig("my_object", "new_field", "new_subfield").AsString(), "wrong event field")
 		assert.Nil(t, e.Root.Dig("not_exists"), "wrong event field")
+		assert.Equal(t, "existing_value | another_value", e.Root.Dig("from_two_fields").AsString(), "wrong event field")
 		wg.Done()
 	})
 
-	input.In(0, "test.log", test.NewOffset(0), []byte(`{"existing_field":"existing_value","my_object":{"field":{"subfield":"subfield_value"}}}`))
+	input.In(0, "test.log", test.NewOffset(0), []byte(`{"existing_field":"existing_value","my_object":{"field":{"subfield":"subfield_value"}},"another_field":"another_value"}`))
 
 	wg.Wait()
 	p.Stop()

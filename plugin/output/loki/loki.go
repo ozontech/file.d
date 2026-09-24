@@ -450,7 +450,7 @@ func (p *Plugin) send(root *insaneJSON.Root) (int, error) {
 func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
 	p.sendErrorMetric = ctl.RegisterCounterVec("output_loki_send_error_total", "Total Loki send errors", "status_code")
 	p.bannedEndpointsMetric = ctl.RegisterGauge(
-		"output_loki_banned_endpoints_count",
+		"output_loki_banned_endpoints",
 		"Current number of endpoints banned by circuit breaker",
 	)
 	p.bannedEndpointsMetric.Set(0)
