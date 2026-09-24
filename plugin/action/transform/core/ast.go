@@ -176,7 +176,7 @@ type ForExpr struct {
 // dump of a folded constant is stable across runs.
 //
 // Value.String() deliberately does not sort: it sits on the runtime path of
-// string(value), and debug output is the only place that needs a stable order.
+// to_string(value), and debug output is the only place that needs a stable order
 func dumpValue(v Value) string {
 	switch t := v.(type) {
 	case StringValue:
