@@ -109,7 +109,7 @@ type Config struct {
 	// > MaxConcurrentFetches sets the maximum number of fetch requests to allow in
 	// > flight or buffered at once, overriding the unbounded (i.e. number of
 	// > brokers) default.
-	MaxConcurrentFetches int `json:"max_concurrent_fetches" default:"0"` // *
+	MaxConcurrentFetches int `json:"max_concurrent_fetches" default:"-1"` // *
 
 	// > @3@4@5@6
 	// >
