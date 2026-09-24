@@ -44,4 +44,6 @@ WORKDIR /file.d
 
 COPY --from=build /file.d/file.d /file.d/file.d
 
+USER 65532:65532
+
 CMD [ "./file.d" ]
