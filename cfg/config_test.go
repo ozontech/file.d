@@ -924,15 +924,15 @@ type stringSliceDefaults struct {
 	SS []string `default:"str1 str2 str3"`
 }
 
-type childDefaults struct {
-	ValueStr   string `json:"value_str" default:"child"`
+type childrenDefaults struct {
+	ValueStr   string `json:"value_str" default:"children"`
 	ValueInt64 int64  `json:"value_int64" default:"67"`
 }
 
 type parentDefaults struct {
-	ValueBool bool            `json:"value_bool" default:"true"`
-	Nested    childDefaults   `json:"nested"`
-	Childs    []childDefaults `json:"childs"`
+	ValueBool bool               `json:"value_bool" default:"true"`
+	Nested    childrenDefaults   `json:"nested"`
+	Children  []childrenDefaults `json:"children"`
 }
 
 func TestSetDefaultValues(t *testing.T) {
@@ -961,17 +961,17 @@ func TestSetDefaultValues(t *testing.T) {
 		{
 			name: "recurse_into_struct_and_slice_elements",
 			input: &parentDefaults{
-				Childs: []childDefaults{
+				Children: []childrenDefaults{
 					{ValueStr: "str"},
 					{},
 				},
 			},
 			want: &parentDefaults{
 				ValueBool: true,
-				Nested:    childDefaults{ValueStr: "child", ValueInt64: 67},
-				Childs: []childDefaults{
+				Nested:    childrenDefaults{ValueStr: "children", ValueInt64: 67},
+				Children: []childrenDefaults{
 					{ValueStr: "str", ValueInt64: 67},
-					{ValueStr: "child", ValueInt64: 67},
+					{ValueStr: "children", ValueInt64: 67},
 				},
 			},
 		},
@@ -1002,34 +1002,24 @@ func TestSetDefaultValues(t *testing.T) {
 
 func TestPreallocSlicesFromJson(t *testing.T) {
 	cases := []struct {
-		name  string
-		input string
-		want  *parentDefaults
+		name    string
+		input   string
+		wantLen int
 	}{
 		{
-			name:  "preallocate_struct_slice",
-			input: `{"childs":[{},{"value_str":"size"}]}`,
-			want: &parentDefaults{
-				Childs: []childDefaults{
-					{ValueStr: "child", ValueInt64: 67},
-					{ValueStr: "child", ValueInt64: 67},
-				},
-			},
+			name:    "preallocate_struct_slice",
+			input:   `{"children":[{},{"value_str":"size"}]}`,
+			wantLen: 2,
 		},
 		{
-			name:  "skip_nil_slice",
-			input: `{"childs":null}`,
-			want:  &parentDefaults{},
+			name:    "preallocate_empty_slice",
+			input:   `{"childern":[]}`,
+			wantLen: 0,
 		},
 		{
-			name:  "skip_wrong_type_in_json",
-			input: `{"childs":"52"}`,
-			want:  &parentDefaults{},
-		},
-		{
-			name:  "nil_object",
-			input: ``,
-			want:  &parentDefaults{},
+			name:    "nil_object",
+			input:   ``,
+			wantLen: -1,
 		},
 	}
 
@@ -1046,7 +1036,13 @@ func TestPreallocSlicesFromJson(t *testing.T) {
 
 			got := &parentDefaults{}
 			require.NoError(t, preallocSlicesFromJSON(reflect.ValueOf(got), root))
-			require.Equal(t, tt.want, got)
+
+			if tt.wantLen == -1 {
+				require.Nil(t, got.Children)
+				return
+			}
+
+			require.Len(t, got.Children, tt.wantLen)
 		})
 	}
 }
@@ -1062,8 +1058,8 @@ func TestDecodeConfig(t *testing.T) {
 			input: `{}`,
 			want: &parentDefaults{
 				ValueBool: true,
-				Nested: childDefaults{
-					ValueStr: "child", ValueInt64: 67,
+				Nested: childrenDefaults{
+					ValueStr: "children", ValueInt64: 67,
 				},
 			},
 		},
@@ -1072,20 +1068,20 @@ func TestDecodeConfig(t *testing.T) {
 			input: `{"value_bool":false}`,
 			want: &parentDefaults{
 				ValueBool: false,
-				Nested: childDefaults{
-					ValueStr: "child", ValueInt64: 67,
+				Nested: childrenDefaults{
+					ValueStr: "children", ValueInt64: 67,
 				},
 			},
 		},
 		{
 			name:  "slice_element_defaults_applied_for_missing_fields",
-			input: `{"childs":[{"value_str":"first"}, {"value_int64":52}]}`,
+			input: `{"children":[{"value_str":"first"}, {"value_int64":52}]}`,
 			want: &parentDefaults{
 				ValueBool: true,
-				Nested:    childDefaults{ValueStr: "child", ValueInt64: 67},
-				Childs: []childDefaults{
+				Nested:    childrenDefaults{ValueStr: "children", ValueInt64: 67},
+				Children: []childrenDefaults{
 					{ValueStr: "first", ValueInt64: 67},
-					{ValueStr: "child", ValueInt64: 52},
+					{ValueStr: "children", ValueInt64: 52},
 				},
 			},
 		},

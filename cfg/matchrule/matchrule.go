@@ -28,14 +28,14 @@ func (m *Mode) UnmarshalJSON(i []byte) error {
 }
 
 const (
-	ModePrefix Mode = iota
-	ModeContains
+	ModeContains Mode = iota
+	ModePrefix
 	ModeSuffix
 )
 
 var (
-	modePrefixBytes   = []byte(`"prefix"`)
 	modeContainsBytes = []byte(`"contains"`)
+	modePrefixBytes   = []byte(`"prefix"`)
 	modeSuffixBytes   = []byte(`"suffix"`)
 )
 
@@ -48,7 +48,7 @@ type Rule struct {
 	// > @3@4@5@6
 	// >
 	// > Matching mode. Allowed modes: `prefix`, `contains`, `suffix`. Defaults to `contains`.
-	Mode Mode `json:"mode"` // *
+	Mode Mode `json:"mode" default:"contains"` // *
 
 	// > @3@4@5@6
 	// >
@@ -160,26 +160,31 @@ func (r *Rule) match(raw []byte) bool {
 	return false
 }
 
-type Cond string
-
-const (
-	CondAnd Cond = "and"
-	CondOr  Cond = "or"
-)
+type Cond byte
 
 var _ json.Unmarshaler = (*Cond)(nil)
 
-func (c *Cond) UnmarshalJSON(data []byte) error {
-	switch string(data) {
-	case `"and"`:
+func (c *Cond) UnmarshalJSON(i []byte) error {
+	switch {
+	case bytes.Equal(i, condAndBytes):
 		*c = CondAnd
-	case `"or"`:
+	case bytes.Equal(i, condOrBytes):
 		*c = CondOr
 	default:
-		return fmt.Errorf("unknown condition %s", data)
+		return fmt.Errorf("unknown condition %s", string(i))
 	}
 	return nil
 }
+
+const (
+	CondAnd Cond = iota
+	CondOr
+)
+
+var (
+	condAndBytes = []byte(`"and"`)
+	condOrBytes  = []byte(`"or"`)
+)
 
 type RuleSet struct {
 	// > @3@4@5@6

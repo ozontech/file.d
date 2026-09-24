@@ -726,6 +726,12 @@ func SetDefaultValues(data any) error {
 
 		defaultValue := tField.Tag.Get("default")
 		if defaultValue != "" {
+			if j, ok := vField.Addr().Interface().(json.Unmarshaler); ok {
+				if err := j.UnmarshalJSON([]byte(strconv.Quote(defaultValue))); err != nil {
+					return err
+				}
+				continue
+			}
 			switch vFieldKind {
 			case reflect.Bool:
 				currentValue := vField.Bool()
@@ -801,8 +807,7 @@ func CompileRegex(s string) (*regexp.Regexp, error) {
 	return regexp.Compile(s[1 : len(s)-1])
 }
 
-// preallocSlicesFromJSON pre-sizes []struct config fields from the raw JSON
-// and applies tag defaults to each element.
+// preallocSlicesFromJSON pre-sizes []struct config fields from the raw JSON.
 func preallocSlicesFromJSON(v reflect.Value, object *simplejson.Json) error {
 	if object == nil {
 		return nil
@@ -849,9 +854,6 @@ func preallocSlicesFromJSON(v reflect.Value, object *simplejson.Json) error {
 		newSlice := reflect.MakeSlice(v.Type(), len(arr), len(arr))
 		for i := range len(arr) {
 			item := newSlice.Index(i)
-			if err := SetDefaultValues(item.Addr().Interface()); err != nil {
-				return err
-			}
 			if err := preallocSlicesFromJSON(item, object.GetIndex(i)); err != nil {
 				return err
 			}
