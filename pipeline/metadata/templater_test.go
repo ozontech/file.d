@@ -2,6 +2,7 @@ package metadata
 
 import (
 	"fmt"
+	"strconv"
 	"testing"
 
 	"github.com/ozontech/file.d/cfg"
@@ -221,12 +222,24 @@ func (m metaInfoTest) GetData() map[string]any {
 	}
 }
 
+func (m metaInfoTest) GetCacheKey() string {
+	return Hash(
+		[]byte(m.topic),
+		[]byte(strconv.FormatInt(int64(m.partition), 10)),
+		[]byte(strconv.FormatInt(m.offset, 10)),
+	)
+}
+
 type testMetadata struct {
 	data map[string]any
 }
 
 func (f testMetadata) GetData() map[string]any {
 	return f.data
+}
+
+func (f testMetadata) GetCacheKey() string {
+	return Hash([]byte(fmt.Sprint(f.data)))
 }
 
 func BenchmarkMetaTemplater_Render(b *testing.B) {

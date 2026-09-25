@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -496,6 +497,76 @@ func TestPluginAuth(t *testing.T) {
 			r.Equal(tc.Login, login)
 		})
 	}
+}
+
+func TestMetaInformationGetDataAndGetCacheKey(t *testing.T) {
+	t.Parallel()
+
+	newReq := func(contentLength int64, rawQuery string, headers map[string][]string) *http.Request {
+		return &http.Request{
+			ContentLength: contentLength,
+			Header:        headers,
+			URL:           &url.URL{RawQuery: rawQuery},
+		}
+	}
+
+	tests := []struct {
+		name string
+		req  *http.Request
+	}{
+		{
+			name: "basic",
+			req:  newReq(10, "a=1&b=2", map[string][]string{"User-Agent": {"curl"}}),
+		},
+		{
+			name: "headers differ",
+			req:  newReq(10, "a=1&b=2", map[string][]string{"User-Agent": {"wget"}}),
+		},
+		{
+			name: "no params",
+			req:  newReq(0, "", nil),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mi := newMetaInformation("login", net.ParseIP("192.0.2.1"), tt.req)
+
+			data := mi.GetData()
+			assert.Equal(t, "login", data["login"])
+			assert.Equal(t, mi.request, data["request"])
+			assert.Equal(t, tt.req.URL.Query(), data["params"])
+			assert.Equal(t, tt.req.Header, data["headers"])
+			assert.Equal(t, net.ParseIP("192.0.2.1"), data["remote_addr"])
+			_, ok := data["request_uuid"]
+			assert.True(t, ok)
+
+			assert.NotEmpty(t, mi.GetCacheKey())
+		})
+	}
+}
+
+func TestMetaInformationCacheKeyUniqueness(t *testing.T) {
+	t.Parallel()
+
+	req1 := newMetaInformation("login", net.ParseIP("192.0.2.1"), &http.Request{
+		ContentLength: 10,
+		Header:        map[string][]string{"User-Agent": {"curl"}},
+		URL:           &url.URL{RawQuery: "a=1"},
+	})
+	req2 := newMetaInformation("login", net.ParseIP("192.0.2.1"), &http.Request{
+		ContentLength: 10,
+		Header:        map[string][]string{"User-Agent": {"curl"}},
+		URL:           &url.URL{RawQuery: "a=1"},
+	})
+	req3 := newMetaInformation("login", net.ParseIP("192.0.2.1"), &http.Request{
+		ContentLength: 10,
+		Header:        map[string][]string{"User-Agent": {"wget"}},
+		URL:           &url.URL{RawQuery: "a=1"},
+	})
+
+	assert.Equal(t, req1.GetCacheKey(), req2.GetCacheKey(), "identical requests should have the same cache key")
+	assert.NotEqual(t, req1.GetCacheKey(), req3.GetCacheKey(), "different headers should produce different cache keys")
 }
 
 func BenchmarkHttpInputJson(b *testing.B) {
