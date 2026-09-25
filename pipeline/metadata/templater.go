@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"regexp"
-	"strconv"
 	"strings"
 	"sync"
 	"text/template"
@@ -150,6 +149,7 @@ func NewMetaTemplater(templates cfg.MetaTemplates, logger *zap.Logger, cacheSize
 
 type Data interface {
 	GetData() map[string]any
+	GetCacheKey() string
 }
 
 func (m *MetaTemplater) Render(data Data) (MetaData, error) {
@@ -157,7 +157,7 @@ func (m *MetaTemplater) Render(data Data) (MetaData, error) {
 	meta := MetaData{}
 
 	// Create a unique cache key based on the input data
-	cacheKey := generateCacheKey(initValues)
+	cacheKey := data.GetCacheKey()
 
 	// Check if the result is already cached
 	if cachedMeta, found := m.cache.Get(cacheKey); found {
@@ -210,37 +210,4 @@ func (m *MetaTemplater) Render(data Data) (MetaData, error) {
 	m.cache.Add(cacheKey, meta)
 
 	return meta, nil
-}
-
-func generateCacheKey(data map[string]any) string {
-	var builder strings.Builder
-	builder.Grow(len(data) * 16) // Preallocate memory for the builder (estimate)
-
-	for k, v := range data {
-		switch v := v.(type) {
-		case string:
-			// Write the key and string value to the builder
-			builder.WriteString(k)
-			builder.WriteString(":")
-			builder.WriteString(v)
-			builder.WriteString("|")
-		case int:
-			// Write the key and integer value to the builder
-			builder.WriteString(k)
-			builder.WriteString(":")
-			builder.WriteString(strconv.Itoa(v))
-			builder.WriteString("|")
-		}
-		// If the value is not a string or int, skip it
-	}
-
-	// Convert the builder to a string
-	key := builder.String()
-
-	// Remove the last "|" character if needed
-	if key != "" {
-		key = key[:len(key)-1] // Slice to remove the last character
-	}
-
-	return key
 }

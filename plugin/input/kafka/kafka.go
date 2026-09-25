@@ -2,6 +2,7 @@ package kafka
 
 import (
 	"context"
+	"strconv"
 	"time"
 
 	"github.com/ozontech/file.d/cfg"
@@ -427,6 +428,14 @@ func (m metaInformation) GetData() map[string]any {
 		"partition": m.partition,
 		"offset":    m.offset,
 	}
+}
+
+func (m metaInformation) GetCacheKey() string {
+	return metadata.Hash(
+		[]byte(m.topic),
+		[]byte(strconv.FormatInt(int64(m.partition), 10)),
+		[]byte(strconv.FormatInt(m.offset, 10)),
+	)
 }
 
 /*{ meta-params
