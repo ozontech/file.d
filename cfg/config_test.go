@@ -32,20 +32,8 @@ func TestSimple(t *testing.T) {
 	assert.Equal(t, "devnull", outputType, "output type is not overrided")
 }
 
-type intDefault struct {
-	T int `default:"5"`
-}
-
 type strRequired struct {
 	T string `required:"true"`
-}
-
-type strDefault struct {
-	T string `default:"sync"`
-}
-
-type boolDefault struct {
-	T bool `default:"true"`
 }
 
 type PersistenceMode byte
@@ -125,12 +113,14 @@ func TestParseRequiredErr(t *testing.T) {
 }
 
 func TestParseDefault(t *testing.T) {
-	s := &strDefault{}
+	s := &struct {
+		S string `default:"sync"`
+	}{}
 	SetDefaultValues(s)
 	err := Parse(s, nil)
 
 	assert.NoError(t, err, "shouldn't be an error")
-	assert.Equal(t, "sync", s.T, "wrong value")
+	assert.Equal(t, "sync", s.S, "wrong value")
 }
 
 func TestParseDuration(t *testing.T) {
@@ -675,50 +665,36 @@ func TestApplyConfigFuncs(t *testing.T) {
 	}
 }
 
-func TestParseDefaultInt(t *testing.T) {
-	testCases := []struct {
-		s        *intDefault
-		expected int
+func TestPipelineValidator(t *testing.T) {
+	cases := []struct {
+		name    string
+		input   []string
+		wantErr bool
 	}{
-		{s: &intDefault{}, expected: 5},
-		{s: &intDefault{T: 17}, expected: 17},
+		{
+			name:  "valid",
+			input: []string{"pipeline_name", "PipeLine_NAME", "pipelinename", "PIPELINENAME", "pipeline_k8s"},
+		},
+		{
+			name:    "invalid",
+			input:   []string{"Pipeline-name", "pipeline-name", "<pipeline_name>", "пайплайн_нейм"},
+			wantErr: true,
+		},
 	}
-	for i, tc := range testCases {
-		SetDefaultValues(tc.s)
-		err := Parse(tc.s, nil)
 
-		assert.NoError(t, err, "shouldn't be an error tc: %d", i)
-		assert.Equal(t, tc.expected, tc.s.T, "wrong value tc: %d", i)
-	}
-}
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 
-func TestParseDefaultBool(t *testing.T) {
-	testCases := []struct {
-		s        *boolDefault
-		expected bool
-	}{
-		{s: &boolDefault{}, expected: true},
-	}
-	for i, tc := range testCases {
-		SetDefaultValues(tc.s)
-		err := Parse(tc.s, nil)
-
-		assert.NoError(t, err, "shouldn't be an error tc: %d", i)
-		assert.Equal(t, tc.expected, tc.s.T, "wrong value tc: %d", i)
-	}
-}
-
-func TestPipelineValidatorValid(t *testing.T) {
-	testName := []string{"pipeline_name", "PipeLine_NAME", "pipelinename", "PIPELINENAME", "pipeline_k8s"}
-	for _, tl := range testName {
-		assert.NoError(t, validatePipelineName(tl))
-	}
-}
-
-func TestPipelineValidatorInvalid(t *testing.T) {
-	testName := []string{"Pipeline-name", "pipeline-name", "<pipeline_name>", "пайплайн_нейм"}
-	for _, tl := range testName {
-		assert.Error(t, validatePipelineName(tl))
+			for _, s := range tt.input {
+				err := validatePipelineName(s)
+				if tt.wantErr {
+					require.Error(t, err)
+				} else {
+					require.NoError(t, err)
+				}
+			}
+		})
 	}
 }
 
@@ -864,6 +840,8 @@ func TestMergeYAMLs(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			result := mergeYAMLs(tt.a, tt.b)
 			if !reflect.DeepEqual(result, tt.expected) {
 				t.Errorf("expected %v, got %v", tt.expected, result)
@@ -921,6 +899,201 @@ func TestBuildFieldSelector(t *testing.T) {
 
 			got := BuildFieldSelector(tt.fields)
 			require.Equal(t, tt.expected, got)
+		})
+	}
+}
+
+type primitiveDefaults struct {
+	B   bool    `default:"true"`
+	S   string  `default:"strValue"`
+	I   int     `default:"1"`
+	I8  int8    `default:"2"`
+	I16 int16   `default:"3"`
+	I32 int32   `default:"4"`
+	I64 int64   `default:"5"`
+	U   uint    `default:"6"`
+	U8  uint8   `default:"7"`
+	U16 uint16  `default:"8"`
+	U32 uint32  `default:"9"`
+	U64 uint64  `default:"10"`
+	F32 float32 `default:"11.0"`
+	F64 float64 `default:"12.0"`
+}
+
+type stringSliceDefaults struct {
+	SS []string `default:"str1 str2 str3"`
+}
+
+type childrenDefaults struct {
+	ValueStr   string `json:"value_str" default:"children"`
+	ValueInt64 int64  `json:"value_int64" default:"67"`
+}
+
+type parentDefaults struct {
+	ValueBool bool               `json:"value_bool" default:"true"`
+	Nested    childrenDefaults   `json:"nested"`
+	Children  []childrenDefaults `json:"children"`
+}
+
+func TestSetDefaultValues(t *testing.T) {
+	cases := []struct {
+		name    string
+		input   any
+		want    any
+		wantErr bool
+	}{
+		{
+			name:  "primitive_types",
+			input: &primitiveDefaults{},
+			want: &primitiveDefaults{
+				B: true, S: "strValue", I: 1,
+				I8: 2, I16: 3, I32: 4,
+				I64: 5, U: 6, U8: 7,
+				U16: 8, U32: 9, U64: 10,
+				F32: 11.0, F64: 12.0,
+			},
+		},
+		{
+			name:  "string_slice",
+			input: &stringSliceDefaults{},
+			want:  &stringSliceDefaults{SS: []string{"str1", "str2", "str3"}},
+		},
+		{
+			name: "recurse_into_struct_and_slice_elements",
+			input: &parentDefaults{
+				Children: []childrenDefaults{
+					{ValueStr: "str"},
+					{},
+				},
+			},
+			want: &parentDefaults{
+				ValueBool: true,
+				Nested:    childrenDefaults{ValueStr: "children", ValueInt64: 67},
+				Children: []childrenDefaults{
+					{ValueStr: "str", ValueInt64: 67},
+					{ValueStr: "children", ValueInt64: 67},
+				},
+			},
+		},
+		{
+			name: "err_negative_default_for_uint",
+			input: &struct {
+				U uint `default:"-1"`
+			}{},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			err := SetDefaultValues(tt.input)
+			if tt.wantErr {
+				require.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, tt.want, tt.input)
+		})
+	}
+}
+
+func TestPreallocSlicesFromJson(t *testing.T) {
+	cases := []struct {
+		name    string
+		input   string
+		wantLen int
+	}{
+		{
+			name:    "preallocate_struct_slice",
+			input:   `{"children":[{},{"value_str":"size"}]}`,
+			wantLen: 2,
+		},
+		{
+			name:    "preallocate_empty_slice",
+			input:   `{"children":[]}`,
+			wantLen: 0,
+		},
+		{
+			name:    "nil_object",
+			input:   ``,
+			wantLen: -1,
+		},
+	}
+
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			var root *simplejson.Json
+			if tt.input != "" {
+				var err error
+				root, err = simplejson.NewJson([]byte(tt.input))
+				require.NoError(t, err)
+			}
+
+			got := &parentDefaults{}
+			require.NoError(t, preallocSlicesFromJSON(reflect.ValueOf(got), root))
+
+			if tt.wantLen == -1 {
+				require.Nil(t, got.Children)
+				return
+			}
+
+			require.Len(t, got.Children, tt.wantLen)
+		})
+	}
+}
+
+func TestDecodeConfig(t *testing.T) {
+	cases := []struct {
+		name  string
+		input string
+		want  *parentDefaults
+	}{
+		{
+			name:  "empty_json_set_all_defaults",
+			input: `{}`,
+			want: &parentDefaults{
+				ValueBool: true,
+				Nested: childrenDefaults{
+					ValueStr: "children", ValueInt64: 67,
+				},
+			},
+		},
+		{
+			name:  "bool_false_overrides_default_true",
+			input: `{"value_bool":false}`,
+			want: &parentDefaults{
+				ValueBool: false,
+				Nested: childrenDefaults{
+					ValueStr: "children", ValueInt64: 67,
+				},
+			},
+		},
+		{
+			name:  "slice_element_defaults_applied_for_missing_fields",
+			input: `{"children":[{"value_str":"first"}, {"value_int64":52}]}`,
+			want: &parentDefaults{
+				ValueBool: true,
+				Nested:    childrenDefaults{ValueStr: "children", ValueInt64: 67},
+				Children: []childrenDefaults{
+					{ValueStr: "first", ValueInt64: 67},
+					{ValueStr: "children", ValueInt64: 52},
+				},
+			},
+		},
+	}
+
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := &parentDefaults{}
+			require.NoError(t, DecodeConfig(got, []byte(tt.input)))
+			require.Equal(t, tt.want, got)
 		})
 	}
 }
