@@ -19,7 +19,7 @@ func (f *TrimToFilter) Apply(src []byte, _ []byte) []byte {
 	}
 	if f.mode == trimModeAll || f.mode == trimModeRight {
 		if idx := bytes.LastIndex(src, f.cutset); idx != -1 {
-			src = src[:idx+1]
+			src = src[:idx+len(f.cutset)]
 		}
 	}
 	return src
@@ -70,6 +70,9 @@ func parseTrimToFilter(data string, offset int) (FieldFilter, int, error) {
 	}
 	if err := json.Unmarshal([]byte(args[1]), &cutset); err != nil {
 		return nil, filterEndPos, fmt.Errorf("failed to parse trim_to filter cutset: %w", err)
+	}
+	if cutset == "" {
+		return nil, filterEndPos, fmt.Errorf("trim_to filter cutset must not be empty")
 	}
 	filter := &TrimToFilter{
 		mode:   mode,
