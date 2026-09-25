@@ -1013,7 +1013,7 @@ func TestPreallocSlicesFromJson(t *testing.T) {
 		},
 		{
 			name:    "preallocate_empty_slice",
-			input:   `{"childern":[]}`,
+			input:   `{"children":[]}`,
 			wantLen: 0,
 		},
 		{
