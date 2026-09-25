@@ -12,6 +12,10 @@ import (
 // ValidateCalls walks the AST and checks that every function call refers to
 // a function that exists in the registry.
 // This is a lightweight static check - argument types are validated at runtime
+//
+// The walk also prepares nodes in place, so it must run before the program is
+// evaluated: regex literals are compiled, timestamp literals are parsed, and
+// constant sub-expressions are folded into core.ConstExpr (see fold.go).
 func ValidateCalls(exprs []core.Expr, registry *stdlib.Registry) error {
 	for _, expr := range exprs {
 		if err := validateExpr(expr, registry); err != nil {
@@ -36,6 +40,11 @@ func validateExpr(expr core.Expr, registry *stdlib.Registry) error {
 				return err
 			}
 		}
+		// Fold after the walk: an argument holding a regex or timestamp literal
+		// is only constant once validateExpr has prepared it.
+		for i := range e.Args {
+			e.Args[i].Value = tryFold(e.Args[i].Value)
+		}
 	case *core.BinaryExpr:
 		if err := validateExpr(e.Left, registry); err != nil {
 			return err
@@ -44,7 +53,12 @@ func validateExpr(expr core.Expr, registry *stdlib.Registry) error {
 	case *core.UnaryExpr:
 		return validateExpr(e.Operand, registry)
 	case *core.AssignExpr:
-		return validateExpr(e.Value, registry)
+		if err := validateExpr(e.Value, registry); err != nil {
+			return err
+		}
+		// Folding the right-hand side keeps `table = { ... }` at the top of a
+		// program from rebuilding the object on every event.
+		e.Value = tryFold(e.Value)
 	case *core.IndexExpr:
 		if err := validateExpr(e.Object, registry); err != nil {
 			return err

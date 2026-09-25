@@ -12,7 +12,7 @@ pipelines:
     - type: transform
       source: |
         # parse lines like "INFO 2025-05-25 11:11:11,222 [shard 1] compaction - done"
-        m = capture(.log, r'^(?P<level>\S+)\s+(?P<time>\S+ \S+)\s+\[(?P<shard>[^\]]+)\]\s+(?P<operation>\S+)\s+-\s+(?P<message>.+)$')
+        m = parse_regex(.log, r'^(?P<level>\S+)\s+(?P<time>\S+ \S+)\s+\[(?P<shard>[^\]]+)\]\s+(?P<operation>\S+)\s+-\s+(?P<message>.+)$')
         if m != null {
           .level = m.level
           .time = m.time
@@ -106,9 +106,9 @@ In conditions `null` and `false` are falsy; every other value is truthy.
 Variables hold intermediate values and live for one event:
 
 ```
-name = .user.name             # read a field into a variable
-parts = capture(.log, r'...') # keep a function result
-.out = name                   # write it back to the event
+name = .user.name                 # read a field into a variable
+parts = parse_regex(.log, r'...')  # keep a function result
+.out = name                       # write it back to the event
 ```
 
 Fields of object values are accessed with a dot or an index; both forms are
@@ -140,7 +140,7 @@ In order of increasing precedence:
 | `f()` `a[i]` `a.b` | call, index, member access |
 
 `+` concatenates only strings with strings — convert other values first:
-`"code " + string(.code)`.
+`"code " + to_string(.code)`.
 
 ### Control flow
 
@@ -174,20 +174,30 @@ are required; named arguments are optional and fall back to their defaults:
   .level = upcase(.level)    # "info" -> "INFO"
   ```
 
-+ `string(value)` — converts any value to its string representation; `null`
++ `to_string(value)` — converts any value to its string representation; `null`
   becomes an empty string. Use it to build strings from non-string fields:
   ```
-  .msg = "code is " + string(.code)
+  .msg = "code is " + to_string(.code)
   ```
 
-+ `capture(value, pattern)` — matches the string against a regular expression
-  and returns an object of its named groups `(?P<name>...)`, or `null` when the
-  value does not match (unnamed groups are ignored):
++ `parse_regex(value, pattern, numeric_groups: false)` — matches the string
+  against a regular expression and returns an object of its named groups
+  `(?P<name>...)`, or `null` when the value does not match (unnamed groups are
+  ignored):
   ```
-  m = capture(.log, r'^(?P<level>\S+)\s+(?P<message>.+)$')
+  m = parse_regex(.log, r'^(?P<level>\S+)\s+(?P<message>.+)$')
   if m != null {
     .level = m.level
     .message = m.message
+  }
+  ```
+  With `numeric_groups: true` every group is additionally keyed by its index as a
+  string — `"0"` is the whole match — which is how a pattern without named groups
+  is read:
+  ```
+  m = parse_regex(.message, r'(\w+):.*', numeric_groups: true)
+  if m != null {
+    .level = m["1"]
   }
   ```
 
@@ -208,5 +218,63 @@ are required; named arguments are optional and fall back to their defaults:
   ```
   .shard = between(.log, "[", "]")
   ```
+
++ `parse_regex_all(value, pattern, group: 0, limit: -1)` — returns every match of
+  `pattern` as an array, or an empty array when nothing matches. `group` selects
+  a capture group (`0` is the whole match) and a negative `limit` collects all
+  occurrences:
+  ```
+  .ids = parse_regex_all(.log, r'id=(\w+)', group: 1)
+  ```
+
++ `join(value, separator)` — joins an array of strings into one string. Only
+  strings are joined; convert other values with `to_string()` first:
+  ```
+  .extracted = join(parse_regex_all(.message, r're\d+', limit: 2), ",")   # "re1,re2"
+  ```
+
++ `trim(value, cutset)`, `trim_left(value, cutset)`,
+  `trim_right(value, cutset)` — strip characters from both ends, the start or
+  the end. `cutset` is a *set of characters*, not a substring: `trim_right(v, "ms")`
+  removes every trailing `m` and `s`.
+  ```
+  .message = trim_right(.message, "\n")
+  ```
+
++ `trim_to(value, cutset)`, `trim_to_left(value, cutset)`,
+  `trim_to_right(value, cutset)` — cut the string back to a delimiter, keeping the
+  delimiter itself; the value is returned unchanged when it is not found. Here
+  `cutset` is a *substring*: the left side trims to its first occurrence, the
+  right side to its last one, so the outermost pair is kept:
+  ```
+  # 'some data {"took":"200ms"} some data' -> '{"took":"200ms"}'
+  .message = trim_to_right(trim_to_left(.message, "{"), "}")
+  ```
+
++ `slice(value, start, end: null)` — returns the part of the string between two
+  positions, counted in characters. Both positions may be negative to count from
+  the end, and positions outside the string are clamped rather than raising an
+  error. `end` defaults to the end of the string:
+  ```
+  .head = slice(.message, 0, end: 10)   # first 10 characters
+  .tail = slice(.message, -5)           # last 5 characters
+  ```
+
++ `lookup(value, table, default: <unchanged>)` — translates a value through a
+  table of replacements. It turns enumeration codes into readable names without
+  a chain of `if`s:
+  ```
+  api_key = {"0": "produce", "1": "fetch", "2": "offsets"}
+  .kafka_request_api_key = lookup(.kafka_request_api_key, api_key)
+  ```
+  Keys are matched by their string form, so the number `0` and the string `"0"`
+  are the same key — JSON writes codes both ways. A value that is not in the
+  table is returned unchanged; pass `default:` to replace it instead:
+  ```
+  .severity = lookup(.status, {"500": "crit", "400": "warn"}, default: "ok")
+  ```
+  A table written as a literal is built once at startup, not per event, so a
+  large table costs no more than a small one. Keep it in a variable when the
+  same table is used more than once.
 
 <br>*Generated using [__insane-doc__](https://github.com/vitkovskii/insane-doc)*
