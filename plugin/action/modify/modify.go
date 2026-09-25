@@ -58,9 +58,15 @@ Optional flag `emptyOnNotMatched` allows to returns empty string if no matches o
 
 + `trim filter` - `trim(mode string, cutset string)`, trims data by the `cutset` substring. Available modes are `all` - trim both sides,
 `left` - trim only left, `right` - trim only right.
+`cutset` must not be empty. An empty `cutset` causes a configuration parsing error.
 
 + `trim-to filter` - `trim_to(mode string, cutset string)`, trims data to `cutset` substring. Available modes are `all` - trim both sides,
 `left` - trim only left, `right` - trim only right.
+`cutset` must not be empty. An empty `cutset` causes a configuration parsing error.
+
+The complete matched substring is preserved, including multi-byte and Unicode delimiters.
+The `left` mode trims before the first occurrence, `right` trims after the last occurrence, and `all` applies both.
+If no match is found, the input is unchanged.
 
 + `cut filter` - `cut(mode string, count int)`, cut `count` data bytes.
 Available modes are `first` - cut first `count` bytes, `last` - cut last `count` bytes.
@@ -114,6 +120,30 @@ Data: `{"message":"some data {\"service\":\"service-test-1\",\"took\":\"200ms\"}
 Substitution: `message: ${message|trim_to("left","{")|trim_to("right","}")}`
 
 Result: `{"message":"{\"service\":\"service-test-1\",\"took\":\"200ms\"}"}`
+
+**Example trim-to: multi-byte delimiter**
+
+Data: `{"message":"first END second END trailing"}`
+
+Substitution: `message: ${message|trim_to("right","END")}`
+
+Result: `{"message":"first END second END"}`
+
+**Example trim-to: both sides**
+
+Data: `{"message":"leading END message END trailing"}`
+
+Substitution: `message: ${message|trim_to("all","END")}`
+
+Result: `{"message":"END message END"}`
+
+**Example trim-to: Unicode delimiter**
+
+Data: `{"message":"hello界 trailing"}`
+
+Substitution: `message: ${message|trim_to("right","界")}`
+
+Result: `{"message":"hello界"}`
 
 **Example cut #1**
 
