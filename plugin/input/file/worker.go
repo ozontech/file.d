@@ -8,7 +8,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/pipeline/metadata"
@@ -331,6 +333,24 @@ func (m metaInformation) GetData() map[string]any {
 	}
 
 	return data
+}
+
+func (m metaInformation) GetCacheKey() string {
+	if m.k8sMetadata != nil {
+		return metadata.Hash(
+			[]byte(m.k8sMetadata.PodName),
+			[]byte(m.k8sMetadata.Namespace),
+			[]byte(m.k8sMetadata.ContainerName),
+			[]byte(m.k8sMetadata.GetPodStatus()),
+			[]byte(m.k8sMetadata.GetUpdateTime().Format(time.RFC3339Nano)),
+		)
+	}
+
+	return metadata.Hash(
+		[]byte(m.filename),
+		[]byte(m.symlink),
+		[]byte(strconv.FormatUint(m.inode, 10)),
+	)
 }
 
 /*{ meta-params
