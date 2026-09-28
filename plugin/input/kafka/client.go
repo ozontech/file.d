@@ -24,7 +24,7 @@ func NewClient(ctx context.Context, c *Config, l *zap.Logger, s Consumer, tokenS
 		kgo.SessionTimeout(c.SessionTimeout_),
 		kgo.HeartbeatInterval(c.HeartbeatInterval_),
 		kgo.OnPartitionsAssigned(s.Assigned),
-		kgo.OnPartitionsRevoked(s.Lost),
+		kgo.OnPartitionsRevoked(s.Revoked),
 		kgo.OnPartitionsLost(s.Lost),
 		kgo.BlockRebalanceOnPoll(),
 	}...)
