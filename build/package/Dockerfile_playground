@@ -29,4 +29,6 @@ WORKDIR /file-d-playground
 
 COPY --from=build /file-d-playground/file-d-playground .
 
+USER 65532:65532
+
 CMD [ "./file-d-playground" ]
