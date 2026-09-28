@@ -66,7 +66,7 @@ Optimal value: number of topics * number of partitions of topic
 
 <br>
 
-**`max_concurrent_fetches`** *`int`* *`default=0`* 
+**`max_concurrent_fetches`** *`int`* *`default=-1`* 
 
 MaxConcurrentFetches sets the maximum number of fetch requests to allow in
 flight or buffered at once, overriding the unbounded (i.e. number of
