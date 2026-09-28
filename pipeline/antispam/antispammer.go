@@ -29,18 +29,6 @@ const (
 	Sampled
 )
 
-// partial state flags
-const (
-	psfDefault uint8 = 0
-
-	psfPartial uint8 = 1 << (iota - 1) // chain of partial events
-	psfDropped                         // first event in the chain of partial events was dropped
-)
-
-func checkMask(mask, flag uint8) bool {
-	return mask&flag != 0
-}
-
 // Antispammer makes a decision on the need to parse the input log.
 // It can be useful when any application writes logs at speed faster than File.d can read it.
 //
@@ -53,7 +41,7 @@ type Antispammer struct {
 	mu                   sync.RWMutex
 	sources              map[string]source
 	sourcesThresholds    map[string]int
-	sourcesPartialStates map[string]uint8
+	sourcesPartialStates map[string]partialState
 
 	exceptions Exceptions
 	rules      Rules
@@ -66,14 +54,6 @@ type Antispammer struct {
 	banMetric       *metric.GaugeVec
 	exceptionMetric *metric.CounterVec
 	samplerMetric   *metric.CounterVec
-}
-
-type source struct {
-	name          string
-	counter       *atomic.Int32
-	timestamp     *atomic.Int64
-	sampleUntil   *atomic.Int64
-	sampleCounter *atomic.Int64
 }
 
 type Options struct {
@@ -111,7 +91,7 @@ func NewAntispammer(o *Options) *Antispammer {
 
 		sources:              make(map[string]source),
 		sourcesThresholds:    make(map[string]int),
-		sourcesPartialStates: make(map[string]uint8),
+		sourcesPartialStates: make(map[string]partialState),
 
 		exceptions: o.Exceptions,
 		rules:      o.Rules,
@@ -153,6 +133,19 @@ func NewAntispammer(o *Options) *Antispammer {
 	return a
 }
 
+type source struct {
+	name          string
+	counter       *atomic.Int32
+	timestamp     *atomic.Int64
+	sampleUntil   *atomic.Int64
+	sampleCounter *atomic.Int64
+}
+
+type partialState struct {
+	isDropped bool
+	gen       int8
+}
+
 type SourceData struct {
 	ID    string
 	Name  string
@@ -177,33 +170,27 @@ func (a *Antispammer) IsSpam(sourceData SourceData, eventData EventData, meta ma
 	// for a chain of partial events, we check only the first event and save it's state.
 	// for all other events from the chain, up to the last full one that completes this chain,
 	// the state of the first one is used.
-	if has && checkMask(ps, psfPartial) {
-		dropped := checkMask(ps, psfDropped)
+	if has {
+		isDropped := ps.isDropped
 		if !eventData.IsPartial {
-			// last event in chain
+			// last event in chain, reset state
 			a.mu.Lock()
-			a.sourcesPartialStates[sourceData.ID] = psfDefault
+			delete(a.sourcesPartialStates, sourceData.ID)
 			a.mu.Unlock()
 		}
-		if dropped {
+		if isDropped {
 			return Dropped
 		}
 		return Passed
 	}
 
-	if eventData.IsPartial {
-		a.mu.Lock()
-		a.sourcesPartialStates[sourceData.ID] = psfPartial
-		a.mu.Unlock()
-	}
-
-	drop := func() SpamResult {
+	res := func(r SpamResult) SpamResult {
 		if eventData.IsPartial {
 			a.mu.Lock()
-			a.sourcesPartialStates[sourceData.ID] |= psfDropped
+			a.sourcesPartialStates[sourceData.ID] = partialState{isDropped: r == Dropped}
 			a.mu.Unlock()
 		}
-		return Dropped
+		return r
 	}
 
 	threshold := a.threshold
@@ -218,7 +205,7 @@ func (a *Antispammer) IsSpam(sourceData SourceData, eventData EventData, meta ma
 				if e.Name != "" {
 					a.exceptionMetric.WithLabelValues(e.Name).Inc()
 				}
-				return Passed
+				return res(Passed)
 			}
 		}
 	} else {
@@ -234,9 +221,9 @@ func (a *Antispammer) IsSpam(sourceData SourceData, eventData EventData, meta ma
 			switch rule.Threshold {
 			case thresholdUnlimited:
 				a.exceptionMetric.WithLabelValues(rule.Name).Inc()
-				return Passed
+				return res(Passed)
 			case thresholdBlocked:
-				return drop()
+				return res(Dropped)
 			}
 
 			threshold = rule.Threshold
@@ -246,9 +233,9 @@ func (a *Antispammer) IsSpam(sourceData SourceData, eventData EventData, meta ma
 
 	switch threshold {
 	case thresholdUnlimited:
-		return Passed
+		return res(Passed)
 	case thresholdBlocked:
-		return drop()
+		return res(Dropped)
 	}
 
 	a.mu.RLock()
@@ -278,7 +265,7 @@ func (a *Antispammer) IsSpam(sourceData SourceData, eventData EventData, meta ma
 
 	if sourceData.IsNew {
 		src.counter.Swap(0)
-		return Passed
+		return res(Passed)
 	}
 
 	x := src.counter.Load()
@@ -300,15 +287,19 @@ func (a *Antispammer) IsSpam(sourceData SourceData, eventData EventData, meta ma
 
 	if x >= int32(threshold) {
 		if a.sampler.isSampled(src) {
-			return Sampled
+			return res(Sampled)
 		}
-		return drop()
+		return res(Dropped)
 	}
-	return Passed
+	return res(Passed)
 }
 
 func (a *Antispammer) Maintenance() {
 	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	psDone := make(chan struct{})
+	go a.maintenancePartialStates(psDone)
 
 	allUnbanned := true
 	for sourceID, source := range a.sources {
@@ -346,13 +337,30 @@ func (a *Antispammer) Maintenance() {
 		source.counter.Swap(int32(x))
 	}
 
+	<-psDone
+
 	if allUnbanned {
 		a.activeMetric.Set(0)
 	} else {
 		a.logger.Info("there are banned sources")
 	}
+}
 
-	a.mu.Unlock()
+const maxPartialStateGen = int8(2)
+
+// use under lock
+func (a *Antispammer) maintenancePartialStates(done chan struct{}) {
+	defer func() { done <- struct{}{} }()
+
+	for k, v := range a.sourcesPartialStates {
+		if v.gen >= maxPartialStateGen {
+			delete(a.sourcesPartialStates, k)
+			continue
+		}
+
+		v.gen++
+		a.sourcesPartialStates[k] = v
+	}
 }
 
 func (a *Antispammer) Dump() string {

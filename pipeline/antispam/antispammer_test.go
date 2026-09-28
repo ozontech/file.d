@@ -318,6 +318,27 @@ func TestAntispamPartial(t *testing.T) {
 	}
 }
 
+func TestAntispamMaintenancePartialStates(t *testing.T) {
+	a := &Antispammer{
+		sourcesPartialStates: map[string]partialState{
+			"test1": {gen: 0},
+			"test2": {gen: maxPartialStateGen - 1},
+			"test3": {gen: maxPartialStateGen},
+		},
+	}
+
+	want := map[string]partialState{
+		"test1": {gen: 1},
+		"test2": {gen: maxPartialStateGen},
+	}
+
+	done := make(chan struct{})
+	go a.maintenancePartialStates(done)
+	<-done
+
+	require.Equal(t, want, a.sourcesPartialStates)
+}
+
 func TestIsSampled(t *testing.T) {
 	type samplerStep struct {
 		timeSleep time.Duration
