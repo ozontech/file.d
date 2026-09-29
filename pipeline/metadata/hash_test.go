@@ -11,23 +11,23 @@ func TestFastHash(t *testing.T) {
 
 	tests := []struct {
 		name  string
-		parts [][]byte
+		parts []string
 	}{
 		{
 			name:  "single part",
-			parts: [][]byte{[]byte("hello")},
+			parts: []string{"hello"},
 		},
 		{
 			name:  "multiple parts",
-			parts: [][]byte{[]byte("hello"), []byte("world"), []byte("foo")},
+			parts: []string{"hello", "world", "foo"},
 		},
 		{
 			name:  "empty",
-			parts: [][]byte{},
+			parts: []string{},
 		},
 		{
 			name:  "empty parts",
-			parts: [][]byte{[]byte(""), []byte("a")},
+			parts: []string{"", "a"},
 		},
 	}
 
@@ -45,8 +45,8 @@ func TestFastHashDeterministic(t *testing.T) {
 	t.Parallel()
 
 	assert.Equal(t,
-		Hash([]byte("a"), []byte("b")),
-		Hash([]byte("a"), []byte("b")),
+		Hash("a", "b"),
+		Hash("a", "b"),
 		"same inputs should produce the same hash",
 	)
 }
@@ -55,8 +55,8 @@ func TestFastHashDiffers(t *testing.T) {
 	t.Parallel()
 
 	assert.NotEqual(t,
-		Hash([]byte("a")),
-		Hash([]byte("b")),
+		Hash("a"),
+		Hash("b"),
 		"different inputs should produce different hashes",
 	)
 }

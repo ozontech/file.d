@@ -430,11 +430,11 @@ func (m metaInformation) GetData() map[string]any {
 	}
 }
 
-func (m metaInformation) GetCacheKey() string {
+func (m metaInformation) GetCacheKey() uint64 {
 	return metadata.Hash(
-		[]byte(m.topic),
-		[]byte(strconv.FormatInt(int64(m.partition), 10)),
-		[]byte(strconv.FormatInt(m.offset, 10)),
+		m.topic,
+		strconv.FormatInt(int64(m.partition), 10),
+		strconv.FormatInt(m.offset, 10),
 	)
 }
 

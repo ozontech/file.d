@@ -50,17 +50,17 @@ func TestMetaInformationGetCacheKey(t *testing.T) {
 	tests := []struct {
 		name string
 		rec  *kgo.Record
-		want string
+		want uint64
 	}{
 		{
 			name: "basic",
 			rec:  &kgo.Record{Topic: "topic", Partition: 1, Offset: 100},
-			want: metadata.Hash([]byte("topic"), []byte("1"), []byte("100")),
+			want: metadata.Hash("topic", "1", "100"),
 		},
 		{
 			name: "zero values",
 			rec:  &kgo.Record{Topic: "", Partition: 0, Offset: 0},
-			want: metadata.Hash([]byte(""), []byte("0"), []byte("0")),
+			want: metadata.Hash("", "0", "0"),
 		},
 	}
 

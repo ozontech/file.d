@@ -190,13 +190,13 @@ func TestMetaTemplaterCacheKey(t *testing.T) {
 		32,
 	)
 
-	// первая запись с partition=1, offset=100
+	// first record with partition=1, offset=100
 	first, err := templater.Render(metaInfoTest{
 		topic: "topic", partition: int32(1), offset: int64(100),
 	})
 	assert.Nil(t, err)
 
-	// вторая запись с partition=2, offset=200
+	// first record with partition=2, offset=200
 	second, err := templater.Render(metaInfoTest{
 		topic: "topic", partition: int32(2), offset: int64(200),
 	})
@@ -222,11 +222,11 @@ func (m metaInfoTest) GetData() map[string]any {
 	}
 }
 
-func (m metaInfoTest) GetCacheKey() string {
+func (m metaInfoTest) GetCacheKey() uint64 {
 	return Hash(
-		[]byte(m.topic),
-		[]byte(strconv.FormatInt(int64(m.partition), 10)),
-		[]byte(strconv.FormatInt(m.offset, 10)),
+		m.topic,
+		strconv.FormatInt(int64(m.partition), 10),
+		strconv.FormatInt(m.offset, 10),
 	)
 }
 
@@ -238,8 +238,8 @@ func (f testMetadata) GetData() map[string]any {
 	return f.data
 }
 
-func (f testMetadata) GetCacheKey() string {
-	return Hash([]byte(fmt.Sprint(f.data)))
+func (f testMetadata) GetCacheKey() uint64 {
+	return Hash(fmt.Sprint(f.data))
 }
 
 func BenchmarkMetaTemplater_Render(b *testing.B) {

@@ -52,7 +52,7 @@ type MetaTemplater struct {
 	valueTypes   *orderedmap.OrderedMap[string, ValueType]
 	poolBuffer   sync.Pool
 	logger       *zap.Logger
-	cache        *lru.Cache[string, MetaData]
+	cache        *lru.Cache[uint64, MetaData]
 }
 
 func NewMetaTemplater(templates cfg.MetaTemplates, logger *zap.Logger, cacheSize int) *MetaTemplater {
@@ -128,7 +128,7 @@ func NewMetaTemplater(templates cfg.MetaTemplates, logger *zap.Logger, cacheSize
 		}
 	}
 
-	cache, err := lru.New[string, MetaData](cacheSize)
+	cache, err := lru.New[uint64, MetaData](cacheSize)
 	if err != nil {
 		panic(err)
 	}
@@ -149,7 +149,7 @@ func NewMetaTemplater(templates cfg.MetaTemplates, logger *zap.Logger, cacheSize
 
 type Data interface {
 	GetData() map[string]any
-	GetCacheKey() string
+	GetCacheKey() uint64
 }
 
 func (m *MetaTemplater) Render(data Data) (MetaData, error) {

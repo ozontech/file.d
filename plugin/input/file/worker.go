@@ -335,21 +335,21 @@ func (m metaInformation) GetData() map[string]any {
 	return data
 }
 
-func (m metaInformation) GetCacheKey() string {
+func (m metaInformation) GetCacheKey() uint64 {
 	if m.k8sMetadata != nil {
 		return metadata.Hash(
-			[]byte(m.k8sMetadata.PodName),
-			[]byte(m.k8sMetadata.Namespace),
-			[]byte(m.k8sMetadata.ContainerName),
-			[]byte(m.k8sMetadata.GetPodStatus()),
-			[]byte(m.k8sMetadata.GetUpdateTime().Format(time.RFC3339Nano)),
+			m.k8sMetadata.PodName,
+			m.k8sMetadata.Namespace,
+			m.k8sMetadata.ContainerName,
+			m.k8sMetadata.GetPodStatus(),
+			m.k8sMetadata.GetUpdateTime().Format(time.RFC3339Nano),
 		)
 	}
 
 	return metadata.Hash(
-		[]byte(m.filename),
-		[]byte(m.symlink),
-		[]byte(strconv.FormatUint(m.inode, 10)),
+		m.filename,
+		m.symlink,
+		strconv.FormatUint(m.inode, 10),
 	)
 }
 

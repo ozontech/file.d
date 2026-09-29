@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -705,19 +706,18 @@ func (m metaInformation) GetData() map[string]any {
 	}
 }
 
-func (m metaInformation) GetCacheKey() string {
+func (m metaInformation) GetCacheKey() uint64 {
 	return m.cacheKey()
 }
 
-func (m metaInformation) cacheKey() string {
-	var contentLength []byte
-	contentLength = fmt.Appendf(contentLength, "%d", m.request.ContentLength)
+func (m metaInformation) cacheKey() uint64 {
+	contentLength := strconv.FormatInt(m.request.ContentLength, 10)
 
 	return metadata.Hash(
 		contentLength,
-		[]byte(m.params.Encode()),
-		[]byte(m.remoteAddr.String()),
-		[]byte(url.Values(m.request.Header).Encode()),
+		m.params.Encode(),
+		m.remoteAddr.String(),
+		url.Values(m.request.Header).Encode(),
 	)
 }
 
