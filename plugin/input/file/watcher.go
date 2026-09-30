@@ -150,7 +150,7 @@ func (w *watcher) notify(e notify.Event, path string) {
 		return
 	}
 
-	w.logger.Infof("notify %s %s", e, path)
+	w.logger.Debugf("notify %s %s", e, path)
 
 	for _, pattern := range w.paths.Exclude {
 		match, err := doublestar.PathMatch(pattern, path)
