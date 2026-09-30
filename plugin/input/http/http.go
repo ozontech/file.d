@@ -732,5 +732,5 @@ func (m metaInformation) cacheKey() uint64 {
 
 **`headers`**  *`http.Header`*
 
-**`request_uuid`**  *`string`*
+**`request_uuid`**  *`uint64`*
 }*/
