@@ -176,17 +176,19 @@ type AntispamSettings struct {
 	Rules               antispam.Rules
 	Exceptions          antispam.Exceptions
 	MaintenanceInterval time.Duration
+	Sampler             *antispam.Sampler
 }
 
 // values that stay the same for all chunks of one In call
 type chunkParams struct {
-	dec        decoder.Type
-	row        decoder.CRIRow
-	sourceID   SourceID
-	sourceName string
-	offsets    Offsets
-	meta       metadata.MetaData
-	cutoff     bool
+	dec             decoder.Type
+	row             decoder.CRIRow
+	sourceID        SourceID
+	sourceName      string
+	offsets         Offsets
+	meta            metadata.MetaData
+	cutoff          bool
+	antispamSampled bool
 }
 
 type PoolType string
@@ -236,6 +238,7 @@ func New(name string, settings *Settings, registry *prometheus.Registry, lg *zap
 			MetricsController:   metricCtl,
 			Rules:               settings.Antispam.Rules,
 			Exceptions:          settings.Antispam.Exceptions,
+			Sampler:             settings.Antispam.Sampler,
 		}),
 		metricCtl: metricCtl,
 
@@ -415,8 +418,9 @@ func (p *Pipeline) GetOutput() OutputPlugin {
 // In decodes message and passes it to event stream.
 func (p *Pipeline) In(sourceID SourceID, sourceName string, offsets Offsets, bytes []byte, isNewSource bool, meta metadata.MetaData) (seqID uint64) {
 	var (
-		ok     bool
-		cutoff bool
+		ok              bool
+		cutoff          bool
+		antispamSampled bool
 	)
 	// don't process mud.
 	bytes, cutoff, ok = p.checkInputBytes(bytes, sourceName, meta)
@@ -491,9 +495,12 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offsets Offsets, byt
 				p.Error(fmt.Sprintf("cannot parse raw time %s: %v", row.Time, err))
 			}
 		}
-		isSpam := p.antispamer.IsSpam(checkSourceID, checkSourceName, isNewSource, bytes, eventTime, meta)
-		if isSpam {
+
+		switch p.antispamer.IsSpam(checkSourceID, checkSourceName, isNewSource, bytes, eventTime, meta) {
+		case antispam.Dropped:
 			return EventSeqIDError
+		case antispam.Sampled:
+			antispamSampled = true
 		}
 	}
 
@@ -505,13 +512,14 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offsets Offsets, byt
 	}
 
 	params := &chunkParams{
-		sourceID:   sourceID,
-		sourceName: sourceName,
-		offsets:    offsets,
-		meta:       meta,
-		cutoff:     cutoff,
-		dec:        dec,
-		row:        row,
+		sourceID:        sourceID,
+		sourceName:      sourceName,
+		offsets:         offsets,
+		meta:            meta,
+		cutoff:          cutoff,
+		antispamSampled: antispamSampled,
+		dec:             dec,
+		row:             row,
 	}
 
 	var lastSeqID uint64
@@ -627,6 +635,26 @@ func (p *Pipeline) streamChunk(params *chunkParams, chunk []byte) uint64 {
 	}
 	if params.cutoff && p.settings.CutOffEventByLimitField != "" {
 		event.Root.AddFieldNoAlloc(event.Root, p.settings.CutOffEventByLimitField).MutateToBool(true)
+	}
+
+	if params.antispamSampled {
+		// cfg is always non-nil here: antispamSampled is set only when the sampler is configured.
+		cfg := p.settings.Antispam.Sampler
+		if cfg.MarkerField != "" {
+			event.Root.AddFieldNoAlloc(event.Root, cfg.MarkerField).MutateToBool(true)
+		}
+
+		if sm := p.antispamer.SamplerMetric(); sm != nil {
+			values := make([]string, 0, len(cfg.MetricLabels))
+			for _, path := range cfg.MetricLabels {
+				v := "not_set"
+				if node := event.Root.Dig(path); node != nil {
+					v = node.AsString()
+				}
+				values = append(values, v)
+			}
+			sm.WithLabelValues(values...).Inc()
+		}
 	}
 
 	event.Offset = params.offsets.current
