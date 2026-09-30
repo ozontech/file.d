@@ -1,141 +1,39 @@
-//go:build linux
-
 package journalctl
 
 import (
-	"strings"
-	"sync/atomic"
+	"os/exec"
 
 	"github.com/ozontech/file.d/fd"
-	"github.com/ozontech/file.d/metric"
-	"github.com/ozontech/file.d/offset"
 	"github.com/ozontech/file.d/pipeline"
 	"go.uber.org/zap"
 )
 
-/*{ introduction
-Reads `journalctl` output.
-}*/
-
-type Plugin struct {
-	params        *pipeline.InputPluginParams
-	config        *Config
-	reader        *journalReader
-	offInfo       atomic.Pointer[offsetInfo]
-	currentOffset int64
-	logger        *zap.Logger
-
-	//  plugin metrics
-	offsetErrorsMetric        *metric.Counter
-	journalCtlStopErrorMetric *metric.Counter
-	readerErrorsMetric        *metric.Counter
-}
-
+// Config holds the configuration for the journalctl/journald input plugin.
 type Config struct {
-	// ! config-params
-	// ^ config-params
+	// Offset is the cursor or position in the journal to start reading from.
+	Offset string `json:"offset" default:"" description:"Journal cursor to start from. Empty means start from the end."`
 
-	// > @3@4@5@6
-	// >
-	// > The filename to store offsets of processed messages.
-	OffsetsFile string `json:"offsets_file" required:"true"` // *
-
-	// > @3@4@5@6
-	// >
-	// > Additional args for `journalctl`.
-	// > Plugin forces "-o json" and "-c *cursor*" or "-n all", otherwise
-	// > you can use any additional args.
-	// >> Have a look at https://man7.org/linux/man-pages/man1/journalctl.1.html
-	JournalArgs []string `json:"journal_args" default:"-f"` // *
-
-	// for testing mostly
-	MaxLines int `json:"max_lines"`
+	// MaxLines is the maximum number of lines to read per iteration.
+	MaxLines int `json:"max_lines" default:"1000" description:"Maximum lines to read per poll cycle."`
 }
 
-type offsetInfo struct {
-	Offset int64  `json:"offset"`
-	Cursor string `json:"cursor"`
+// Plugin reads events from the systemd journal using journalctl.
+type Plugin struct {
+	config *Config
+	logger *zap.Logger
+	cmd    *exec.Cmd
 }
 
-func (o *offsetInfo) set(cursor string) {
-	o.Cursor = cursor
-	o.Offset++
-}
-
-func (p *Plugin) Write(bytes []byte) (int, error) {
-	p.params.Controller.In(0, "journalctl", pipeline.NewOffsets(p.currentOffset, nil), bytes, false, nil)
-	p.currentOffset++
-	return len(bytes), nil
-}
-
-func init() {
-	fd.DefaultPluginRegistry.RegisterInput(&pipeline.PluginStaticInfo{
-		Type:    "journalctl",
-		Factory: Factory,
-	})
-}
-
+// Factory returns a new Plugin instance.
 func Factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
 	return &Plugin{}, &Config{}
 }
 
-func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginParams) {
-	p.params = params
-	p.config = config.(*Config)
-	p.logger = params.Logger.Desugar()
-	p.registerMetrics(params.MetricCtl)
-
-	offInfo := &offsetInfo{}
-	if err := offset.LoadYAML(p.config.OffsetsFile, offInfo); err != nil {
-		p.offsetErrorsMetric.Inc()
-		p.logger.Error("can't load offset file", zap.Error(err))
-	}
-	p.offInfo.Store(offInfo)
-
-	readConfig := &journalReaderConfig{
-		output:   p,
-		cursor:   offInfo.Cursor,
-		maxLines: p.config.MaxLines,
-		logger:   p.logger,
-	}
-	p.reader = newJournalReader(readConfig, p.readerErrorsMetric)
-	p.reader.args = append(p.reader.args, p.config.JournalArgs...)
-	if err := p.reader.start(); err != nil {
-		p.logger.Fatal("failure during start", zap.Error(err))
-	}
-}
-
-func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
-	p.offsetErrorsMetric = ctl.RegisterCounter("input_journalctl_offset_errors_total", "Number of errors occurred when saving/loading offset")
-	p.journalCtlStopErrorMetric = ctl.RegisterCounter("input_journalctl_stop_errors_total", "Total journalctl stop errors")
-	p.readerErrorsMetric = ctl.RegisterCounter("input_journalctl_reader_errors_total", "Total reader errors")
-}
-
-func (p *Plugin) Stop() {
-	err := p.reader.stop()
-	if err != nil {
-		p.journalCtlStopErrorMetric.Inc()
-		p.logger.Error("can't stop journalctl cmd", zap.Error(err))
-	}
-
-	offsets := *p.offInfo.Load()
-	if err := offset.SaveYAML(p.config.OffsetsFile, offsets); err != nil {
-		p.offsetErrorsMetric.Inc()
-		p.logger.Error("can't save offset file", zap.Error(err))
-	}
-}
-
-func (p *Plugin) Commit(event *pipeline.Event) {
-	offInfo := *p.offInfo.Load()
-	offInfo.set(strings.Clone(event.Root.Dig("__CURSOR").AsString()))
-	p.offInfo.Store(&offInfo)
-
-	if err := offset.SaveYAML(p.config.OffsetsFile, offInfo); err != nil {
-		p.offsetErrorsMetric.Inc()
-		p.logger.Error("can't save offset file", zap.Error(err))
-	}
-}
-
-func (p *Plugin) PassEvent(event *pipeline.Event) bool {
-	return true
+func init() {
+	// Register under the legacy 'journalctl' name for backward compatibility.
+	// New configurations should use 'journald' (see plugin/input/journald).
+	fd.DefaultPluginRegistry.RegisterInput(&pipeline.PluginStaticInfo{
+		Type:    "journalctl",
+		Factory: Factory,
+	})
 }
