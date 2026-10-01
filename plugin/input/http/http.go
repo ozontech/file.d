@@ -2,17 +2,16 @@ package http
 
 import (
 	"context"
-	"crypto/sha1"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/klauspost/compress/gzip"
 	"github.com/ozontech/file.d/cfg"
 	"github.com/ozontech/file.d/fd"
@@ -415,7 +414,8 @@ func (p *Plugin) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		p.failedAuthTotal.Inc()
 		p.errorsTotal.Inc()
-		p.logger.Warn("auth failed",
+		p.logger.Warn(
+			"auth failed",
 			zap.String("user_agent", r.UserAgent()),
 			zap.Any("headers", r.Header),
 			zap.String("remote_addr", r.RemoteAddr),
@@ -696,34 +696,29 @@ func newMetaInformation(login string, ip net.IP, r *http.Request) metaInformatio
 }
 
 func (m metaInformation) GetData() map[string]any {
-	contentLength := fmt.Sprintf("%d", m.request.ContentLength)
-	encodedParams := m.params.Encode()
-	remoteAddress := m.remoteAddr
-	result := fmt.Sprintf("%s|%s|%s", contentLength, encodedParams, remoteAddress)
-	requestUuid, _ := stringToUUID(result)
-
 	return map[string]any{
 		"login":        m.login,
 		"remote_addr":  m.remoteAddr,
 		"request":      m.request,
 		"params":       m.params,
-		"request_uuid": requestUuid.String(),
+		"headers":      m.request.Header,
+		"request_uuid": m.cacheKey(),
 	}
 }
 
-func stringToUUID(input string) (uuid.UUID, error) {
-	hash := sha1.New()
-	_, err := hash.Write([]byte(input))
-	if err != nil {
-		return uuid.UUID{}, err
-	}
+func (m metaInformation) GetCacheKey() uint64 {
+	return m.cacheKey()
+}
 
-	hashBytes := hash.Sum(nil)
+func (m metaInformation) cacheKey() uint64 {
+	contentLength := strconv.FormatInt(m.request.ContentLength, 10)
 
-	var u uuid.UUID
-	copy(u[:], hashBytes[:16])
-
-	return u, nil
+	return metadata.Hash(
+		contentLength,
+		m.params.Encode(),
+		m.remoteAddr.String(),
+		url.Values(m.request.Header).Encode(),
+	)
 }
 
 /*{ meta-params
@@ -735,5 +730,7 @@ func stringToUUID(input string) (uuid.UUID, error) {
 
 **`params`**  *`url.Values`*
 
-**`request_uuid`**  *`string`*
+**`headers`**  *`http.Header`*
+
+**`request_uuid`**  *`uint64`*
 }*/
