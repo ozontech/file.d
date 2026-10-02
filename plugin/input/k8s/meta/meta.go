@@ -3,6 +3,7 @@ package meta
 import (
 	"errors"
 	"strings"
+	"time"
 )
 
 type K8sMetaInformation struct {
@@ -75,4 +76,18 @@ func (m K8sMetaInformation) GetData() map[string]any {
 		"container_id":   m.ContainerID,
 		"pod":            m.Pod,
 	}
+}
+
+func (m K8sMetaInformation) GetPodStatus() string {
+	if m.Pod != nil {
+		return string(m.Pod.Status.Phase)
+	}
+	return ""
+}
+
+func (m K8sMetaInformation) GetUpdateTime() time.Time {
+	if m.Pod != nil {
+		return m.Pod.updateTime
+	}
+	return time.Time{}
 }
