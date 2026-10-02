@@ -6,8 +6,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"sync/atomic"
-
 	"github.com/ozontech/file.d/cfg/matchrule"
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/metric"
