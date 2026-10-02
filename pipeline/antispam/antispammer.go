@@ -38,9 +38,11 @@ type Antispammer struct {
 	threshold           int
 	maintenanceInterval time.Duration
 
-	mu                   sync.RWMutex
-	sources              map[string]source
-	sourcesThresholds    map[string]int
+	mu                sync.RWMutex
+	sources           map[string]source
+	sourcesThresholds map[string]int
+
+	muPS                 sync.RWMutex
 	sourcesPartialStates map[string]partialState
 
 	exceptions Exceptions
@@ -163,9 +165,9 @@ func (a *Antispammer) IsSpam(sourceData SourceData, eventData EventData, meta ma
 		return Passed
 	}
 
-	a.mu.RLock()
+	a.muPS.RLock()
 	ps, has := a.sourcesPartialStates[sourceData.ID]
-	a.mu.RUnlock()
+	a.muPS.RUnlock()
 
 	// for a chain of partial events, we check only the first event and save it's state.
 	// for all other events from the chain, up to the last full one that completes this chain,
@@ -174,9 +176,9 @@ func (a *Antispammer) IsSpam(sourceData SourceData, eventData EventData, meta ma
 		isDropped := ps.isDropped
 		if !eventData.IsPartial {
 			// last event in chain, reset state
-			a.mu.Lock()
+			a.muPS.Lock()
 			delete(a.sourcesPartialStates, sourceData.ID)
-			a.mu.Unlock()
+			a.muPS.Unlock()
 		}
 		if isDropped {
 			return Dropped
@@ -186,9 +188,9 @@ func (a *Antispammer) IsSpam(sourceData SourceData, eventData EventData, meta ma
 
 	res := func(r SpamResult) SpamResult {
 		if eventData.IsPartial {
-			a.mu.Lock()
+			a.muPS.Lock()
 			a.sourcesPartialStates[sourceData.ID] = partialState{isDropped: r == Dropped}
-			a.mu.Unlock()
+			a.muPS.Unlock()
 		}
 		return r
 	}
@@ -348,9 +350,12 @@ func (a *Antispammer) Maintenance() {
 
 const maxPartialStateGen = int8(2)
 
-// use under lock
 func (a *Antispammer) maintenancePartialStates(done chan struct{}) {
-	defer func() { done <- struct{}{} }()
+	a.muPS.Lock()
+	defer func() {
+		a.muPS.Unlock()
+		done <- struct{}{}
+	}()
 
 	for k, v := range a.sourcesPartialStates {
 		if v.gen >= maxPartialStateGen {
