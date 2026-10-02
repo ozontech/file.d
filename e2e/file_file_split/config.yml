@@ -3,7 +3,7 @@ pipelines:
     settings:
       decoder: json
       split_json_array: true
-      split_json_array_filed: data
+      split_json_array_field: data
     input:
       type: file
       persistence_mode: async
