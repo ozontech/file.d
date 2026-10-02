@@ -396,6 +396,7 @@ func TestNewMetaInformation(t *testing.T) {
 				assert.Equal(t, tt.filename, metaInfo.filename)
 				assert.Equal(t, tt.symlink, metaInfo.symlink)
 				assert.Equal(t, uint64(tt.inode), metaInfo.inode)
+				assert.NotNil(t, metaInfo.GetCacheKey())
 
 				if tt.parseK8sMeta {
 					assert.Equal(t, tt.expectedK8sMeta.PodName, metaInfo.k8sMetadata.PodName)
