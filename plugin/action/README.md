@@ -159,6 +159,14 @@ pipelines:
 ```
 
 [More details...](plugin/action/discard/README.md)
+## event_to_metrics
+Transforms events into metric format
+
+This plugin extracts values and labels from event fields and restructures the event into an array of metrics containing `name`, `type`, `value`, `timestamp`, `ttl`, and `labels`.
+
+**Important:** This action should be the last one in the pipeline, as it consumes events and does not pass them further.
+
+[More details...](plugin/action/event_to_metrics/README.md)
 ## flatten
 It extracts the object keys and adds them into the root with some prefix. If the provided field isn't an object, an event will be skipped.
 
@@ -601,7 +609,7 @@ pipelines:
     - type: transform
       source: |
         # parse lines like "INFO 2025-05-25 11:11:11,222 [shard 1] compaction - done"
-        m = capture(.log, r'^(?P<level>\S+)\s+(?P<time>\S+ \S+)\s+\[(?P<shard>[^\]]+)\]\s+(?P<operation>\S+)\s+-\s+(?P<message>.+)$')
+        m = parse_regex(.log, r'^(?P<level>\S+)\s+(?P<time>\S+ \S+)\s+\[(?P<shard>[^\]]+)\]\s+(?P<operation>\S+)\s+-\s+(?P<message>.+)$')
         if m != null {
           .level = m.level
           .time = m.time

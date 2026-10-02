@@ -229,9 +229,9 @@ func parseFields(fields []cfg.FieldSelector) *parsedFields {
 func (p *Plugin) registerMetrics(ctl *metric.Ctl, prefix string) {
 	var metricName string
 	if prefix == "" {
-		metricName = "cardinality_unique_values_count"
+		metricName = "cardinality_unique_values"
 	} else {
-		metricName = fmt.Sprintf(`cardinality_%s_unique_values_count`, prefix)
+		metricName = fmt.Sprintf(`cardinality_%s_unique_values`, prefix)
 	}
 	p.cardinalityUniqueValuesGauge = ctl.RegisterGaugeVec(
 		metricName,

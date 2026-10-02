@@ -1,0 +1,441 @@
+package prometheus
+
+import (
+	"context"
+	"crypto/tls"
+	"encoding/base64"
+	"fmt"
+	"net"
+	"net/http"
+	"sync"
+	"sync/atomic"
+	"time"
+
+	"github.com/castai/promwrite"
+	"github.com/cenkalti/backoff/v4"
+	"github.com/ozontech/file.d/cfg"
+	"github.com/ozontech/file.d/fd"
+	"github.com/ozontech/file.d/metric"
+	"github.com/ozontech/file.d/pipeline"
+	"github.com/ozontech/file.d/xtls"
+	insaneJSON "github.com/ozontech/insane-json"
+
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+)
+
+/*{ introduction
+It sends metrics to Prometheus using the remote write API. The plugin receives metric events from the pipeline (e.g., from the event_to_metrics action plugin) and forwards them to a Prometheus-compatible endpoint.
+}*/
+
+const (
+	outPluginType = "prometheus"
+
+	metricTypeGauge   = "gauge"
+	metricTypeCounter = "counter"
+)
+
+// ! config-params
+// ^ config-params
+type Config struct {
+	// > @3@4@5@6
+	// >
+	// > Prometheus remote write endpoint URL.
+	Endpoint string `json:"endpoint" default:"http://localhost:9090/api/v1/write"` // *
+
+	// > @3@4@5@6
+	// >
+	// > Auth config.
+	// >
+	// > `AuthConfig` params:
+	// > * `strategy` describes strategy to use; options:"disabled|tenant|basic|bearer"
+	// > By default strategy is `disabled`.
+	// > * `tenant_id` should be provided if strategy is `tenant`.
+	// > * `username` should be provided if strategy is `basic`.
+	// > Username is used for HTTP Basic Authentication.
+	// > * `password` should be provided if strategy is `basic`.
+	// > Password is used for HTTP Basic Authentication.
+	// > * `bearer_token` should be provided if strategy is `bearer`.
+	// > Token is used for HTTP Bearer Authentication.
+	Auth AuthConfig `json:"auth" child:"true"` // *
+
+	// > @3@4@5@6
+	// >
+	// > TLS config.
+	// >
+	// > `TLSConfig` params:
+	// > * `ca_cert` - path or content of a PEM-encoded CA file
+	// > * `client_cert` - path or content of a PEM-encoded client certificate file
+	// > * `client_key` - path or content of a PEM-encoded client key file
+	// > * `insecure` - if set, the plugin will skip SSL/TLS verification
+	TLS *cfg.TLSConfig `json:"tls"` // *
+
+	// > @3@4@5@6
+	// >
+	// > Client timeout when sends requests to Prometheus HTTP API.
+	RequestTimeout  cfg.Duration `json:"request_timeout" default:"1s" parse:"duration"` // *
+	RequestTimeout_ time.Duration
+
+	// > @3@4@5@6
+	// >
+	// > It defines how much time to wait for the connection.
+	ConnectionTimeout  cfg.Duration `json:"connection_timeout" default:"5s" parse:"duration"` // *
+	ConnectionTimeout_ time.Duration
+
+	// > @3@4@5@6
+	// >
+	// > Keep-alive config.
+	// >
+	// > `KeepAliveConfig` params:
+	// > * `max_idle_conn_duration` - idle keep-alive connections are closed after this duration.
+	// > By default idle connections are closed after `10s`.
+	// > * `max_conn_duration` - keep-alive connections are closed after this duration.
+	// > If set to `0` - connection duration is unlimited.
+	// > By default connection duration is `5m`.
+	KeepAlive KeepAliveConfig `json:"keep_alive" child:"true"` // *
+
+	// > @3@4@5@6
+	// >
+	// > Retries of upload. If File.d cannot upload for this number of attempts,
+	// > File.d will fall with non-zero exit code or skip message (see fatal_on_failed_insert).
+	Retry int `json:"retry" default:"10"` // *
+
+	// > @3@4@5@6
+	// >
+	// > After an insert error, fall with a non-zero exit code or not
+	FatalOnFailedInsert bool `json:"fatal_on_failed_insert" default:"false"` // *
+
+	// > @3@4@5@6
+	// >
+	// > Retention milliseconds for retry to upload.
+	Retention  cfg.Duration `json:"retention" default:"1s" parse:"duration"` // *
+	Retention_ time.Duration
+
+	// > @3@4@5@6
+	// >
+	// > Multiplier for exponential increase of retention between retries
+	RetentionExponentMultiplier int `json:"retention_exponentially_multiplier" default:"2"` // *
+}
+
+type AuthStrategy byte
+
+const (
+	StrategyDisabled AuthStrategy = iota
+	StrategyTenant
+	StrategyBasic
+	StrategyBearer
+)
+
+// ! config-params
+// ^ config-params
+type AuthConfig struct {
+	// > AuthStrategy.Strategy describes strategy to use.
+	Strategy  string `json:"strategy" default:"disabled" options:"disabled|tenant|basic|bearer"`
+	Strategy_ AuthStrategy
+
+	// > TenantID for Tenant Authentication.
+	TenantID string `json:"tenant_id"`
+
+	// > Username for HTTP Basic Authentication.
+	Username string `json:"username"`
+
+	// > Password for HTTP Basic Authentication.
+	Password string `json:"password"`
+
+	// > Token for HTTP Bearer Authentication.
+	BearerToken string `json:"bearer_token"`
+}
+
+type KeepAliveConfig struct {
+	// Idle keep-alive connections are closed after this duration.
+	MaxIdleConnDuration  cfg.Duration `json:"max_idle_conn_duration" parse:"duration" default:"10s"`
+	MaxIdleConnDuration_ time.Duration
+
+	// Keep-alive connections are closed after this duration.
+	MaxConnDuration  cfg.Duration `json:"max_conn_duration" parse:"duration" default:"5m"`
+	MaxConnDuration_ time.Duration
+}
+
+type Plugin struct {
+	controller pipeline.OutputPluginController
+	logger     *zap.Logger
+
+	config    *Config
+	tlsConfig *tls.Config
+	client    PrometheusClient
+
+	// plugin metrics
+	sendErrorMetric *metric.Counter
+
+	collector *metricCollector
+
+	// mu protects retryChan from race conditions
+	mu sync.Mutex
+
+	// isAvailable indicates if Prometheus is currently available (atomic)
+	isAvailable atomic.Bool
+
+	// retryChan is used to signal waiting events when Prometheus becomes available
+	retryChan chan struct{}
+}
+
+type PrometheusClient interface {
+	Write(ctx context.Context, req *promwrite.WriteRequest, options ...promwrite.WriteOption) (*promwrite.WriteResponse, error)
+}
+
+func init() {
+	fd.DefaultPluginRegistry.RegisterOutput(&pipeline.PluginStaticInfo{
+		Type:    outPluginType,
+		Factory: Factory,
+	})
+}
+
+func Factory() (pipeline.AnyPlugin, pipeline.AnyConfig) {
+	return &Plugin{}, &Config{}
+}
+
+func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginParams) {
+	p.controller = params.Controller
+	p.config = config.(*Config)
+	p.logger = params.Logger.Desugar()
+	p.registerMetrics(params.MetricCtl)
+	p.collector = newCollector(p, 15*time.Second, p.logger)
+
+	if p.client == nil {
+		p.buildTLSConfig()
+		p.prepareClient()
+	}
+	p.isAvailable.Store(true)
+	p.retryChan = make(chan struct{})
+}
+
+func (p *Plugin) Stop() {
+	p.collector.shutdown()
+}
+
+func (p *Plugin) Out(event *pipeline.Event) {
+	msg := event.Root
+
+	if msg.IsArray() {
+		arr := msg.AsArray()
+		for _, metricNode := range arr {
+			if !metricNode.IsObject() {
+				continue
+			}
+
+			p.processMetricNode(metricNode)
+		}
+
+		if !p.isAvailable.Load() {
+			p.mu.Lock()
+			if !p.isAvailable.Load() {
+				retryChan := p.retryChan
+				p.mu.Unlock()
+				<-retryChan
+			} else {
+				p.mu.Unlock()
+			}
+		}
+	}
+
+	p.controller.Commit(event)
+}
+
+func (p *Plugin) processMetricNode(msg *insaneJSON.Node) {
+	metricTypeNode := msg.Dig("type")
+	if metricTypeNode == nil {
+		return
+	}
+	metricType := metricTypeNode.AsString()
+	metricTypeNode.Suicide()
+
+	if metricType != metricTypeCounter && metricType != metricTypeGauge {
+		p.logger.Warn(
+			"unsupported metric type, skipping",
+			zap.String("type", metricType),
+		)
+		return
+	}
+
+	nameNode := msg.Dig("name")
+	name := nameNode.AsString()
+	nameNode.Suicide()
+
+	timestampNode := msg.Dig("timestamp")
+	timestamp := timestampNode.AsInt64()
+	timestampNode.Suicide()
+
+	ttlNode := msg.Dig("ttl")
+	ttl := ttlNode.AsInt64()
+	ttlNode.Suicide()
+
+	valueNode := msg.Dig("value")
+	value := valueNode.AsFloat()
+	valueNode.Suicide()
+
+	labelsNode := msg.Dig("labels")
+	labelValues := labelsNode.AsFields()
+	labelsNode.Suicide()
+
+	labels := make([]promwrite.Label, 0, len(labelValues)+1)
+	labels = append(labels, promwrite.Label{
+		Name:  "__name__",
+		Value: name,
+	})
+	for _, l := range labelValues {
+		labels = append(labels, promwrite.Label{
+			Name:  l.AsString(),
+			Value: labelsNode.Dig(l.AsString()).AsString(),
+		})
+	}
+
+	p.collector.handleMetric(metricData{
+		labels:     labels,
+		value:      value,
+		timestamp:  timestamp,
+		metricType: metricType,
+		ttl:        ttl,
+	})
+}
+
+func (p *Plugin) sendToStorage(values []promwrite.TimeSeries) error {
+	for _, value := range values {
+		p.logger.Debug(
+			"send metric",
+			zap.Any("labels", value.Labels),
+			zap.Time("time", value.Sample.Time),
+			zap.Float64("value", value.Sample.Value),
+		)
+	}
+
+	expBackoff := pipeline.GetBackoff(
+		p.config.Retention_,
+		float64(p.config.RetentionExponentMultiplier),
+		uint64(p.config.Retry),
+	)
+	expBackoff.Reset()
+
+	err := backoff.Retry(func() error {
+		ctx, cancel := context.WithTimeout(context.Background(), p.config.RequestTimeout_)
+		defer cancel()
+		resp, err := p.client.Write(ctx, &promwrite.WriteRequest{TimeSeries: values})
+		if err != nil {
+			p.sendErrorMetric.Inc()
+			p.logger.Error("can't send data to Prometheus", zap.String("address", p.config.Endpoint), zap.Error(err))
+			return err
+		}
+		p.logger.Debug("successfully sent", zap.Any("response", resp))
+		return nil
+	}, expBackoff)
+
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if err != nil {
+		var level zapcore.Level
+		if p.config.FatalOnFailedInsert {
+			level = zapcore.FatalLevel
+		} else {
+			level = zapcore.ErrorLevel
+		}
+
+		p.logger.Log(level, "max retries reached")
+		p.isAvailable.Store(false)
+		newRetryChan := make(chan struct{})
+		if p.retryChan != nil {
+			close(p.retryChan)
+		}
+		p.retryChan = newRetryChan
+
+		p.logger.Info("prometheus unavailable, events will wait")
+	} else if !p.isAvailable.Load() {
+		p.isAvailable.Store(true)
+		if p.retryChan != nil {
+			close(p.retryChan)
+			p.logger.Info("prometheus available")
+		}
+		p.retryChan = make(chan struct{})
+	}
+
+	return err
+}
+
+func (p *Plugin) registerMetrics(ctl *metric.Ctl) {
+	p.sendErrorMetric = ctl.RegisterCounter("output_prometheus_send_error", "Total Prometheus send errors")
+}
+
+func (p *Plugin) prepareClient() {
+	baseTransport := &http.Transport{
+		DialContext: (&net.Dialer{
+			Timeout:   p.config.ConnectionTimeout_,
+			KeepAlive: p.config.KeepAlive.MaxConnDuration_,
+		}).DialContext,
+		IdleConnTimeout: p.config.KeepAlive.MaxIdleConnDuration_,
+		TLSClientConfig: p.tlsConfig,
+	}
+
+	authTransport := &authTransport{
+		base:       baseTransport,
+		authHeader: p.getAuthHeader(),
+		tenantID:   p.config.Auth.TenantID,
+		strategy:   p.config.Auth.Strategy_,
+	}
+
+	customClient := &http.Client{
+		Transport: authTransport,
+	}
+
+	p.client = promwrite.NewClient(p.config.Endpoint, promwrite.HttpClient(customClient))
+}
+
+// authTransport adds authentication headers to requests.
+type authTransport struct {
+	base       *http.Transport
+	authHeader string
+	tenantID   string
+	strategy   AuthStrategy
+}
+
+func (t *authTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	switch t.strategy {
+	case StrategyTenant:
+		req.Header.Set("X-Scope-OrgID", t.tenantID)
+	case StrategyBasic, StrategyBearer:
+		req.Header.Set("Authorization", t.authHeader)
+	}
+	return t.base.RoundTrip(req)
+}
+
+func (p *Plugin) getAuthHeader() string {
+	switch p.config.Auth.Strategy_ {
+	case StrategyBasic:
+		credentials := []byte(p.config.Auth.Username + ":" + p.config.Auth.Password)
+		return fmt.Sprintf("Basic %s", base64.StdEncoding.EncodeToString(credentials))
+	case StrategyBearer:
+		return fmt.Sprintf("Bearer %s", p.config.Auth.BearerToken)
+	}
+	return ""
+}
+
+func (p *Plugin) buildTLSConfig() {
+	if p.config.TLS == nil {
+		return
+	}
+
+	b := xtls.NewConfigBuilder()
+	tlsCfg := p.config.TLS
+
+	if tlsCfg.CACert != "" {
+		if err := b.AppendCARoot(tlsCfg.CACert); err != nil {
+			p.logger.Fatal("can't append CA root", zap.Error(err))
+		}
+	}
+	if tlsCfg.ClientCert != "" && tlsCfg.ClientKey != "" {
+		if err := b.AppendX509KeyPair(tlsCfg.ClientCert, tlsCfg.ClientKey); err != nil {
+			p.logger.Fatal("can't append X509 key pair", zap.Error(err))
+		}
+	}
+	b.SetSkipVerify(tlsCfg.Insecure)
+
+	p.tlsConfig = b.Build()
+}

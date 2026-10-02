@@ -2,6 +2,7 @@ package kafka
 
 import (
 	"context"
+	"strconv"
 	"time"
 
 	"github.com/ozontech/file.d/cfg"
@@ -109,7 +110,7 @@ type Config struct {
 	// > MaxConcurrentFetches sets the maximum number of fetch requests to allow in
 	// > flight or buffered at once, overriding the unbounded (i.e. number of
 	// > brokers) default.
-	MaxConcurrentFetches int `json:"max_concurrent_fetches" default:"0"` // *
+	MaxConcurrentFetches int `json:"max_concurrent_fetches" default:"-1"` // *
 
 	// > @3@4@5@6
 	// >
@@ -427,6 +428,14 @@ func (m metaInformation) GetData() map[string]any {
 		"partition": m.partition,
 		"offset":    m.offset,
 	}
+}
+
+func (m metaInformation) GetCacheKey() uint64 {
+	return metadata.Hash(
+		m.topic,
+		strconv.FormatInt(int64(m.partition), 10),
+		strconv.FormatInt(m.offset, 10),
+	)
 }
 
 /*{ meta-params

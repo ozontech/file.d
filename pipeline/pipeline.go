@@ -172,6 +172,7 @@ type AntispamSettings struct {
 	Rules               antispam.Rules
 	Exceptions          antispam.Exceptions
 	MaintenanceInterval time.Duration
+	Sampler             *antispam.Sampler
 }
 
 type PoolType string
@@ -221,6 +222,7 @@ func New(name string, settings *Settings, registry *prometheus.Registry, lg *zap
 			MetricsController:   metricCtl,
 			Rules:               settings.Antispam.Rules,
 			Exceptions:          settings.Antispam.Exceptions,
+			Sampler:             settings.Antispam.Sampler,
 		}),
 		metricCtl: metricCtl,
 
@@ -400,8 +402,9 @@ func (p *Pipeline) GetOutput() OutputPlugin {
 // In decodes message and passes it to event stream.
 func (p *Pipeline) In(sourceID SourceID, sourceName string, offsets Offsets, bytes []byte, isNewSource bool, meta metadata.MetaData) (seqID uint64) {
 	var (
-		ok     bool
-		cutoff bool
+		ok              bool
+		cutoff          bool
+		antispamSampled bool
 	)
 	// don't process mud.
 	bytes, cutoff, ok = p.checkInputBytes(bytes, sourceName, meta)
@@ -476,9 +479,12 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offsets Offsets, byt
 				p.Error(fmt.Sprintf("cannot parse raw time %s: %v", row.Time, err))
 			}
 		}
-		isSpam := p.antispamer.IsSpam(checkSourceID, checkSourceName, isNewSource, bytes, eventTime, meta)
-		if isSpam {
+
+		switch p.antispamer.IsSpam(checkSourceID, checkSourceName, isNewSource, bytes, eventTime, meta) {
+		case antispam.Dropped:
 			return EventSeqIDError
+		case antispam.Sampled:
+			antispamSampled = true
 		}
 	}
 
@@ -549,6 +555,25 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offsets Offsets, byt
 	}
 	if cutoff && p.settings.CutOffEventByLimitField != "" {
 		event.Root.AddFieldNoAlloc(event.Root, p.settings.CutOffEventByLimitField).MutateToBool(true)
+	}
+	if antispamSampled {
+		// cfg is always non-nil here: antispamSampled is set only when the sampler is configured.
+		cfg := p.settings.Antispam.Sampler
+		if cfg.MarkerField != "" {
+			event.Root.AddFieldNoAlloc(event.Root, cfg.MarkerField).MutateToBool(true)
+		}
+
+		if sm := p.antispamer.SamplerMetric(); sm != nil {
+			values := make([]string, 0, len(cfg.MetricLabels))
+			for _, path := range cfg.MetricLabels {
+				v := "not_set"
+				if node := event.Root.Dig(path); node != nil {
+					v = node.AsString()
+				}
+				values = append(values, v)
+			}
+			sm.WithLabelValues(values...).Inc()
+		}
 	}
 
 	event.Offset = offsets.current

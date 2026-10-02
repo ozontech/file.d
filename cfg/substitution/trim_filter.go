@@ -89,6 +89,9 @@ func parseTrimFilter(data string, offset int) (FieldFilter, int, error) {
 	if err := json.Unmarshal([]byte(args[1]), &cutset); err != nil {
 		return nil, filterEndPos, fmt.Errorf("failed to parse trim filter cutset: %w", err)
 	}
+	if cutset == "" {
+		return nil, filterEndPos, fmt.Errorf("trim filter cutset must not be empty")
+	}
 	filter := &TrimFilter{
 		mode:   mode,
 		cutset: cutset,
