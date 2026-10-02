@@ -179,18 +179,6 @@ type AntispamSettings struct {
 	Sampler             *antispam.Sampler
 }
 
-// values that stay the same for all chunks of one In call
-type chunkParams struct {
-	dec             decoder.Type
-	row             decoder.CRIRow
-	sourceID        SourceID
-	sourceName      string
-	offsets         Offsets
-	meta            metadata.MetaData
-	cutoff          bool
-	antispamSampled bool
-}
-
 type PoolType string
 
 const (
@@ -418,9 +406,8 @@ func (p *Pipeline) GetOutput() OutputPlugin {
 // In decodes message and passes it to event stream.
 func (p *Pipeline) In(sourceID SourceID, sourceName string, offsets Offsets, bytes []byte, isNewSource bool, meta metadata.MetaData) (seqID uint64) {
 	var (
-		ok              bool
-		cutoff          bool
-		antispamSampled bool
+		ok     bool
+		cutoff bool
 	)
 	// don't process mud.
 	bytes, cutoff, ok = p.checkInputBytes(bytes, sourceName, meta)
@@ -455,6 +442,12 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offsets Offsets, byt
 		}
 	}
 
+	var (
+		checkSourceID   string
+		checkSourceName string
+		eventTime       time.Time
+	)
+
 	// Skip IsSpam for partial logs is necessary to avoid the case
 	// when some parts of a large event have got into the ban,
 	// thereby cutting off a piece of the event.
@@ -463,16 +456,13 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offsets Offsets, byt
 	// The event is Partial if it is larger than the driver configuration.
 	// For example, for containerd this setting is called max_container_log_line_size
 	// https://github.com/containerd/containerd/blob/f7f2be732159a411eae46b78bfdb479b133a823b/pkg/cri/config/config.go#L263-L266
-	if !row.IsPartial && p.settings.Antispam.Threshold >= 0 {
+	antispamEnabled := !row.IsPartial && p.settings.Antispam.Threshold >= 0
+	if antispamEnabled {
 		streamOffset := offsets.ByStream(string(row.Stream))
-		currentOffset := offsets.current
-
-		if streamOffset > 0 && currentOffset < streamOffset {
+		if streamOffset > 0 && offsets.current < streamOffset {
 			return EventSeqIDError
 		}
 
-		var checkSourceID string
-		var checkSourceName string
 		if p.settings.SourceNameMetaField == "" {
 			checkSourceID = strconv.FormatUint(uint64(sourceID), 10)
 			checkSourceName = sourceName
@@ -488,51 +478,53 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offsets Offsets, byt
 			}
 		}
 
-		var eventTime time.Time
 		if len(row.Time) > 0 {
 			eventTime, err = time.Parse("2006-01-02T15:04:05.999999999Z", string(row.Time))
 			if err != nil {
 				p.Error(fmt.Sprintf("cannot parse raw time %s: %v", row.Time, err))
 			}
 		}
-
-		switch p.antispamer.IsSpam(checkSourceID, checkSourceName, isNewSource, bytes, eventTime, meta) {
-		case antispam.Dropped:
-			return EventSeqIDError
-		case antispam.Sampled:
-			antispamSampled = true
-		}
 	}
 
 	chunks := [][]byte{bytes}
 	if p.settings.SplitJSONArray && dec == decoder.JSON {
-		if elems, split := extractJSONArrElements(bytes, p.settings.SplitJSONArrayField); split {
-			chunks = elems
+		if buf, split := extractJSONArrElements(bytes, p.settings.SplitJSONArrayField); split {
+			chunks = buf.Elements
+			defer buf.Reset()
 		}
 	}
 
 	params := &chunkParams{
-		sourceID:        sourceID,
-		sourceName:      sourceName,
-		offsets:         offsets,
-		meta:            meta,
-		cutoff:          cutoff,
-		antispamSampled: antispamSampled,
-		dec:             dec,
-		row:             row,
+		sourceID:   sourceID,
+		sourceName: sourceName,
+		offsets:    offsets,
+		meta:       meta,
+		cutoff:     cutoff,
+		dec:        dec,
+		row:        row,
 	}
 
+	lastIdx := len(chunks) - 1
+
 	var lastSeqID uint64
-	for _, chunk := range chunks {
+	for i, chunk := range chunks {
+		params.antispamSampled = false
+		if antispamEnabled {
+			switch p.antispamer.IsSpam(checkSourceID, checkSourceName, isNewSource, bytes, eventTime, meta) {
+			case antispam.Dropped:
+				isNewSource = false
+				continue
+			case antispam.Sampled:
+				params.antispamSampled = true
+			}
+			isNewSource = false
+		}
+
+		params.isLastChunk = i == lastIdx
 		if id := p.streamChunk(params, chunk); id != EventSeqIDError {
 			lastSeqID = id
 		}
 	}
-
-	if lastSeqID == 0 {
-		return EventSeqIDError
-	}
-
 	return lastSeqID
 }
 
@@ -563,6 +555,20 @@ func (p *Pipeline) checkInputBytes(bytes []byte, sourceName string, meta metadat
 	}
 
 	return bytes, false, true
+}
+
+// values shared by all chunks of one In call.
+// isLast is the only field that changes between chunks
+type chunkParams struct {
+	dec             decoder.Type
+	row             decoder.CRIRow
+	sourceID        SourceID
+	sourceName      string
+	offsets         Offsets
+	meta            metadata.MetaData
+	cutoff          bool
+	antispamSampled bool
+	isLastChunk     bool
 }
 
 func (p *Pipeline) streamChunk(params *chunkParams, chunk []byte) uint64 {
@@ -661,6 +667,7 @@ func (p *Pipeline) streamChunk(params *chunkParams, chunk []byte) uint64 {
 	event.SourceID = params.sourceID
 	event.SourceName = params.sourceName
 	event.streamName = DefaultStreamName
+	event.skipInputCommit = !params.isLastChunk
 
 	return p.streamEvent(event)
 }
@@ -708,7 +715,9 @@ func (p *Pipeline) finalize(event *Event, notifyInput bool, backEvent bool) {
 	}
 
 	if notifyInput {
-		p.input.Commit(event)
+		if !event.skipInputCommit {
+			p.input.Commit(event)
+		}
 		p.outputEvents.Inc()
 		p.outputSize.Add(int64(event.Size))
 	}
@@ -1118,13 +1127,25 @@ func (p *Pipeline) serveActionSample(actionIndex int) func(http.ResponseWriter, 
 	}
 }
 
-func extractJSONArrElements(data []byte, fieldPath []string) ([][]byte, bool) {
+type chunksBuffer struct {
+	Elements [][]byte
+}
+
+func (b *chunksBuffer) Reset() {
+	b.Elements = b.Elements[:0]
+	chunkBufferPool.Put(b)
+}
+
+var chunkBufferPool = sync.Pool{
+	New: func() any {
+		return &chunksBuffer{Elements: make([][]byte, 0, 128)} // мб побольше или меньше
+	},
+}
+
+func extractJSONArrElements(data []byte, fieldPath []string) (*chunksBuffer, bool) {
 	d := jx.DecodeBytes(data)
 
 	for _, key := range fieldPath {
-		if d.Next() != jx.Object {
-			return nil, false
-		}
 		objIter, err := d.ObjIter()
 		if err != nil {
 			return nil, false
@@ -1151,24 +1172,27 @@ func extractJSONArrElements(data []byte, fieldPath []string) ([][]byte, bool) {
 		return nil, false
 	}
 
-	var elements [][]byte
+	buf := chunkBufferPool.Get().(*chunksBuffer)
 	for arrIter.Next() {
 		raw, err := d.Raw()
 		if err != nil {
+			buf.Reset()
 			return nil, false
 		}
 
-		elements = append(elements, []byte(raw))
+		buf.Elements = append(buf.Elements, []byte(raw))
 	}
 
 	if err := arrIter.Err(); err != nil {
+		buf.Reset()
 		return nil, false
 	}
-	if len(elements) == 0 {
+	if len(buf.Elements) == 0 {
+		buf.Reset()
 		return nil, false
 	}
 
-	return elements, true
+	return buf, true
 }
 
 func writeErr(w io.Writer, err string) {

@@ -16,6 +16,10 @@ import (
 type Event struct {
 	kind Kind
 
+	// set to true for non-last chunks of a split batch, so pipeline.finalize()
+	// skips input.Commit() and Event.Offset is committed only once
+	skipInputCommit bool
+
 	children []*Event
 
 	Root *insaneJSON.Root
@@ -116,6 +120,7 @@ func (e *Event) reset() {
 	e.stream = nil
 	e.children = e.children[:0]
 	e.kind = EventKindRegular
+	e.skipInputCommit = false
 }
 
 func (e *Event) StreamNameBytes() []byte {

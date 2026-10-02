@@ -1,6 +1,8 @@
 package pipeline
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/ozontech/file.d/decoder"
@@ -355,15 +357,83 @@ func TestExtractJSONArrElements(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			elems, split := extractJSONArrElements([]byte(tt.input), tt.fieldPath)
+			buf, split := extractJSONArrElements([]byte(tt.input), tt.fieldPath)
 			require.Equal(t, tt.wantSplit, split)
 			if !tt.wantSplit {
 				return
 			}
 
-			require.Equal(t, len(tt.wantElems), len(elems))
+			require.Equal(t, len(tt.wantElems), len(buf.Elements))
 			for i := range tt.wantElems {
-				require.JSONEq(t, tt.wantElems[i], string(elems[i]))
+				require.JSONEq(t, tt.wantElems[i], string(buf.Elements[i]))
+			}
+		})
+	}
+}
+
+func BenchmarkExtractJSONArrElements(b *testing.B) {
+	buildData := func(n int, splitFields ...string) []byte {
+		var sb strings.Builder
+		for _, sf := range splitFields {
+			fmt.Fprintf(&sb, `{%q:`, sf)
+		}
+		sb.WriteByte('[')
+
+		for i := range n {
+			if i > 0 {
+				sb.WriteByte(',')
+			}
+			fmt.Fprintf(&sb, `{"i":%d,"m":"message-%d"}`, i, i)
+		}
+		sb.WriteByte(']')
+
+		for range splitFields {
+			sb.WriteByte('}')
+		}
+		return []byte(sb.String())
+	}
+
+	tests := []struct {
+		name        string
+		data        []byte
+		splitFields []string
+	}{
+		{
+			name: "root/10",
+			data: buildData(10),
+		},
+		{
+			name: "root/100",
+			data: buildData(100),
+		},
+		{
+			name: "root/1000",
+			data: buildData(1000),
+		},
+		{
+			name:        "nested/10",
+			data:        buildData(10, "data"),
+			splitFields: []string{"data"},
+		},
+		{
+			name:        "nested/100",
+			data:        buildData(100, "data"),
+			splitFields: []string{"data"},
+		},
+		{
+			name:        "nested/1000",
+			data:        buildData(1000, "data"),
+			splitFields: []string{"data"},
+		},
+	}
+
+	for _, tt := range tests {
+		b.Run(tt.name, func(b *testing.B) {
+			for b.Loop() {
+				buf, split := extractJSONArrElements(tt.data, tt.splitFields)
+				if split {
+					buf.Reset()
+				}
 			}
 		})
 	}
