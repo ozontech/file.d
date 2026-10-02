@@ -1,0 +1,14 @@
+pipelines:
+  file_file_split:
+    settings:
+      decoder: json
+      split_json_array: true
+      split_json_array_field: data
+    input:
+      type: file
+      persistence_mode: async
+      watching_dir: SOME_DIR
+      offsets_file: SOME_FILE
+      offsets_op: reset
+    output:
+      type: file

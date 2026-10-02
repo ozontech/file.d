@@ -1,6 +1,8 @@
 package pipeline
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/ozontech/file.d/decoder"
@@ -300,6 +302,139 @@ func TestSuggestDecoder(t *testing.T) {
 			p := New("file_d", tCase.settings, prometheus.NewPedanticRegistry(), zap.NewNop())
 			p.SuggestDecoder(tCase.suggestType)
 			require.Equal(t, tCase.expectedType, p.decoderType)
+		})
+	}
+}
+
+func TestExtractJSONArrElements(t *testing.T) {
+	tests := []struct {
+		name      string
+		input     string
+		fieldPath []string
+		wantSplit bool
+		wantElems []string
+	}{
+		{
+			name:      "root array of objects",
+			input:     `[{"message1":"value1"},{"message2":"value2"},{"message3":"value3"}]`,
+			wantSplit: true,
+			wantElems: []string{
+				`{"message1":"value1"}`,
+				`{"message2":"value2"}`,
+				`{"message3":"value3"}`,
+			},
+		},
+		{
+			name:      "nested array but non-splited",
+			input:     `{"data":[{"message1":"value1"},{"message2":"value2"},{"message3":"value3"}], "other-field": "other-value"}`,
+			wantSplit: false,
+		},
+		{
+			name:      "nested array by single-level fieldPath",
+			input:     `{"data":[{"message1":"value1"},{"message2":"value2"},{"message3":"value3"}], "other-field": "other-value"}`,
+			wantSplit: true,
+			fieldPath: []string{"data"},
+			wantElems: []string{
+				`{"message1":"value1"}`,
+				`{"message2":"value2"}`,
+				`{"message3":"value3"}`,
+			},
+		},
+		{
+			name:      "nested array by multi-level fieldPath",
+			input:     `{"something":{"data":[{"message1":"value1"},{"message2":"value2"},{"message3":"value3"}]}, "other-field": "other-value"}`,
+			wantSplit: true,
+			fieldPath: []string{"something", "data"},
+			wantElems: []string{
+				`{"message1":"value1"}`,
+				`{"message2":"value2"}`,
+				`{"message3":"value3"}`,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			buf, split := extractJSONArrElements([]byte(tt.input), tt.fieldPath)
+			require.Equal(t, tt.wantSplit, split)
+			if !tt.wantSplit {
+				return
+			}
+
+			require.Equal(t, len(tt.wantElems), len(buf.Elements))
+			for i := range tt.wantElems {
+				require.JSONEq(t, tt.wantElems[i], string(buf.Elements[i]))
+			}
+		})
+	}
+}
+
+func BenchmarkExtractJSONArrElements(b *testing.B) {
+	buildData := func(n int, splitFields ...string) []byte {
+		var sb strings.Builder
+		for _, sf := range splitFields {
+			fmt.Fprintf(&sb, `{%q:`, sf)
+		}
+		sb.WriteByte('[')
+
+		for i := range n {
+			if i > 0 {
+				sb.WriteByte(',')
+			}
+			fmt.Fprintf(&sb, `{"i":%d,"m":"message-%d"}`, i, i)
+		}
+		sb.WriteByte(']')
+
+		for range splitFields {
+			sb.WriteByte('}')
+		}
+		return []byte(sb.String())
+	}
+
+	tests := []struct {
+		name        string
+		data        []byte
+		splitFields []string
+	}{
+		{
+			name: "root/10",
+			data: buildData(10),
+		},
+		{
+			name: "root/100",
+			data: buildData(100),
+		},
+		{
+			name: "root/1000",
+			data: buildData(1000),
+		},
+		{
+			name:        "nested/10",
+			data:        buildData(10, "data"),
+			splitFields: []string{"data"},
+		},
+		{
+			name:        "nested/100",
+			data:        buildData(100, "data"),
+			splitFields: []string{"data"},
+		},
+		{
+			name:        "nested/1000",
+			data:        buildData(1000, "data"),
+			splitFields: []string{"data"},
+		},
+	}
+
+	for _, tt := range tests {
+		b.Run(tt.name, func(b *testing.B) {
+			for b.Loop() {
+				buf, split := extractJSONArrElements(tt.data, tt.splitFields)
+				if split {
+					buf.Reset()
+				}
+			}
 		})
 	}
 }

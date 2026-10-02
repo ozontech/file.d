@@ -108,6 +108,18 @@ Whether to fatal on decoding error.
 
 <br>
 
+**`split_json_array`** *`bool`* *`default=false`*
+
+Splitting of incoming JSON arrays into separate events before event pool allocation. Each array element becomes its own event. Applies only when the pipeline decoder is `json`.
+
+<br>
+    
+**`split_json_array_field`** *`string`*
+
+Path to the JSON array of objects. Alternative to the `split` action plugin, applied before event pool allocation. Only used together with `split_json_array: true`.
+
+<br>
+    
 **`metric_hold_duration`** *`string`* *`default=30m`* 
 
 The amount of time the metric can be idle until it is deleted. Used for deleting rarely updated metrics to save metrics storage resources. The value must be passed in format of duration (`<number>(ms|s|m|h)`).

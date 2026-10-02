@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/go-faster/jx"
 	"github.com/ozontech/file.d/decoder"
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/metric"
@@ -42,6 +43,7 @@ const (
 	DefaultMetricHoldDuration        = time.Minute * 30
 	DefaultMetaCacheSize             = 1024
 	DefaultMetricMaxLabelValueLength = 0
+	DefaultSplitJSONArray            = false
 
 	EventSeqIDError = uint64(0)
 
@@ -158,6 +160,8 @@ type Settings struct {
 	CutOffEventByLimitField string
 	StreamField             string
 	IsStrict                bool
+	SplitJSONArray          bool
+	SplitJSONArrayField     []string
 	Pool                    PoolType
 	Metric                  *MetricSettings
 }
@@ -402,9 +406,8 @@ func (p *Pipeline) GetOutput() OutputPlugin {
 // In decodes message and passes it to event stream.
 func (p *Pipeline) In(sourceID SourceID, sourceName string, offsets Offsets, bytes []byte, isNewSource bool, meta metadata.MetaData) (seqID uint64) {
 	var (
-		ok              bool
-		cutoff          bool
-		antispamSampled bool
+		ok     bool
+		cutoff bool
 	)
 	// don't process mud.
 	bytes, cutoff, ok = p.checkInputBytes(bytes, sourceName, meta)
@@ -439,6 +442,12 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offsets Offsets, byt
 		}
 	}
 
+	var (
+		checkSourceID   string
+		checkSourceName string
+		eventTime       time.Time
+	)
+
 	// Skip IsSpam for partial logs is necessary to avoid the case
 	// when some parts of a large event have got into the ban,
 	// thereby cutting off a piece of the event.
@@ -447,16 +456,13 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offsets Offsets, byt
 	// The event is Partial if it is larger than the driver configuration.
 	// For example, for containerd this setting is called max_container_log_line_size
 	// https://github.com/containerd/containerd/blob/f7f2be732159a411eae46b78bfdb479b133a823b/pkg/cri/config/config.go#L263-L266
-	if !row.IsPartial && p.settings.Antispam.Threshold >= 0 {
+	antispamEnabled := !row.IsPartial && p.settings.Antispam.Threshold >= 0
+	if antispamEnabled {
 		streamOffset := offsets.ByStream(string(row.Stream))
-		currentOffset := offsets.current
-
-		if streamOffset > 0 && currentOffset < streamOffset {
+		if streamOffset > 0 && offsets.current < streamOffset {
 			return EventSeqIDError
 		}
 
-		var checkSourceID string
-		var checkSourceName string
 		if p.settings.SourceNameMetaField == "" {
 			checkSourceID = strconv.FormatUint(uint64(sourceID), 10)
 			checkSourceName = sourceName
@@ -472,116 +478,54 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offsets Offsets, byt
 			}
 		}
 
-		var eventTime time.Time
 		if len(row.Time) > 0 {
 			eventTime, err = time.Parse("2006-01-02T15:04:05.999999999Z", string(row.Time))
 			if err != nil {
 				p.Error(fmt.Sprintf("cannot parse raw time %s: %v", row.Time, err))
 			}
 		}
+	}
 
-		switch p.antispamer.IsSpam(checkSourceID, checkSourceName, isNewSource, bytes, eventTime, meta) {
-		case antispam.Dropped:
-			return EventSeqIDError
-		case antispam.Sampled:
-			antispamSampled = true
+	chunks := [][]byte{bytes}
+	if p.settings.SplitJSONArray && dec == decoder.JSON {
+		if buf, split := extractJSONArrElements(bytes, p.settings.SplitJSONArrayField); split {
+			chunks = buf.Elements
+			defer buf.Reset()
 		}
 	}
 
-	p.inputEvents.Inc()
-	p.inputSize.Add(int64(length))
-
-	now := time.Now()
-	event := p.eventPool.get(len(bytes))
-	p.eventPoolLatency.Observe(time.Since(now).Seconds())
-
-	err = nil
-	if !(dec == decoder.JSON || dec == decoder.PROTOBUF) {
-		_ = event.Root.DecodeString("{}")
-	}
-	switch dec {
-	case decoder.JSON, decoder.NGINX_ERROR, decoder.PROTOBUF,
-		decoder.SYSLOG_RFC3164, decoder.SYSLOG_RFC5424, decoder.CSV:
-		err = p.decoder.DecodeToJson(event.Root, bytes)
-	case decoder.RAW:
-		if bytes[len(bytes)-1] == '\n' {
-			event.Root.AddFieldNoAlloc(event.Root, "message").MutateToBytesCopy(event.Root, bytes[:len(bytes)-1])
-		} else {
-			event.Root.AddFieldNoAlloc(event.Root, "message").MutateToBytesCopy(event.Root, bytes)
-		}
-	case decoder.CRI:
-		event.Root.AddFieldNoAlloc(event.Root, "log").MutateToBytesCopy(event.Root, row.Log)
-		event.Root.AddFieldNoAlloc(event.Root, "time").MutateToBytesCopy(event.Root, row.Time)
-		event.Root.AddFieldNoAlloc(event.Root, "stream").MutateToBytesCopy(event.Root, row.Stream)
-	case decoder.POSTGRES:
-		err = decoder.DecodePostgresToJson(event.Root, bytes)
-	default:
-		p.logger.Panic("unknown decoder", zap.Int("decoder", int(dec)))
+	params := &chunkParams{
+		sourceID:   sourceID,
+		sourceName: sourceName,
+		offsets:    offsets,
+		meta:       meta,
+		cutoff:     cutoff,
+		dec:        dec,
+		row:        row,
 	}
 
-	if err != nil {
-		level := zapcore.ErrorLevel
-		if p.settings.IsStrict {
-			level = zapcore.FatalLevel
-		}
+	lastIdx := len(chunks) - 1
 
-		p.logger.Log(level, "wrong log format", zap.Error(err),
-			zap.Int64("offset", offsets.current),
-			zap.Int("length", length),
-			zap.Uint64("source", uint64(sourceID)),
-			zap.String("source_name", sourceName),
-			zap.ByteString("log", bytes))
-
-		// Can't process event, return to pool.
-		p.eventPool.back(event)
-		return EventSeqIDError
-	}
-
-	if len(meta) > 0 {
-		if event.Root.IsArray() {
-			nodeArray := event.Root.AsArray()
-			for _, elem := range nodeArray {
-				if elem.IsObject() {
-					for k, v := range meta {
-						elem.AddField(k).MutateToString(v)
-					}
-				}
+	var lastSeqID uint64
+	for i, chunk := range chunks {
+		params.antispamSampled = false
+		if antispamEnabled {
+			switch p.antispamer.IsSpam(checkSourceID, checkSourceName, isNewSource, bytes, eventTime, meta) {
+			case antispam.Dropped:
+				isNewSource = false
+				continue
+			case antispam.Sampled:
+				params.antispamSampled = true
 			}
-		} else {
-			for k, v := range meta {
-				CreateNestedField(event.Root, []string{k}).MutateToString(v)
-			}
-		}
-	}
-	if cutoff && p.settings.CutOffEventByLimitField != "" {
-		event.Root.AddFieldNoAlloc(event.Root, p.settings.CutOffEventByLimitField).MutateToBool(true)
-	}
-	if antispamSampled {
-		// cfg is always non-nil here: antispamSampled is set only when the sampler is configured.
-		cfg := p.settings.Antispam.Sampler
-		if cfg.MarkerField != "" {
-			event.Root.AddFieldNoAlloc(event.Root, cfg.MarkerField).MutateToBool(true)
+			isNewSource = false
 		}
 
-		if sm := p.antispamer.SamplerMetric(); sm != nil {
-			values := make([]string, 0, len(cfg.MetricLabels))
-			for _, path := range cfg.MetricLabels {
-				v := "not_set"
-				if node := event.Root.Dig(path); node != nil {
-					v = node.AsString()
-				}
-				values = append(values, v)
-			}
-			sm.WithLabelValues(values...).Inc()
+		params.isLastChunk = i == lastIdx
+		if id := p.streamChunk(params, chunk); id != EventSeqIDError {
+			lastSeqID = id
 		}
 	}
-
-	event.Offset = offsets.current
-	event.SourceID = sourceID
-	event.SourceName = sourceName
-	event.streamName = DefaultStreamName
-
-	return p.streamEvent(event)
+	return lastSeqID
 }
 
 func (p *Pipeline) checkInputBytes(bytes []byte, sourceName string, meta metadata.MetaData) ([]byte, bool, bool) {
@@ -611,6 +555,121 @@ func (p *Pipeline) checkInputBytes(bytes []byte, sourceName string, meta metadat
 	}
 
 	return bytes, false, true
+}
+
+// values shared by all chunks of one In call.
+// isLast is the only field that changes between chunks
+type chunkParams struct {
+	dec             decoder.Type
+	row             decoder.CRIRow
+	sourceID        SourceID
+	sourceName      string
+	offsets         Offsets
+	meta            metadata.MetaData
+	cutoff          bool
+	antispamSampled bool
+	isLastChunk     bool
+}
+
+func (p *Pipeline) streamChunk(params *chunkParams, chunk []byte) uint64 {
+	length := len(chunk)
+
+	p.inputEvents.Inc()
+	p.inputSize.Add(int64(length))
+
+	now := time.Now()
+	event := p.eventPool.get(len(chunk))
+	p.eventPoolLatency.Observe(time.Since(now).Seconds())
+
+	var err error
+	if !(params.dec == decoder.JSON || params.dec == decoder.PROTOBUF) {
+		_ = event.Root.DecodeString("{}")
+	}
+	switch params.dec {
+	case decoder.JSON, decoder.NGINX_ERROR, decoder.PROTOBUF,
+		decoder.SYSLOG_RFC3164, decoder.SYSLOG_RFC5424, decoder.CSV:
+		err = p.decoder.DecodeToJson(event.Root, chunk)
+	case decoder.RAW:
+		if chunk[len(chunk)-1] == '\n' {
+			event.Root.AddFieldNoAlloc(event.Root, "message").MutateToBytesCopy(event.Root, chunk[:len(chunk)-1])
+		} else {
+			event.Root.AddFieldNoAlloc(event.Root, "message").MutateToBytesCopy(event.Root, chunk)
+		}
+	case decoder.CRI:
+		event.Root.AddFieldNoAlloc(event.Root, "log").MutateToBytesCopy(event.Root, params.row.Log)
+		event.Root.AddFieldNoAlloc(event.Root, "time").MutateToBytesCopy(event.Root, params.row.Time)
+		event.Root.AddFieldNoAlloc(event.Root, "stream").MutateToBytesCopy(event.Root, params.row.Stream)
+	case decoder.POSTGRES:
+		err = decoder.DecodePostgresToJson(event.Root, chunk)
+	default:
+		p.logger.Panic("unknown decoder", zap.Int("decoder", int(params.dec)))
+	}
+
+	if err != nil {
+		level := zapcore.ErrorLevel
+		if p.settings.IsStrict {
+			level = zapcore.FatalLevel
+		}
+
+		p.logger.Log(level, "wrong log format", zap.Error(err),
+			zap.Int64("offset", params.offsets.current),
+			zap.Int("length", length),
+			zap.Uint64("source", uint64(params.sourceID)),
+			zap.String("source_name", params.sourceName),
+			zap.ByteString("log", chunk))
+
+		// Can't process event, return to pool.
+		p.eventPool.back(event)
+		return EventSeqIDError
+	}
+
+	if len(params.meta) > 0 {
+		if event.Root.IsArray() {
+			nodeArray := event.Root.AsArray()
+			for _, elem := range nodeArray {
+				if elem.IsObject() {
+					for k, v := range params.meta {
+						elem.AddField(k).MutateToString(v)
+					}
+				}
+			}
+		} else {
+			for k, v := range params.meta {
+				CreateNestedField(event.Root, []string{k}).MutateToString(v)
+			}
+		}
+	}
+	if params.cutoff && p.settings.CutOffEventByLimitField != "" {
+		event.Root.AddFieldNoAlloc(event.Root, p.settings.CutOffEventByLimitField).MutateToBool(true)
+	}
+
+	if params.antispamSampled {
+		// cfg is always non-nil here: antispamSampled is set only when the sampler is configured.
+		cfg := p.settings.Antispam.Sampler
+		if cfg.MarkerField != "" {
+			event.Root.AddFieldNoAlloc(event.Root, cfg.MarkerField).MutateToBool(true)
+		}
+
+		if sm := p.antispamer.SamplerMetric(); sm != nil {
+			values := make([]string, 0, len(cfg.MetricLabels))
+			for _, path := range cfg.MetricLabels {
+				v := "not_set"
+				if node := event.Root.Dig(path); node != nil {
+					v = node.AsString()
+				}
+				values = append(values, v)
+			}
+			sm.WithLabelValues(values...).Inc()
+		}
+	}
+
+	event.Offset = params.offsets.current
+	event.SourceID = params.sourceID
+	event.SourceName = params.sourceName
+	event.streamName = DefaultStreamName
+	event.skipInputCommit = !params.isLastChunk
+
+	return p.streamEvent(event)
 }
 
 func (p *Pipeline) streamEvent(event *Event) uint64 {
@@ -656,7 +715,9 @@ func (p *Pipeline) finalize(event *Event, notifyInput bool, backEvent bool) {
 	}
 
 	if notifyInput {
-		p.input.Commit(event)
+		if !event.skipInputCommit {
+			p.input.Commit(event)
+		}
 		p.outputEvents.Inc()
 		p.outputSize.Add(int64(event.Size))
 	}
@@ -1064,6 +1125,74 @@ func (p *Pipeline) serveActionSample(actionIndex int) func(http.ResponseWriter, 
 			writeErr(w, "Timeout while try to display an event before and after the action processing.")
 		}
 	}
+}
+
+type chunksBuffer struct {
+	Elements [][]byte
+}
+
+func (b *chunksBuffer) Reset() {
+	b.Elements = b.Elements[:0]
+	chunkBufferPool.Put(b)
+}
+
+var chunkBufferPool = sync.Pool{
+	New: func() any {
+		return &chunksBuffer{Elements: make([][]byte, 0, 128)} // мб побольше или меньше
+	},
+}
+
+func extractJSONArrElements(data []byte, fieldPath []string) (*chunksBuffer, bool) {
+	d := jx.DecodeBytes(data)
+
+	for _, key := range fieldPath {
+		objIter, err := d.ObjIter()
+		if err != nil {
+			return nil, false
+		}
+
+		var found bool
+		for objIter.Next() {
+			if string(objIter.Key()) == key {
+				found = true
+				break
+			}
+			if err := d.Skip(); err != nil {
+				return nil, false
+			}
+		}
+
+		if !found {
+			return nil, false
+		}
+	}
+
+	arrIter, err := d.ArrIter()
+	if err != nil {
+		return nil, false
+	}
+
+	buf := chunkBufferPool.Get().(*chunksBuffer)
+	for arrIter.Next() {
+		raw, err := d.Raw()
+		if err != nil {
+			buf.Reset()
+			return nil, false
+		}
+
+		buf.Elements = append(buf.Elements, []byte(raw))
+	}
+
+	if err := arrIter.Err(); err != nil {
+		buf.Reset()
+		return nil, false
+	}
+	if len(buf.Elements) == 0 {
+		buf.Reset()
+		return nil, false
+	}
+
+	return buf, true
 }
 
 func writeErr(w io.Writer, err string) {

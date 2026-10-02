@@ -14,6 +14,7 @@ import (
 	"github.com/ozontech/file.d/e2e/file_elasticsearch"
 	"github.com/ozontech/file.d/e2e/file_es_split"
 	"github.com/ozontech/file.d/e2e/file_file"
+	"github.com/ozontech/file.d/e2e/file_file_split"
 	"github.com/ozontech/file.d/e2e/file_loki"
 	"github.com/ozontech/file.d/e2e/file_socket"
 	"github.com/ozontech/file.d/e2e/http_file"
@@ -121,6 +122,16 @@ func TestE2EStabilityWorkCase(t *testing.T) {
 				RetTime: "1s",
 			},
 			cfgPath: "./file_file/config.yml",
+		},
+		{
+			name: "file_file_split",
+			e2eTest: &file_file_split.Config{
+				Count:     5,
+				Lines:     50,
+				BatchSize: 10,
+				RetTime:   "1s",
+			},
+			cfgPath: "./file_file_split/config.yml",
 		},
 		{
 			name: "http_file",
