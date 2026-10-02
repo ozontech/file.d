@@ -3,9 +3,8 @@ package antispam
 import (
 	"fmt"
 	"sync"
-	"time"
-
 	"sync/atomic"
+	"time"
 
 	"github.com/ozontech/file.d/cfg/matchrule"
 	"github.com/ozontech/file.d/logger"

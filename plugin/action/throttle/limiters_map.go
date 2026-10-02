@@ -9,9 +9,9 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
-	"go.uber.org/atomic"
 	"go.uber.org/zap"
 
 	"github.com/ozontech/file.d/logger"
@@ -43,10 +43,12 @@ type limiterWithGen struct {
 }
 
 func newLimiterWithGen(lim limiter, gen int64) *limiterWithGen {
-	return &limiterWithGen{
+	lwg := &limiterWithGen{
 		limiter: lim,
-		gen:     atomic.NewInt64(gen),
+		gen:     &atomic.Int64{},
 	}
+	lwg.gen.Store(gen)
+	return lwg
 }
 
 // limiterConfig configuration for creation of new limiters.
@@ -114,7 +116,7 @@ func newLimitersMap(lmCfg limitersMapConfig, redisOpts *xredis.Options) *limiter
 		ctx:         lmCfg.ctx,
 		lims:        make(map[string]*limiterWithGen),
 		mu:          &sync.RWMutex{},
-		activeTasks: *atomic.NewUint32(0),
+		activeTasks: atomic.Uint32{},
 		curGen:      nowTs,
 		limitersExp: lmCfg.limitersExpiration.Microseconds(),
 		logger:      lmCfg.logger,

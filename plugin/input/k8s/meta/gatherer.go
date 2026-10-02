@@ -9,11 +9,11 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/ozontech/file.d/logger"
-	"go.uber.org/atomic"
 	"go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -71,7 +71,7 @@ var (
 	controller cache.Controller
 
 	canUpdateMetaData     atomic.Bool
-	metaLastAvailableTime atomic.Time
+	metaLastAvailableTime atomic.Value               // stores time.Time
 	expiredItems          = make([]*MetaItem, 0, 16) // temporary list of expired items
 
 	informerStop    = make(chan struct{}, 1)
@@ -206,7 +206,7 @@ func initInformer() {
 			pod := obj.(*corev1.Pod)
 			PutMeta(pod)
 			deletedPodsCache.Add(PodName(pod.Name), true)
-			deletedPodsCounter.Inc()
+			deletedPodsCounter.Add(1)
 		},
 	})
 	if err != nil {
@@ -330,7 +330,7 @@ func cleanUpItems(items []*MetaItem) {
 	defer metaDataMu.Unlock()
 
 	for _, item := range items {
-		expiredItemsCounter.Inc()
+		expiredItemsCounter.Add(1)
 		delete(MetaData.PodMeta[item.Namespace][item.PodName], item.ContainerID)
 
 		if len(MetaData.PodMeta[item.Namespace][item.PodName]) == 0 {
@@ -365,7 +365,7 @@ func GetPodMeta(ns Namespace, pod PodName, cid ContainerID) (bool, *podMeta) {
 			return success, podMeta
 		}
 
-		if !canUpdateMetaData.Load() && time.Since(metaLastAvailableTime.Load()) > metaWaitAvailabilityTimeout {
+		if !canUpdateMetaData.Load() && time.Since(metaLastAvailableTime.Load().(time.Time)) > metaWaitAvailabilityTimeout {
 			return success, podMeta
 		}
 
@@ -431,7 +431,7 @@ func PutMeta(podData *corev1.Pod) {
 		}
 	}
 
-	metaAddedCounter.Inc()
+	metaAddedCounter.Add(1)
 }
 
 // putContainerMeta fullContainerID must be in format XXX://ID, eg docker://4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0
