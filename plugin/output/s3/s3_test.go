@@ -32,6 +32,12 @@ var (
 	fileName atomic.Value // stores string
 )
 
+func init() {
+	// atomic.Value returns nil until the first Store, so make Load().(string) safe
+	// even if no test stored a file name yet.
+	fileName.Store("")
+}
+
 func testFactory(objStoreF objStoreFactory) (pipeline.AnyPlugin, pipeline.AnyConfig) {
 	return &testS3Plugin{objStoreF: objStoreF}, &Config{}
 }
