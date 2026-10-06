@@ -28,14 +28,14 @@ func (m *Mode) UnmarshalJSON(i []byte) error {
 }
 
 const (
-	ModePrefix Mode = iota
-	ModeContains
+	ModeContains Mode = iota
+	ModePrefix
 	ModeSuffix
 )
 
 var (
-	modePrefixBytes   = []byte(`"prefix"`)
 	modeContainsBytes = []byte(`"contains"`)
+	modePrefixBytes   = []byte(`"prefix"`)
 	modeSuffixBytes   = []byte(`"suffix"`)
 )
 
@@ -48,7 +48,7 @@ type Rule struct {
 	// > @3@4@5@6
 	// >
 	// > Matching mode. Allowed modes: `prefix`, `contains`, `suffix`. Defaults to `contains`.
-	Mode Mode `json:"mode"` // *
+	Mode Mode `json:"mode" default:"contains"` // *
 
 	// > @3@4@5@6
 	// >
