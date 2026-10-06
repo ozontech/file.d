@@ -37,28 +37,25 @@ type Antispammer struct {
 	unbanIterations     int
 	threshold           int
 	maintenanceInterval time.Duration
-	mu                  sync.RWMutex
-	sources             map[string]source
-	sourcesThresholds   map[string]int
-	exceptions          Exceptions
-	rules               Rules
-	sampler             *Sampler
 
-	logger *zap.Logger
+	mu                sync.RWMutex
+	sources           map[string]source
+	sourcesThresholds map[string]int
+
+	muPS                 sync.RWMutex
+	sourcesPartialStates map[string]partialState
+
+	exceptions Exceptions
+	rules      Rules
+
+	sampler *Sampler
+	logger  *zap.Logger
 
 	// antispammer metrics
 	activeMetric    *metric.Gauge
 	banMetric       *metric.GaugeVec
 	exceptionMetric *metric.CounterVec
 	samplerMetric   *metric.CounterVec
-}
-
-type source struct {
-	counter       *atomic.Int32
-	timestamp     *atomic.Int64
-	sampleUntil   *atomic.Int64
-	sampleCounter *atomic.Int64
-	name          string
 }
 
 type Options struct {
@@ -93,11 +90,16 @@ func NewAntispammer(o *Options) *Antispammer {
 		unbanIterations:     o.UnbanIterations,
 		threshold:           o.Threshold,
 		maintenanceInterval: o.MaintenanceInterval,
-		sources:             make(map[string]source),
-		sourcesThresholds:   make(map[string]int),
-		exceptions:          o.Exceptions,
-		rules:               o.Rules,
-		logger:              o.Logger,
+
+		sources:              make(map[string]source),
+		sourcesThresholds:    make(map[string]int),
+		sourcesPartialStates: make(map[string]partialState),
+
+		exceptions: o.Exceptions,
+		rules:      o.Rules,
+
+		logger: o.Logger,
+
 		activeMetric: o.MetricsController.RegisterGauge("antispam_active",
 			"Gauge indicates whether the antispam is enabled",
 		),
@@ -133,30 +135,85 @@ func NewAntispammer(o *Options) *Antispammer {
 	return a
 }
 
-func (a *Antispammer) IsSpam(id string, name string, isNewSource bool, event []byte, timeEvent time.Time, meta map[string]string) SpamResult {
-	if a.rules == nil && a.threshold == -1 {
+type source struct {
+	name          string
+	counter       *atomic.Int32
+	timestamp     *atomic.Int64
+	sampleUntil   *atomic.Int64
+	sampleCounter *atomic.Int64
+}
+
+type partialState struct {
+	isDropped bool
+	gen       int8
+}
+
+type SourceData struct {
+	ID    string
+	Name  string
+	IsNew bool
+}
+
+type EventData struct {
+	Bytes     []byte
+	Time      time.Time
+	IsPartial bool
+}
+
+func (a *Antispammer) IsSpam(sourceData SourceData, eventData EventData, meta map[string]string) SpamResult {
+	if a.rules == nil && a.threshold == thresholdUnlimited {
 		return Passed
+	}
+
+	a.muPS.RLock()
+	ps, has := a.sourcesPartialStates[sourceData.ID]
+	a.muPS.RUnlock()
+
+	// for a chain of partial events, we check only the first event and save it's state.
+	// for all other events from the chain, up to the last full one that completes this chain,
+	// the state of the first one is used.
+	if has {
+		isDropped := ps.isDropped
+		if !eventData.IsPartial {
+			// last event in chain, reset state
+			a.muPS.Lock()
+			delete(a.sourcesPartialStates, sourceData.ID)
+			a.muPS.Unlock()
+		}
+		if isDropped {
+			return Dropped
+		}
+		return Passed
+	}
+
+	res := func(r SpamResult) SpamResult {
+		if eventData.IsPartial {
+			a.muPS.Lock()
+			a.sourcesPartialStates[sourceData.ID] = partialState{isDropped: r == Dropped}
+			a.muPS.Unlock()
+		}
+		return r
 	}
 
 	threshold := a.threshold
 	if a.rules == nil {
 		for i := 0; i < len(a.exceptions); i++ {
 			e := &a.exceptions[i]
-			checkData := event
+			checkData := eventData.Bytes
 			if e.CheckSourceName {
-				checkData = []byte(name)
+				checkData = []byte(sourceData.Name)
 			}
 			if e.Match(checkData) {
 				if e.Name != "" {
 					a.exceptionMetric.WithLabelValues(e.Name).Inc()
 				}
-				return Passed
+				return res(Passed)
 			}
 		}
 	} else {
 		data := &antispamData{
-			eventBytes: event,
-			sourceName: name,
+			eventBytes: eventData.Bytes,
+			sourceName: sourceData.Name,
 			meta:       meta,
 		}
 		for _, rule := range a.rules {
@@ -166,9 +223,9 @@ func (a *Antispammer) IsSpam(id string, name string, isNewSource bool, event []b
 			switch rule.Threshold {
 			case thresholdUnlimited:
 				a.exceptionMetric.WithLabelValues(rule.Name).Inc()
-				return Passed
+				return res(Passed)
 			case thresholdBlocked:
-				return Dropped
+				return res(Dropped)
 			}
 
 			threshold = rule.Threshold
@@ -178,39 +235,39 @@ func (a *Antispammer) IsSpam(id string, name string, isNewSource bool, event []b
 
 	switch threshold {
 	case thresholdUnlimited:
-		return Passed
+		return res(Passed)
 	case thresholdBlocked:
-		return Dropped
+		return res(Dropped)
 	}
 
 	a.mu.RLock()
-	src, has := a.sources[id]
+	src, has := a.sources[sourceData.ID]
 	a.mu.RUnlock()
 
-	timeEventSeconds := timeEvent.UnixNano()
+	timeEventSeconds := eventData.Time.UnixNano()
 
 	if !has {
 		a.mu.Lock()
-		if newSrc, has := a.sources[id]; has {
+		if newSrc, has := a.sources[sourceData.ID]; has {
 			src = newSrc
 		} else {
 			src = source{
+				name:          sourceData.Name,
 				counter:       &atomic.Int32{},
 				timestamp:     &atomic.Int64{},
 				sampleUntil:   &atomic.Int64{},
 				sampleCounter: &atomic.Int64{},
-				name:          name,
 			}
 			src.timestamp.Add(timeEventSeconds)
-			a.sources[id] = src
-			a.sourcesThresholds[id] = threshold
+			a.sources[sourceData.ID] = src
+			a.sourcesThresholds[sourceData.ID] = threshold
 		}
 		a.mu.Unlock()
 	}
 
-	if isNewSource {
+	if sourceData.IsNew {
 		src.counter.Swap(0)
-		return Passed
+		return res(Passed)
 	}
 
 	x := src.counter.Load()
@@ -221,10 +278,10 @@ func (a *Antispammer) IsSpam(id string, name string, isNewSource bool, event []b
 	if x == int32(threshold) {
 		src.counter.Swap(int32(a.unbanIterations * threshold))
 		a.activeMetric.Set(1)
-		a.banMetric.WithLabelValues(name).Inc()
+		a.banMetric.WithLabelValues(sourceData.Name).Inc()
 		a.logger.Warn("source has been banned",
-			zap.Any("id", id), zap.String("name", name),
-			zap.Time("time_event", timeEvent), zap.Int64("diff_nsec", diff),
+			zap.String("id", sourceData.ID), zap.String("name", sourceData.Name),
+			zap.Time("time_event", eventData.Time), zap.Int64("diff_nsec", diff),
 			zap.Int64("maintenance_nsec", a.maintenanceInterval.Nanoseconds()),
 			zap.Int32("counter", src.counter.Load()),
 		)
@@ -232,15 +289,19 @@ func (a *Antispammer) IsSpam(id string, name string, isNewSource bool, event []b
 
 	if x >= int32(threshold) {
 		if a.sampler.isSampled(src) {
-			return Sampled
+			return res(Sampled)
 		}
-		return Dropped
+		return res(Dropped)
 	}
-	return Passed
+	return res(Passed)
 }
 
 func (a *Antispammer) Maintenance() {
 	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	psDone := make(chan struct{})
+	go a.maintenancePartialStates(psDone)
 
 	allUnbanned := true
 	for sourceID, source := range a.sources {
@@ -278,13 +339,33 @@ func (a *Antispammer) Maintenance() {
 		source.counter.Swap(int32(x))
 	}
 
+	<-psDone
+
 	if allUnbanned {
 		a.activeMetric.Set(0)
 	} else {
 		a.logger.Info("there are banned sources")
 	}
+}
 
-	a.mu.Unlock()
+const maxPartialStateGen = int8(2)
+
+func (a *Antispammer) maintenancePartialStates(done chan struct{}) {
+	a.muPS.Lock()
+	defer func() {
+		a.muPS.Unlock()
+		done <- struct{}{}
+	}()
+
+	for k, v := range a.sourcesPartialStates {
+		if v.gen >= maxPartialStateGen {
+			delete(a.sourcesPartialStates, k)
+			continue
+		}
+
+		v.gen++
+		a.sourcesPartialStates[k] = v
+	}
 }
 
 func (a *Antispammer) Dump() string {
