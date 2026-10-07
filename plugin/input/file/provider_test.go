@@ -3,11 +3,10 @@ package file
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"sync"
 	"testing"
 	"time"
-
-	"runtime"
 
 	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/metric"
@@ -164,6 +163,46 @@ func TestProviderWatcherPaths(t *testing.T) {
 			},
 			expectedPathes: Paths{
 				Include: []string{filepath.Join(currentDir, "/host*/*")},
+			},
+		},
+		{
+			name: "relative paths.include resolved to cwd",
+			config: &Config{
+				OffsetsFile: "offset.json",
+				Paths: Paths{
+					Include: []string{"./2025-12-16-cardinalty-sub-field/*-json.log"},
+					Exclude: []string{"./excluded/**"},
+				},
+			},
+			expectedPathes: Paths{
+				Include: []string{filepath.Join(currentDir, "2025-12-16-cardinalty-sub-field", "*-json.log")},
+				Exclude: []string{filepath.Join(currentDir, "excluded", "**")},
+			},
+		},
+		{
+			name: "absolute paths.include unchanged",
+			config: &Config{
+				OffsetsFile: "offset.json",
+				Paths: Paths{
+					Include: []string{"/var/log/access.log"},
+					Exclude: []string{"/var/log/payments/**"},
+				},
+			},
+			expectedPathes: Paths{
+				Include: []string{"/var/log/access.log"},
+				Exclude: []string{"/var/log/payments/**"},
+			},
+		},
+		{
+			name: "relative paths.include with leading glob",
+			config: &Config{
+				OffsetsFile: "offset.json",
+				Paths: Paths{
+					Include: []string{"**/*-json.log"},
+				},
+			},
+			expectedPathes: Paths{
+				Include: []string{filepath.Join(currentDir, "**", "*-json.log")},
 			},
 		},
 	}

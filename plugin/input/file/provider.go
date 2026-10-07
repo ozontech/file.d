@@ -217,6 +217,14 @@ func NewJobProvider(config *Config, metrics *metricCollection, sugLogger *zap.Su
 		}
 	}
 
+	currentDir, err := os.Getwd()
+	if err != nil {
+		jp.logger.Errorf("cannot get current dir: %s", err.Error())
+		return nil
+	}
+	config.Paths.Include = jp.resolvePathsToAbs(config.Paths.Include, currentDir)
+	config.Paths.Exclude = jp.resolvePathsToAbs(config.Paths.Exclude, currentDir)
+
 	jp.watcher = NewWatcher(
 		config.WatchingDir,
 		config.Paths,
@@ -227,6 +235,16 @@ func NewJobProvider(config *Config, metrics *metricCollection, sugLogger *zap.Su
 	)
 
 	return jp
+}
+
+func (jp *jobProvider) resolvePathsToAbs(paths []string, currentDir string) []string {
+	for i, pattern := range paths {
+		if filepath.IsAbs(pattern) {
+			continue
+		}
+		paths[i] = filepath.Join(currentDir, pattern)
+	}
+	return paths
 }
 
 func (jp *jobProvider) start() {
