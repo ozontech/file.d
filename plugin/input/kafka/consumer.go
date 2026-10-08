@@ -34,7 +34,7 @@ type splitConsume struct {
 	commitErrorsMetric     *metric.Counter
 	consumeErrorsMetric    *metric.Counter
 
-	mu    sync.Mutex
+	mu    sync.RWMutex
 	owned map[partitionTopic]struct{}
 }
 
@@ -107,8 +107,8 @@ func (s *splitConsume) stopConsumers(lost map[string][]int32) {
 }
 
 func (s *splitConsume) Owns(topic string, partition int32) bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	_, ok := s.owned[partitionTopic{topic, partition}]
 	return ok
 }
@@ -134,7 +134,9 @@ func (s *splitConsume) consume(ctx context.Context, cl *kgo.Client) {
 
 		fetches.EachPartition(func(p kgo.FetchTopicPartition) {
 			tp := partitionTopic{p.Topic, p.Partition}
+			s.mu.RLock()
 			consumer, ok := s.consumers[tp]
+			s.mu.RUnlock()
 			if !ok {
 				s.logger.Error("consumer not ready yet", zap.String("topic", p.Topic), zap.Int32("partiton", p.Partition))
 				return
