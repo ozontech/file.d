@@ -318,13 +318,14 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.InputPluginPa
 	}
 
 	p.s = &splitConsume{
-		consumers:              make(map[tp]*pconsumer),
+		consumers:              make(map[partitionTopic]*pconsumer),
 		bufferSize:             p.config.ChannelBufferSize,
 		maxConcurrentConsumers: p.config.MaxConcurrentConsumers,
 		idByTopic:              idByTopic,
 		controller:             p.controller,
 		logger:                 p.logger,
 		metaTemplater:          p.metaTemplater,
+		commitErrorsMetric:     p.commitErrorsMetric,
 		consumeErrorsMetric:    p.consumeErrorsMetric,
 	}
 
@@ -371,9 +372,14 @@ func (p *Plugin) Stop() {
 func (p *Plugin) Commit(event *pipeline.Event) {
 	index, partition := disassembleSourceID(event.SourceID)
 
+	topic := p.config.Topics[index]
+	if !p.s.Owns(topic, partition) {
+		return
+	}
+
 	offset := disassembleOffset(event.Offset)
 	offsets := map[string]map[int32]kgo.EpochOffset{
-		p.config.Topics[index]: {partition: offset},
+		topic: {partition: offset},
 	}
 	p.client.MarkCommitOffsets(offsets)
 }
@@ -389,13 +395,18 @@ func disassembleSourceID(sourceID pipeline.SourceID) (index int, partition int32
 	return
 }
 
+// assembleOffset packs the record offset and leader epoch into a single int64
+// by shifting the offset left by 16 bits and placing the epoch in the low 16
+// bits. The epoch is stored offset by +1 so that an absent epoch (LeaderEpoch
+// == -1) is representable: it decodes back to -1 via disassembleOffset.
+// This encoding is valid for -1 <= LeaderEpoch <= 65534.
 func assembleOffset(message *kgo.Record) int64 {
-	return message.Offset<<16 + int64(message.LeaderEpoch)
+	return message.Offset<<16 + int64(message.LeaderEpoch+1)
 }
 
 func disassembleOffset(assembledOffset int64) kgo.EpochOffset {
 	offset := assembledOffset >> 16
-	epoch := int32(assembledOffset & 0xFFFF)
+	epoch := int32(assembledOffset&0xFFFF) - 1
 
 	return kgo.EpochOffset{
 		Offset: offset + 1,
