@@ -2,6 +2,7 @@ package pipeline_test
 
 import (
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -10,7 +11,6 @@ import (
 	"github.com/ozontech/file.d/test"
 	insaneJSON "github.com/ozontech/insane-json"
 	"github.com/stretchr/testify/assert"
-	"go.uber.org/atomic"
 )
 
 type fakeOutputPluginController struct {

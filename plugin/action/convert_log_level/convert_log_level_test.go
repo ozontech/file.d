@@ -1,13 +1,13 @@
 package convert_log_level
 
 import (
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/test"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/atomic"
 )
 
 func TestDo(t *testing.T) {
@@ -228,12 +228,13 @@ func TestDo(t *testing.T) {
 			config := test.NewConfig(&tc.Config, nil)
 			p, input, output := test.NewPipelineMock(test.NewActionPluginStaticInfo(factory, config, pipeline.MatchModeAnd, nil, false))
 
-			outCounter := atomic.NewInt32(int32(len(tc.In)))
+			outCounter := &atomic.Int32{}
+			outCounter.Store(int32(len(tc.In)))
 
 			var outEvents []string
 			output.SetOutFn(func(e *pipeline.Event) {
 				outEvents = append(outEvents, e.Root.EncodeToString())
-				outCounter.Dec()
+				outCounter.Add(-1)
 			})
 
 			for _, log := range tc.In {

@@ -9,6 +9,7 @@ import (
 	"net/http/pprof"
 	"runtime"
 	"runtime/debug"
+	"sync/atomic"
 
 	"github.com/bitly/go-simplejson"
 	"github.com/ozontech/file.d/buildinfo"
@@ -20,7 +21,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"go.uber.org/atomic"
 )
 
 type FileD struct {
