@@ -21,16 +21,31 @@ func TestAssembleSourceID(t *testing.T) {
 }
 
 func TestAssembleOffset(t *testing.T) {
-	message := &kgo.Record{
-		LeaderEpoch: 27,
-		Offset:      237582035700,
+	tests := []struct {
+		name  string
+		epoch int32
+		off   int64
+	}{
+		{name: "regular epoch", epoch: 27, off: 237582035700},
+		{name: "no epoch", epoch: -1, off: 237582035700},
+		{name: "zero epoch", epoch: 0, off: 0},
+		{name: "max epoch", epoch: 65534, off: 12345},
+		{name: "high offset", epoch: 5, off: 1 << 40},
 	}
-	x := assembleOffset(message)
 
-	epochOffset := disassembleOffset(x)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			message := &kgo.Record{
+				LeaderEpoch: tt.epoch,
+				Offset:      tt.off,
+			}
 
-	assert.Equal(t, message.LeaderEpoch, epochOffset.Epoch, "values aren't equal")
-	assert.Equal(t, message.Offset+1, epochOffset.Offset, "values aren't equal")
+			epochOffset := disassembleOffset(assembleOffset(message))
+
+			assert.Equal(t, tt.epoch, epochOffset.Epoch, "epoch isn't equal")
+			assert.Equal(t, tt.off+1, epochOffset.Offset, "offset isn't equal")
+		})
+	}
 }
 
 func TestMetaInformationGetData(t *testing.T) {
