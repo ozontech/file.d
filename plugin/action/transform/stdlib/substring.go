@@ -65,9 +65,17 @@ func (before) Params() []Parameter {
 	}
 }
 
-func (before) Call(args map[string]core.Value) (core.Value, error) {
-	value := args["value"].(core.StringValue).V
-	sep := args["separator"].(core.StringValue).V
+func (b before) Call(args map[string]core.Value) (core.Value, error) {
+	return b.call(args["value"], args["separator"])
+}
+
+func (b before) CallIndexed(args []core.Value) (core.Value, error) {
+	return b.call(args[0], args[1])
+}
+
+func (before) call(valueArg, separatorArg core.Value) (core.Value, error) {
+	value := valueArg.(core.StringValue).V
+	sep := separatorArg.(core.StringValue).V
 
 	idx := strings.Index(value, sep)
 	if idx == -1 {

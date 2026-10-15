@@ -45,8 +45,17 @@ func (trimRight) Name() string { return "trim_right" }
 
 func (trimRight) Params() []Parameter { return trimParams("the end") }
 
-func (trimRight) Call(args map[string]core.Value) (core.Value, error) {
-	value, cutset := trimArgs(args)
+func (tr trimRight) Call(args map[string]core.Value) (core.Value, error) {
+	return tr.call(args["value"], args["cutset"])
+}
+
+func (tr trimRight) CallIndexed(args []core.Value) (core.Value, error) {
+	return tr.call(args[0], args[1])
+}
+
+func (trimRight) call(valueArg, cutsetArg core.Value) (core.Value, error) {
+	value := valueArg.(core.StringValue).V
+	cutset := cutsetArg.(core.StringValue).V
 	return core.StringValue{V: strings.TrimRight(value, cutset)}, nil
 }
 
