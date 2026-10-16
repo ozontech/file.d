@@ -24,16 +24,24 @@ type callPlanContext struct {
 	result        Value
 	err           error
 	fallbackCalls int
+	clearArgs     bool
 }
 
 func (c *callPlanContext) call(_ Position, args []Value) (Value, error) {
 	c.steps = append(c.steps, "call")
 	c.args = slices.Clone(args)
+	if c.clearArgs {
+		clear(args)
+	}
 	return c.result, c.err
 }
 
-func (c *callPlanContext) CallFunc(pos Position, _ string, args []Value, _ map[string]Value) (Value, error) {
+func (c *callPlanContext) CallFunc(pos Position, _ string, args []Value, named map[string]Value) (Value, error) {
 	c.fallbackCalls++
+	if len(named) > 0 {
+		// The test function declares its named parameters as first, second.
+		args = append(args, named["first"], named["second"])
+	}
 	return c.call(pos, args)
 }
 
@@ -41,6 +49,7 @@ func TestCallPlanMaterializesInSourceOrder(t *testing.T) {
 	tests := []struct {
 		name     string
 		prepared bool
+		named    bool
 		input    string
 		want     Value
 	}{
@@ -80,6 +89,45 @@ func TestCallPlanMaterializesInSourceOrder(t *testing.T) {
 			input:    `{"value":{"key":"original"}}`,
 			want:     ObjectValue{V: map[string]Value{"key": StringValue{V: "original"}}},
 		},
+		{
+			name:  "general named string",
+			named: true,
+			input: `{"value":"original"}`,
+			want:  StringValue{V: "original"},
+		},
+		{
+			name:     "prepared named string",
+			prepared: true,
+			named:    true,
+			input:    `{"value":"original"}`,
+			want:     StringValue{V: "original"},
+		},
+		{
+			name:  "general named array",
+			named: true,
+			input: `{"value":["original"]}`,
+			want:  ArrayValue{V: []Value{StringValue{V: "original"}}},
+		},
+		{
+			name:     "prepared named array",
+			prepared: true,
+			named:    true,
+			input:    `{"value":["original"]}`,
+			want:     ArrayValue{V: []Value{StringValue{V: "original"}}},
+		},
+		{
+			name:  "general named object",
+			named: true,
+			input: `{"value":{"key":"original"}}`,
+			want:  ObjectValue{V: map[string]Value{"key": StringValue{V: "original"}}},
+		},
+		{
+			name:     "prepared named object",
+			prepared: true,
+			named:    true,
+			input:    `{"value":{"key":"original"}}`,
+			want:     ObjectValue{V: map[string]Value{"key": StringValue{V: "original"}}},
+		},
 	}
 
 	for _, tt := range tests {
@@ -102,16 +150,62 @@ func TestCallPlanMaterializesInSourceOrder(t *testing.T) {
 					return StringValue{V: "second"}, nil
 				}}},
 			}}
+			slots := []int{0, 1}
+			wantArgs := []Value{tt.want, StringValue{V: "second"}}
+			if tt.named {
+				expr.Args[0].Name = "second"
+				expr.Args[1].Name = "first"
+				slots = []int{1, 0}
+				wantArgs = []Value{StringValue{V: "second"}, tt.want}
+			}
 			if tt.prepared {
-				expr.Plan = NewCallPlan([]int{0, 1}, make([]Value, 2), ctx.call)
+				expr.Plan = NewCallPlan(slots, make([]Value, 2), ctx.call)
 			}
 
 			value, err := expr.Eval(ctx)
 
 			require.NoError(t, err)
 			require.Equal(t, tt.want, value)
-			require.Equal(t, []Value{tt.want, StringValue{V: "second"}}, ctx.args)
+			require.Equal(t, wantArgs, ctx.args)
 			require.Equal(t, []string{"first", "second", "call"}, ctx.steps)
+		})
+	}
+}
+
+func TestCallPlanOwnsArgumentStorage(t *testing.T) {
+	tests := []struct {
+		name           string
+		changeMetadata bool
+		clearArgs      bool
+	}{
+		{name: "caller changes layout and defaults", changeMetadata: true},
+		{name: "callee clears invocation slots", clearArgs: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			ctx := &callPlanContext{result: NullValue{}, clearArgs: tt.clearArgs}
+			slots := []int{1}
+			defaults := []Value{StringValue{V: "default"}, nil}
+			expr := &CallExpr{
+				Node: n(),
+				Name: "storage",
+				Args: []Argument{{Value: &ConstExpr{V: StringValue{V: "input"}}}},
+				Plan: NewCallPlan(slots, defaults, ctx.call),
+			}
+			if tt.changeMetadata {
+				slots[0] = 0
+				defaults[0] = StringValue{V: "changed"}
+			}
+
+			for range 3 {
+				_, err := expr.Eval(ctx)
+
+				require.NoError(t, err)
+				require.Equal(t, []Value{StringValue{V: "default"}, StringValue{V: "input"}}, ctx.args)
+			}
 		})
 	}
 }
