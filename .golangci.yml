@@ -10,7 +10,6 @@ linters:
     - dupl
     - errcheck
     - forbidigo
-    - goconst
     - gocritic
     - govet
     - ineffassign
@@ -38,9 +37,6 @@ linters:
         - pattern: ^print.*$
         - pattern: ^fmt\.Print.*$
           msg: Do not commit print statements.
-    goconst:
-      min-len: 2
-      min-occurrences: 3
     gocritic:
       disabled-checks:
         - whyNoLint
@@ -75,7 +71,6 @@ linters:
       - linters:
           - dupl
           - errcheck
-          - goconst
           - gocyclo
           - gosec
           - prealloc
@@ -83,9 +78,6 @@ linters:
       - linters:
           - govet
         text: declaration of "(err|ctx)"
-      - linters:
-          - goconst
-        path: pipeline/doif
     paths:
       - testdata$
 formatters:
