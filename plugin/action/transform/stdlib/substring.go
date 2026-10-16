@@ -35,9 +35,17 @@ func (after) Params() []Parameter {
 	}
 }
 
-func (after) Call(args map[string]core.Value) (core.Value, error) {
-	value := args["value"].(core.StringValue).V
-	sep := args["separator"].(core.StringValue).V
+func (a after) Call(args map[string]core.Value) (core.Value, error) {
+	return a.call(args["value"], args["separator"])
+}
+
+func (a after) CallIndexed(args []core.Value) (core.Value, error) {
+	return a.call(args[0], args[1])
+}
+
+func (after) call(valueArg, separatorArg core.Value) (core.Value, error) {
+	value := valueArg.(core.StringValue).V
+	sep := separatorArg.(core.StringValue).V
 
 	idx := strings.Index(value, sep)
 	if idx == -1 {
@@ -65,9 +73,17 @@ func (before) Params() []Parameter {
 	}
 }
 
-func (before) Call(args map[string]core.Value) (core.Value, error) {
-	value := args["value"].(core.StringValue).V
-	sep := args["separator"].(core.StringValue).V
+func (b before) Call(args map[string]core.Value) (core.Value, error) {
+	return b.call(args["value"], args["separator"])
+}
+
+func (b before) CallIndexed(args []core.Value) (core.Value, error) {
+	return b.call(args[0], args[1])
+}
+
+func (before) call(valueArg, separatorArg core.Value) (core.Value, error) {
+	value := valueArg.(core.StringValue).V
+	sep := separatorArg.(core.StringValue).V
 
 	idx := strings.Index(value, sep)
 	if idx == -1 {
@@ -100,10 +116,18 @@ func (between) Params() []Parameter {
 	}
 }
 
-func (between) Call(args map[string]core.Value) (core.Value, error) {
-	value := args["value"].(core.StringValue).V
-	open := args["open"].(core.StringValue).V
-	closing := args["close"].(core.StringValue).V
+func (b between) Call(args map[string]core.Value) (core.Value, error) {
+	return b.call(args["value"], args["open"], args["close"])
+}
+
+func (b between) CallIndexed(args []core.Value) (core.Value, error) {
+	return b.call(args[0], args[1], args[2])
+}
+
+func (between) call(valueArg, openArg, closeArg core.Value) (core.Value, error) {
+	value := valueArg.(core.StringValue).V
+	open := openArg.(core.StringValue).V
+	closing := closeArg.(core.StringValue).V
 
 	start := strings.Index(value, open)
 	if start == -1 {

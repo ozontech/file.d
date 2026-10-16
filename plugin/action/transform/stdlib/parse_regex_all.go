@@ -47,11 +47,19 @@ func (parseRegexAll) Params() []Parameter {
 	}
 }
 
-func (parseRegexAll) Call(args map[string]core.Value) (core.Value, error) {
-	value := args["value"].(core.StringValue).V
-	re := args["pattern"].(core.RegexValue).V
-	group := int(args["group"].(core.IntegerValue).V)
-	limit := int(args["limit"].(core.IntegerValue).V)
+func (p parseRegexAll) Call(args map[string]core.Value) (core.Value, error) {
+	return p.call(args["value"], args["pattern"], args["group"], args["limit"])
+}
+
+func (p parseRegexAll) CallIndexed(args []core.Value) (core.Value, error) {
+	return p.call(args[0], args[1], args[2], args[3])
+}
+
+func (parseRegexAll) call(valueArg, patternArg, groupArg, limitArg core.Value) (core.Value, error) {
+	value := valueArg.(core.StringValue).V
+	re := patternArg.(core.RegexValue).V
+	group := int(groupArg.(core.IntegerValue).V)
+	limit := int(limitArg.(core.IntegerValue).V)
 
 	if group < 0 || group > re.NumSubexp() {
 		return core.NullValue{}, fmt.Errorf(

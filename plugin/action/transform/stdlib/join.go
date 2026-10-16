@@ -33,9 +33,17 @@ func (join) Params() []Parameter {
 	}
 }
 
-func (join) Call(args map[string]core.Value) (core.Value, error) {
-	elements := args["value"].(core.ArrayValue).V
-	separator := args["separator"].(core.StringValue).V
+func (j join) Call(args map[string]core.Value) (core.Value, error) {
+	return j.call(args["value"], args["separator"])
+}
+
+func (j join) CallIndexed(args []core.Value) (core.Value, error) {
+	return j.call(args[0], args[1])
+}
+
+func (join) call(valueArg, separatorArg core.Value) (core.Value, error) {
+	elements := valueArg.(core.ArrayValue).V
+	separator := separatorArg.(core.StringValue).V
 
 	parts := make([]string, len(elements))
 	for i, el := range elements {
