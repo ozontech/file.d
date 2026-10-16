@@ -63,9 +63,42 @@ func TestPrepareMatchesGeneralCalls(t *testing.T) {
 		},
 		{
 			name:   "mixed prepared and general calls",
-			source: `.out = trim_right(upcase(before(trim(.value, " "), "-")), "O")`,
+			source: `.out = trim_right(upcase(before(trim(to_string(.value), " "), "-")), "O")`,
 			input:  `{"value":" hello-world "}`,
 			want:   `{"value":" hello-world ","out":"HELL"}`,
+		},
+		{
+			name: "dynamic substring arguments",
+			source: `
+				.rest = after(after(.value, .separator), .separator)
+				.inner = between(.value, .open, .close)
+			`,
+			input: `{"value":"prefix [one] - two - three","separator":" - ","open":"[","close":"]"}`,
+			want:  `{"value":"prefix [one] - two - three","separator":" - ","open":"[","close":"]","rest":"three","inner":"one"}`,
+		},
+		{
+			name: "dynamic trims in loops and short circuit",
+			source: `
+				if after(.status, ":") == "ok" {
+					for i, item in .items {
+						.items[i] = upcase(trim_left(trim(item, .cutset), .prefix))
+					}
+				} else {
+					.out = between(null, "[", "]")
+				}
+				.skip = false && trim_to(null, "!") == ""
+				.keep = true || trim_to_left(null, "!") == ""
+			`,
+			input: `{"status":"state:ok","items":[" !!é! "," !я!! "],"cutset":" ","prefix":"!"}`,
+			want:  `{"status":"state:ok","items":["É!","Я!!"],"cutset":" ","prefix":"!","skip":false,"keep":true}`,
+		},
+		{
+			name: "dynamic trim_to delimiters",
+			source: `
+				.out = trim_to_right(trim_to_left(trim_to(.value, .marker), .open), .close)
+			`,
+			input: `{"value":"prefix |{a{b}c}| suffix","marker":"|","open":"{","close":"}"}`,
+			want:  `{"value":"prefix |{a{b}c}| suffix","marker":"|","open":"{","close":"}","out":"{a{b}c}"}`,
 		},
 		{
 			name: "conditions loops and short circuit",
@@ -172,6 +205,94 @@ func TestPrepareMatchesGeneralCalls(t *testing.T) {
 			err:    `function "trim_right": argument "value": expected string, got null`,
 		},
 		{
+			name:   "after wrong value type",
+			source: `.out = after(42, "-")`,
+			input:  `{}`,
+			want:   `{}`,
+			err:    `function "after": argument "value": expected string, got integer`,
+		},
+		{
+			name:   "after null separator",
+			source: `.out = after("a-b", null)`,
+			input:  `{}`,
+			want:   `{}`,
+			err:    `function "after": argument "separator": expected string, got null`,
+		},
+		{
+			name:   "between checks parameters in order",
+			source: `.out = between("[a]", null, false)`,
+			input:  `{}`,
+			want:   `{}`,
+			err:    `function "between": argument "open": expected string, got null`,
+		},
+		{
+			name:   "between checks third argument type",
+			source: `.out = between("[a]", "[", false)`,
+			input:  `{}`,
+			want:   `{}`,
+			err:    `function "between": argument "close": expected string, got bool`,
+		},
+		{
+			name:   "between third evaluation error precedes type checks",
+			source: `.out = between(42, null, 1 / 0)`,
+			input:  `{}`,
+			want:   `{}`,
+			err:    "division by zero",
+		},
+		{
+			name:   "trim null cutset",
+			source: `.out = trim("data", null)`,
+			input:  `{}`,
+			want:   `{}`,
+			err:    `function "trim": argument "cutset": expected string, got null`,
+		},
+		{
+			name:   "trim_left collection value",
+			source: `.out = trim_left(.value, " ")`,
+			input:  `{"value":{}}`,
+			want:   `{"value":{}}`,
+			err:    `function "trim_left": argument "value": expected string, got object`,
+		},
+		{
+			name:   "upcase missing value",
+			source: `.out = upcase(.missing)`,
+			input:  `{}`,
+			want:   `{}`,
+			err:    `function "upcase": argument "value": expected string, got null`,
+		},
+		{
+			name:   "trim_to null value",
+			source: `.out = trim_to(null, "|")`,
+			input:  `{}`,
+			want:   `{}`,
+			err:    `function "trim_to": argument "value": expected string, got null`,
+		},
+		{
+			name:   "trim_to_left wrong delimiter type",
+			source: `.out = trim_to_left("data", 42)`,
+			input:  `{}`,
+			want:   `{}`,
+			err:    `function "trim_to_left": argument "cutset": expected string, got integer`,
+		},
+		{
+			name:   "trim_to_right null delimiter",
+			source: `.out = trim_to_right("data", null)`,
+			input:  `{}`,
+			want:   `{}`,
+			err:    `function "trim_to_right": argument "cutset": expected string, got null`,
+		},
+		{
+			name: "partial writes before nested substring error",
+			source: `
+				.saved = upcase(trim(.value, " "))
+				.out = after(between(.value, "[", null), "-")
+				.after = "unreachable"
+			`,
+			input: `{"value":" [data] "}`,
+			want:  `{"value":" [data] ","saved":"[DATA]"}`,
+			err:   `function "between": argument "close": expected string, got null`,
+		},
+		{
 			name: "partial writes on error",
 			source: `
 				.saved = before("a-b", "-")
@@ -243,18 +364,27 @@ func (c *recordingCallContext) CallFunc(pos core.Position, name string, position
 func TestPrepareSelectsCallPath(t *testing.T) {
 	tests := []struct {
 		name     string
+		source   string
 		prepared bool
 		want     []string
 	}{
 		{
 			name:     "general calls",
+			source:   `before(trim_right(upcase("a-b!!"), "!"), "-")`,
 			prepared: false,
 			want:     []string{"upcase", "trim_right", "before"},
 		},
 		{
-			name:     "prepared calls with general upcase",
+			name:     "prepared calls",
+			source:   `before(trim_right(upcase("a-b!!"), "!"), "-")`,
 			prepared: true,
-			want:     []string{"upcase"},
+			want:     nil,
+		},
+		{
+			name:     "prepared calls with general to_string",
+			source:   `before(trim_right(upcase(to_string("a-b!!")), "!"), "-")`,
+			prepared: true,
+			want:     []string{"to_string"},
 		},
 	}
 
@@ -262,7 +392,7 @@ func TestPrepareSelectsCallPath(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			exprs := compileCalls(t, `before(trim_right(upcase("a-b!!"), "!"), "-")`, tt.prepared)
+			exprs := compileCalls(t, tt.source, tt.prepared)
 			ctx := &recordingCallContext{Context: runtime.NewContext(nil, stdlib.GetRegistry())}
 
 			value, err := exprs[0].Eval(ctx)
@@ -288,6 +418,21 @@ func TestPrepareValidationCompatibility(t *testing.T) {
 		{
 			name:   "too many arguments",
 			source: `before("x", "y", "z")`,
+			err:    "too many arguments",
+		},
+		{
+			name:   "missing after separator",
+			source: `after("value")`,
+			err:    `missing required argument "separator"`,
+		},
+		{
+			name:   "missing between closing delimiter",
+			source: `between("value", "[")`,
+			err:    `missing required argument "close"`,
+		},
+		{
+			name:   "too many upcase arguments",
+			source: `upcase("value", "extra")`,
 			err:    "too many arguments",
 		},
 		{
@@ -349,16 +494,25 @@ func TestPrepareValidationCompatibility(t *testing.T) {
 }
 
 func TestPreparedProgramConcurrentEvents(t *testing.T) {
-	exprs := compileCalls(t, `.out = before(trim_right(.value, "!"), "-")`, true)
+	exprs := compileCalls(t, `
+		value = trim(.value, " ")
+		value = trim_left(value, "!")
+		value = trim_to_right(value, "|")
+		value = trim_to_left(value, "|")
+		value = trim_to(value, "|")
+		value = between(value, "|", "|")
+		value = after(value, "prefix-")
+		.out = upcase(before(trim_right(value, "!"), "-"))
+	`, true)
 	for i := range 16 {
 		t.Run(fmt.Sprintf("worker_%d", i), func(t *testing.T) {
 			t.Parallel()
 
 			for j := range 20 {
-				input := fmt.Sprintf(`{"value":"%d:%d-rest!!"}`, i, j)
+				input := fmt.Sprintf(`{"value":" !!|prefix-%d:%d-rest|!! "}`, i, j)
 				_, event, err := runCalls(t, exprs, input)
 				require.NoError(t, err)
-				want := fmt.Sprintf(`{"value":"%d:%d-rest!!","out":"%d:%d"}`, i, j, i, j)
+				want := fmt.Sprintf(`{"value":" !!|prefix-%d:%d-rest|!! ","out":"%d:%d"}`, i, j, i, j)
 				require.JSONEq(t, want, event)
 			}
 		})

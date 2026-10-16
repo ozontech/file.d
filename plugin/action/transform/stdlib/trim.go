@@ -23,8 +23,17 @@ func (trim) Name() string { return "trim" }
 
 func (trim) Params() []Parameter { return trimParams("both ends") }
 
-func (trim) Call(args map[string]core.Value) (core.Value, error) {
-	value, cutset := trimArgs(args)
+func (tr trim) Call(args map[string]core.Value) (core.Value, error) {
+	return tr.call(args["value"], args["cutset"])
+}
+
+func (tr trim) CallIndexed(args []core.Value) (core.Value, error) {
+	return tr.call(args[0], args[1])
+}
+
+func (trim) call(valueArg, cutsetArg core.Value) (core.Value, error) {
+	value := valueArg.(core.StringValue).V
+	cutset := cutsetArg.(core.StringValue).V
 	return core.StringValue{V: strings.Trim(value, cutset)}, nil
 }
 
@@ -34,8 +43,17 @@ func (trimLeft) Name() string { return "trim_left" }
 
 func (trimLeft) Params() []Parameter { return trimParams("the start") }
 
-func (trimLeft) Call(args map[string]core.Value) (core.Value, error) {
-	value, cutset := trimArgs(args)
+func (tr trimLeft) Call(args map[string]core.Value) (core.Value, error) {
+	return tr.call(args["value"], args["cutset"])
+}
+
+func (tr trimLeft) CallIndexed(args []core.Value) (core.Value, error) {
+	return tr.call(args[0], args[1])
+}
+
+func (trimLeft) call(valueArg, cutsetArg core.Value) (core.Value, error) {
+	value := valueArg.(core.StringValue).V
+	cutset := cutsetArg.(core.StringValue).V
 	return core.StringValue{V: strings.TrimLeft(value, cutset)}, nil
 }
 
@@ -72,8 +90,4 @@ func trimParams(side string) []Parameter {
 			AcceptedKinds: []core.ValueKind{core.KindString},
 		},
 	}
-}
-
-func trimArgs(args map[string]core.Value) (string, string) {
-	return args["value"].(core.StringValue).V, args["cutset"].(core.StringValue).V
 }

@@ -30,6 +30,19 @@ func TestPluginPreparedCalls(t *testing.T) {
 			want:  `{"value":"a-b!!","saved":"a-b","out":"a"}`,
 		},
 		{
+			name: "simple string calls",
+			source: `
+				.saved = trim(.value, " ")
+				.saved = trim_left(.saved, "!")
+				.saved = trim_to_right(.saved, "|")
+				.saved = trim_to_left(.saved, "|")
+				.saved = trim_to(.saved, "|")
+				.out = upcase(after(between(.saved, "|", "|"), "prefix-"))
+			`,
+			input: `{"value":" !!|prefix-data|!! "}`,
+			want:  `{"value":" !!|prefix-data|!! ","saved":"|prefix-data|","out":"DATA"}`,
+		},
+		{
 			name: "runtime error",
 			source: `
 				.saved = trim_right(.value, "!")
