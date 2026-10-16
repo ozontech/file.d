@@ -153,7 +153,6 @@ func NewConfigFromFiles(paths []string) *Config {
 
 	// add applicators
 	apps := []funcApplier{
-		&envs{},
 		vault,
 	}
 
@@ -180,6 +179,8 @@ func applyEnvs(object *simplejson.Json) error {
 			object.SetPath(path, v)
 		}
 	}
+
+	applyConfigFunc(&envs{}, object)
 
 	return nil
 }
