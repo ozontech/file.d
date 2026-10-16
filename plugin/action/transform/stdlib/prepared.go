@@ -13,7 +13,8 @@ type indexedFunction interface {
 }
 
 // PrepareCall binds an already structurally validated call to this function.
-// Functions not yet supporting indexed arguments keep the general call path.
+// Functions without indexed support keep the general call path; every function
+// in the standard registry supports indexed arguments.
 func (c *CompiledFunc) PrepareCall(args []core.Argument) *core.CallPlan {
 	fn, ok := c.fn.(indexedFunction)
 	if !ok {

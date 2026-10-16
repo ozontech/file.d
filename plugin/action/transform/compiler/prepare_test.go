@@ -44,6 +44,29 @@ func runCalls(t *testing.T, exprs []core.Expr, input string) (core.Value, string
 	return value, root.EncodeToString(), err
 }
 
+func checkPreparedCalls(t *testing.T, source, input, wantEvent, wantErr string) {
+	t.Helper()
+
+	general := compileCalls(t, source, false)
+	prepared := compileCalls(t, source, true)
+	// Reuse both programs with fresh events to catch invocation state leaks.
+	for range 3 {
+		generalValue, generalEvent, generalErr := runCalls(t, general, input)
+		preparedValue, preparedEvent, preparedErr := runCalls(t, prepared, input)
+		if wantErr == "" {
+			require.NoError(t, generalErr)
+			require.NoError(t, preparedErr)
+		} else {
+			require.ErrorContains(t, generalErr, wantErr)
+			require.EqualError(t, preparedErr, generalErr.Error())
+			require.Equal(t, errors.Is(generalErr, core.AbortError), errors.Is(preparedErr, core.AbortError))
+		}
+		require.Equal(t, generalValue, preparedValue)
+		require.JSONEq(t, wantEvent, generalEvent)
+		require.JSONEq(t, generalEvent, preparedEvent)
+	}
+}
+
 func TestPrepareMatchesGeneralCalls(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -62,7 +85,7 @@ func TestPrepareMatchesGeneralCalls(t *testing.T) {
 			want:  `{"value":"hello-world  !!","cutset":" !","separator":"-","out":"hello","again":"hello-world"}`,
 		},
 		{
-			name:   "mixed prepared and general calls",
+			name:   "nested string conversion",
 			source: `.out = trim_right(upcase(before(trim(to_string(.value), " "), "-")), "O")`,
 			input:  `{"value":" hello-world "}`,
 			want:   `{"value":" hello-world ","out":"HELL"}`,
@@ -327,24 +350,7 @@ func TestPrepareMatchesGeneralCalls(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			general := compileCalls(t, tt.source, false)
-			prepared := compileCalls(t, tt.source, true)
-			// Reuse both programs with fresh events to catch invocation state leaks.
-			for range 3 {
-				wantValue, wantEvent, wantErr := runCalls(t, general, tt.input)
-				gotValue, gotEvent, gotErr := runCalls(t, prepared, tt.input)
-				require.Equal(t, wantValue, gotValue)
-				require.JSONEq(t, tt.want, wantEvent)
-				require.JSONEq(t, wantEvent, gotEvent)
-				if tt.err == "" {
-					require.NoError(t, wantErr)
-					require.NoError(t, gotErr)
-				} else {
-					require.ErrorContains(t, wantErr, tt.err)
-					require.EqualError(t, gotErr, wantErr.Error())
-					require.Equal(t, errors.Is(wantErr, core.AbortError), errors.Is(gotErr, core.AbortError))
-				}
-			}
+			checkPreparedCalls(t, tt.source, tt.input, tt.want, tt.err)
 		})
 	}
 }
@@ -381,10 +387,26 @@ func TestPrepareSelectsCallPath(t *testing.T) {
 			want:     nil,
 		},
 		{
-			name:     "prepared calls with general to_string",
+			name:     "prepared string conversion",
 			source:   `before(trim_right(upcase(to_string("a-b!!")), "!"), "-")`,
 			prepared: true,
-			want:     []string{"to_string"},
+			want:     nil,
+		},
+		{
+			name: "prepared named and collection calls",
+			source: `to_string(lookup(
+				join(parse_regex_all(slice("xAA", 1, end: 3), r'A', limit: 1, group: 0), ""),
+				parse_regex("A", r'(?P<A>A)'), default: null))`,
+			prepared: true,
+			want:     nil,
+		},
+		{
+			name: "general named and collection calls",
+			source: `to_string(lookup(
+				join(parse_regex_all(slice("xAA", 1, end: 3), r'A', limit: 1, group: 0), ""),
+				parse_regex("A", r'(?P<A>A)'), default: null))`,
+			prepared: false,
+			want:     []string{"slice", "parse_regex_all", "join", "parse_regex", "lookup", "to_string"},
 		},
 	}
 
@@ -454,6 +476,56 @@ func TestPrepareValidationCompatibility(t *testing.T) {
 			name:   "duplicate named argument",
 			source: `slice("abc", 0, end: 1, end: 2)`,
 			err:    `duplicate argument "end"`,
+		},
+		{
+			name:   "slice end must be named",
+			source: `slice("abc", 0, 1)`,
+			err:    "too many arguments",
+		},
+		{
+			name:   "lookup table is required",
+			source: `lookup("key", default: null)`,
+			err:    `missing required argument "table"`,
+		},
+		{
+			name:   "lookup default must be named",
+			source: `lookup("key", {}, null)`,
+			err:    "too many arguments",
+		},
+		{
+			name:   "regex pattern must be positional",
+			source: `parse_regex("abc", pattern: r'a')`,
+			err:    `argument "pattern" is positional and cannot be passed by name`,
+		},
+		{
+			name:   "regex numeric_groups must be named",
+			source: `parse_regex("abc", r'a', true)`,
+			err:    "too many arguments",
+		},
+		{
+			name:   "regex_all unknown named argument",
+			source: `parse_regex_all("abc", r'a', count: 1)`,
+			err:    `unknown argument "count"`,
+		},
+		{
+			name:   "regex_all duplicate named argument",
+			source: `parse_regex_all("abc", r'a', limit: 1, group: 0, limit: 2)`,
+			err:    `duplicate argument "limit"`,
+		},
+		{
+			name:   "invalid regex literal",
+			source: `parse_regex_all("abc", r'[')`,
+			err:    "invalid regex pattern",
+		},
+		{
+			name:   "join separator is required",
+			source: `join([])`,
+			err:    `missing required argument "separator"`,
+		},
+		{
+			name:   "to_string value is required",
+			source: `to_string()`,
+			err:    `missing required argument "value"`,
 		},
 		{
 			name:   "unknown nested function",

@@ -23,7 +23,7 @@ type lookup struct{}
 // keepInput is the default of the `default` parameter. A named parameter is
 // made optional by having a non-nil default, and "return the input unchanged"
 // is not expressible as an ordinary value - null already means an explicit
-// null. This sentinel never leaves Call.
+// null. This sentinel never leaves the lookup operation.
 type keepInput struct{}
 
 // paramDefault is the name of the miss-replacement parameter, used both in the
@@ -66,16 +66,23 @@ func (lookup) Params() []Parameter {
 	}
 }
 
-func (lookup) Call(args map[string]core.Value) (core.Value, error) {
-	value := args["value"]
-	table := args["table"].(core.ObjectValue)
+func (l lookup) Call(args map[string]core.Value) (core.Value, error) {
+	return l.call(args["value"], args["table"], args[paramDefault])
+}
+
+func (l lookup) CallIndexed(args []core.Value) (core.Value, error) {
+	return l.call(args[0], args[1], args[2])
+}
+
+func (lookup) call(value, tableArg, defaultArg core.Value) (core.Value, error) {
+	table := tableArg.(core.ObjectValue)
 
 	if mapped, ok := table.V[value.String()]; ok {
 		return mapped, nil
 	}
 
-	if _, unchanged := args[paramDefault].(keepInput); unchanged {
+	if _, unchanged := defaultArg.(keepInput); unchanged {
 		return value, nil
 	}
-	return args[paramDefault], nil
+	return defaultArg, nil
 }

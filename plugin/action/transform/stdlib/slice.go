@@ -38,14 +38,22 @@ func (slice) Params() []Parameter {
 	}
 }
 
-func (slice) Call(args map[string]core.Value) (core.Value, error) {
-	runes := []rune(args["value"].(core.StringValue).V)
+func (s slice) Call(args map[string]core.Value) (core.Value, error) {
+	return s.call(args["value"], args["start"], args["end"])
+}
+
+func (s slice) CallIndexed(args []core.Value) (core.Value, error) {
+	return s.call(args[0], args[1], args[2])
+}
+
+func (slice) call(valueArg, startArg, endArg core.Value) (core.Value, error) {
+	runes := []rune(valueArg.(core.StringValue).V)
 	length := len(runes)
 
-	start := clampIndex(int(args["start"].(core.IntegerValue).V), length)
+	start := clampIndex(int(startArg.(core.IntegerValue).V), length)
 
 	end := length
-	if v, ok := args["end"].(core.IntegerValue); ok {
+	if v, ok := endArg.(core.IntegerValue); ok {
 		end = clampIndex(int(v.V), length)
 	}
 

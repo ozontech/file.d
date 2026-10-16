@@ -43,6 +43,28 @@ func TestPluginPreparedCalls(t *testing.T) {
 			want:  `{"value":" !!|prefix-data|!! ","saved":"|prefix-data|","out":"DATA"}`,
 		},
 		{
+			name: "named and collection calls",
+			source: `
+				.saved = parse_regex(.value, r'(?P<prefix>\p{L}+)', numeric_groups: true)
+				.parts = parse_regex_all(.value, r'(\d+)', limit: 2, group: 1)
+				.out = join([slice(.value, 0, end: 2), to_string(lookup(.parts[0], {"12": 42}, default: null))], ":")
+			`,
+			input: `{"value":"界a12 b34 c56"}`,
+			want:  `{"value":"界a12 b34 c56","saved":{"prefix":"界a","0":"界a","1":"界a"},"parts":["12","34"],"out":"界a:42"}`,
+		},
+		{
+			name: "regex operation error",
+			source: `
+				.saved = join(["a", "b"], ",")
+				.out = parse_regex_all(.value, r'(\d+)', group: 2)
+				.after = "unreachable"
+			`,
+			input:   `{"value":"12"}`,
+			want:    `{"value":"12","saved":"a,b"}`,
+			message: "transform runtime error",
+			err:     "parse_regex_all: group 2 is out of range: pattern has 1 capture groups",
+		},
+		{
 			name: "runtime error",
 			source: `
 				.saved = trim_right(.value, "!")
