@@ -29,37 +29,54 @@ func transformFieldScenarios() []transformCallScenario {
 			.out.host = .data.host
 			.out.zone = .data.meta.zone
 		`,
-		actions: []transformCallAction{{config: &modify.Config{
-			"out.host": "${data.host}", "out.zone": "${data.meta.zone}",
-		}}},
-		inputs: []transformCallCase{{
-			name:  "strings",
-			input: `{"data":{"host":"api","meta":{"zone":"west","enabled":true}},"keep":[1,2]}`,
-			want:  `{"data":{"host":"api","meta":{"zone":"west","enabled":true}},"keep":[1,2],"out":{"host":"api","zone":"west"}}`,
-		}},
-		cases: []transformCallCase{{
-			name:  "overwrite_and_preserve",
-			input: `{"data":{"host":"","meta":{"zone":"east"}},"out":{"host":"old","zone":"old","keep":42}}`,
-			want:  `{"data":{"host":"","meta":{"zone":"east"}},"out":{"host":"","zone":"east","keep":42}}`,
-		}},
+		actions: []transformCallAction{
+			{
+				config: &modify.Config{
+					"out.host": "${data.host}",
+					"out.zone": "${data.meta.zone}",
+				},
+			},
+		},
+		inputs: []transformCallCase{
+			{
+				name:  "strings",
+				input: `{"data":{"host":"api","meta":{"zone":"west","enabled":true}},"keep":[1,2]}`,
+				want:  `{"data":{"host":"api","meta":{"zone":"west","enabled":true}},"keep":[1,2],"out":{"host":"api","zone":"west"}}`,
+			},
+		},
+		cases: []transformCallCase{
+			{
+				name:  "overwrite_and_preserve",
+				input: `{"data":{"host":"","meta":{"zone":"east"}},"out":{"host":"old","zone":"old","keep":42}}`,
+				want:  `{"data":{"host":"","meta":{"zone":"east"}},"out":{"host":"","zone":"east","keep":42}}`,
+			},
+		},
 	}, transformCallScenario{
 		name: "compose/nested_fields",
 		source: `
 			.out = .service + "/" + .meta.zone + ":" + to_string(.status)
 		`,
-		actions: []transformCallAction{{config: &modify.Config{
-			"out": "${service}/${meta.zone}:${status}",
-		}}},
-		inputs: []transformCallCase{{
-			name:  "status",
-			input: `{"service":"checkout","meta":{"zone":"west","tags":["api"]},"status":200}`,
-			want:  `{"service":"checkout","meta":{"zone":"west","tags":["api"]},"status":200,"out":"checkout/west:200"}`,
-		}},
-		cases: []transformCallCase{{
-			name:  "unicode_and_empty",
-			input: `{"service":"заказ","meta":{"zone":""},"status":-1,"out":"old"}`,
-			want:  `{"service":"заказ","meta":{"zone":""},"status":-1,"out":"заказ/:-1"}`,
-		}},
+		actions: []transformCallAction{
+			{
+				config: &modify.Config{
+					"out": "${service}/${meta.zone}:${status}",
+				},
+			},
+		},
+		inputs: []transformCallCase{
+			{
+				name:  "status",
+				input: `{"service":"checkout","meta":{"zone":"west","tags":["api"]},"status":200}`,
+				want:  `{"service":"checkout","meta":{"zone":"west","tags":["api"]},"status":200,"out":"checkout/west:200"}`,
+			},
+		},
+		cases: []transformCallCase{
+			{
+				name:  "unicode_and_empty",
+				input: `{"service":"заказ","meta":{"zone":""},"status":-1,"out":"old"}`,
+				want:  `{"service":"заказ","meta":{"zone":""},"status":-1,"out":"заказ/:-1"}`,
+			},
+		},
 	})
 	for _, count := range []int{1, 5, 20} {
 		for _, override := range []bool{false, true} {
@@ -105,9 +122,14 @@ func transformAssignScenario(count int, existing, large bool) transformCallScena
 		fmt.Fprintf(&source, ".%s = %q\n", field, value)
 	}
 	return transformCallScenario{
-		name: name, source: source.String(),
-		actions: []transformCallAction{{config: &config}},
-		inputs:  []transformCallCase{transformEventCase("default", input, want)},
+		name:   name,
+		source: source.String(),
+		actions: []transformCallAction{
+			{
+				config: &config,
+			},
+		},
+		inputs: []transformCallCase{transformEventCase("default", input, want)},
 	}
 }
 
@@ -127,9 +149,14 @@ func transformCopyScenario(count int) transformCallScenario {
 		fmt.Fprintf(&source, ".%s = .%s\n", to, from)
 	}
 	return transformCallScenario{
-		name: fmt.Sprintf("copy/%d", count), source: source.String(),
-		actions: []transformCallAction{{config: &config}},
-		inputs:  []transformCallCase{transformEventCase("default", input, want)},
+		name:   fmt.Sprintf("copy/%d", count),
+		source: source.String(),
+		actions: []transformCallAction{
+			{
+				config: &config,
+			},
+		},
+		inputs: []transformCallCase{transformEventCase("default", input, want)},
 	}
 }
 
@@ -177,9 +204,14 @@ func transformRenameScenario(count int, override, large bool) transformCallScena
 		collisionWant["old_00"] = input["old_00"]
 	}
 	return transformCallScenario{
-		name: name, source: source.String(),
-		actions: []transformCallAction{{config: &config}},
-		inputs:  []transformCallCase{transformEventCase("typed_fields", input, want)},
+		name:   name,
+		source: source.String(),
+		actions: []transformCallAction{
+			{
+				config: &config,
+			},
+		},
+		inputs: []transformCallCase{transformEventCase("typed_fields", input, want)},
 		cases: []transformCallCase{
 			transformEventCase("missing_source", missing, missingWant),
 			transformEventCase("existing_destination", collision, collisionWant),

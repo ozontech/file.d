@@ -8,6 +8,17 @@ import (
 	"github.com/ozontech/file.d/plugin/action/modify"
 )
 
+type transformStringOperation struct {
+	name        string
+	source      string
+	filter      string
+	input       string
+	want        string
+	missProfile string
+	missWant    string
+	cases       []transformCallCase
+}
+
 func transformStringScenarios() []transformCallScenario {
 	var scenarios []transformCallScenario
 	for _, size := range []int{128, 4096} {
@@ -17,16 +28,7 @@ func transformStringScenarios() []transformCallScenario {
 		cutInput := "HEAD" + payload + "TAIL"
 		regexPrefix := "id=42 id=7 id=99 "
 		regexInput := regexPrefix + strings.Repeat("x", size-len(regexPrefix))
-		operations := []struct {
-			name        string
-			source      string
-			filter      string
-			input       string
-			want        string
-			missProfile string
-			missWant    string
-			cases       []transformCallCase
-		}{
+		operations := []transformStringOperation{
 			{
 				name:   "trim/all",
 				source: `.out = trim(.source, " []")`,
@@ -162,7 +164,11 @@ func transformStringScenarios() []transformCallScenario {
 		}
 		for i := range operations {
 			op := &operations[i]
-			actions := []transformCallAction{{config: &modify.Config{"out": "${source|" + op.filter + "}"}}}
+			actions := []transformCallAction{
+				{
+					config: &modify.Config{"out": "${source|" + op.filter + "}"},
+				},
+			}
 			scenarios = append(scenarios, transformCallScenario{
 				name:    fmt.Sprintf("strings/%s/%dB", op.name, size),
 				source:  op.source,

@@ -6,6 +6,11 @@ import (
 	"github.com/ozontech/file.d/plugin/action/modify"
 )
 
+type transformCallProfile struct {
+	name   string
+	inputs []transformCallCase
+}
+
 // Expected values are fixed independently of either plugin. Slice order is
 // also the execution and output order of the paired benchmarks.
 func transformCallScenarios() []transformCallScenario {
@@ -27,7 +32,9 @@ func transformCallScenarios() []transformCallScenario {
 				.e = "v5"
 			`,
 			actions: []transformCallAction{
-				{config: &modify.Config{"a": "v1", "b": "v2", "c": "v3", "d": "v4", "e": "v5"}},
+				{
+					config: &modify.Config{"a": "v1", "b": "v2", "c": "v3", "d": "v4", "e": "v5"},
+				},
 			},
 		},
 		{
@@ -47,7 +54,9 @@ func transformCallScenarios() []transformCallScenario {
 				.e = "v5"
 			`,
 			actions: []transformCallAction{
-				{config: &modify.Config{"a": "v1", "b": "v2", "c": "v3", "d": "v4", "e": "v5"}},
+				{
+					config: &modify.Config{"a": "v1", "b": "v2", "c": "v3", "d": "v4", "e": "v5"},
+				},
 			},
 		},
 		{
@@ -61,7 +70,9 @@ func transformCallScenarios() []transformCallScenario {
 			},
 			source: `.out = trim_right(.source, "0123456789")`,
 			actions: []transformCallAction{
-				{config: &modify.Config{"out": `${source|trim("right","0123456789")}`}},
+				{
+					config: &modify.Config{"out": `${source|trim("right","0123456789")}`},
+				},
 			},
 			cases: []transformCallCase{
 				{
@@ -96,13 +107,15 @@ func transformCallScenarios() []transformCallScenario {
 				)
 			`,
 			actions: []transformCallAction{
-				{config: &modify.Config{
-					"cluster_name": `${source` +
-						`|trim("right","0123456789")` +
-						`|trim("right","z")` +
-						`|trim("right","0123456789")` +
-						`|trim("right","-")}`,
-				}},
+				{
+					config: &modify.Config{
+						"cluster_name": `${source` +
+							`|trim("right","0123456789")` +
+							`|trim("right","z")` +
+							`|trim("right","0123456789")` +
+							`|trim("right","-")}`,
+					},
+				},
 			},
 			cases: []transformCallCase{
 				{
@@ -176,14 +189,16 @@ func transformCallScenarios() []transformCallScenario {
 				)
 			`,
 			actions: []transformCallAction{
-				{config: &modify.Config{
-					"cluster_name": `${source` +
-						`|re("^([^.]*)",1,[1],"")` +
-						`|trim("right","0123456789")` +
-						`|trim("right","z")` +
-						`|trim("right","0123456789")` +
-						`|trim("right","-")}`,
-				}},
+				{
+					config: &modify.Config{
+						"cluster_name": `${source` +
+							`|re("^([^.]*)",1,[1],"")` +
+							`|trim("right","0123456789")` +
+							`|trim("right","z")` +
+							`|trim("right","0123456789")` +
+							`|trim("right","-")}`,
+					},
+				},
 			},
 			cases: []transformCallCase{
 				{
@@ -237,13 +252,20 @@ func transformCallScenarios() []transformCallScenario {
 	scenarios = append(scenarios, transformFieldScenarios()...)
 	scenarios = append(scenarios, transformStringScenarios()...)
 	scenarios = append(scenarios, transformLogScenarios()...)
+	scenarios = append(scenarios, transformMappingScenarios()...)
+	scenarios = append(scenarios, transformTagScenarios()...)
+	scenarios = append(scenarios, transformDependentScenarios()...)
 	return scenarios
 }
 
 // Fixtures are constructed outside measurement. Expected events come from the
 // declared workload data, never from executing either compared plugin.
 func transformEventCase(name string, input, want map[string]any) transformCallCase {
-	return transformCallCase{name: name, input: fixtureJSON(input), want: fixtureJSON(want)}
+	return transformCallCase{
+		name:  name,
+		input: fixtureJSON(input),
+		want:  fixtureJSON(want),
+	}
 }
 
 func fixtureJSON(value any) string {

@@ -9,36 +9,65 @@ import (
 	"github.com/ozontech/file.d/plugin/action/modify"
 )
 
+type transformLogSample struct {
+	name     string
+	size     int
+	time     string
+	level    string
+	service  string
+	request  string
+	duration string
+	message  string
+}
+
+type transformLogMissSample struct {
+	name string
+	log  string
+}
+
+type transformLogParser struct {
+	name   string
+	source string
+	config *modify.Config
+	misses []transformCallCase
+}
+
 func transformLogScenarios() []transformCallScenario {
 	// Fixed grammar: a 20-byte timestamp, nonempty metadata tokens without
 	// whitespace, and a message starting with neither a space nor '-'.
 	// Metadata and messages contain no reserved []{}() delimiters.
 	// This makes both parsing approaches equivalent for these inputs.
 	var inputs []transformCallCase
-	samples := []struct {
-		name     string
-		size     int
-		time     string
-		level    string
-		service  string
-		request  string
-		duration string
-		message  string
-	}{
+	samples := []transformLogSample{
 		{
-			name: "short", size: 128, time: "2026-10-20T09:30:00Z",
-			level: "INFO", service: "api", request: "req-42", duration: "12ms",
-			message: "request completed",
+			name:     "short",
+			size:     128,
+			time:     "2026-10-20T09:30:00Z",
+			level:    "INFO",
+			service:  "api",
+			request:  "req-42",
+			duration: "12ms",
+			message:  "request completed",
 		},
 		{
-			name: "long", size: 4096, time: "2026-10-20T09:31:00Z",
-			level: "ERROR", service: "checkout", request: "req-108", duration: "250ms",
-			message: "upstream unavailable",
+			name:     "long",
+			size:     4096,
+			time:     "2026-10-20T09:31:00Z",
+			level:    "ERROR",
+			service:  "checkout",
+			request:  "req-108",
+			duration: "250ms",
+			message:  "upstream unavailable",
 		},
 		{
-			name: "unicode", size: 512, time: "2026-10-20T09:32:00Z",
-			level: "WARN", service: "worker", request: "job-7", duration: "3ms",
-			message: "запрос обработан",
+			name:     "unicode",
+			size:     512,
+			time:     "2026-10-20T09:32:00Z",
+			level:    "WARN",
+			service:  "worker",
+			request:  "job-7",
+			duration: "3ms",
+			message:  "запрос обработан",
 		},
 	}
 	for _, sample := range samples {
@@ -70,10 +99,17 @@ func transformLogScenarios() []transformCallScenario {
 	// All six fields must be overwritten on failure, matching modify's
 	// emptyOnNotMatched mode; stale output from an earlier event is invalid.
 	misses := make([]transformCallCase, 0, 2)
-	for _, sample := range []struct{ name, log string }{
-		{name: "no_match", log: strings.Repeat("x", 128)},
-		{name: "empty", log: ""},
-	} {
+	missSamples := []transformLogMissSample{
+		{
+			name: "no_match",
+			log:  strings.Repeat("x", 128),
+		},
+		{
+			name: "empty",
+			log:  "",
+		},
+	}
+	for _, sample := range missSamples {
 		input := transformFieldEvent(false)
 		input["log"] = sample.log
 		want := maps.Clone(input)
@@ -83,12 +119,7 @@ func transformLogScenarios() []transformCallScenario {
 		misses = append(misses, transformEventCase(sample.name, input, want))
 	}
 
-	parsers := []struct {
-		name   string
-		source string
-		config *modify.Config
-		misses []transformCallCase
-	}{
+	parsers := []transformLogParser{
 		{
 			name: "no_regex",
 			source: `
@@ -137,17 +168,28 @@ func transformLogScenarios() []transformCallScenario {
 	}
 	var scenarios []transformCallScenario
 	for _, parser := range parsers {
-		actions := []transformCallAction{{config: parser.config}}
-		for _, profile := range []struct {
-			name   string
-			inputs []transformCallCase
-		}{
-			{name: "128B", inputs: inputs[:1]},
-			{name: "4096B", inputs: inputs[1:2]},
+		actions := []transformCallAction{
+			{
+				config: parser.config,
+			},
+		}
+		profiles := []transformCallProfile{
+			{
+				name:   "128B",
+				inputs: inputs[:1],
+			},
+			{
+				name:   "4096B",
+				inputs: inputs[1:2],
+			},
 			// One of each sample, in this order, repeated cyclically:
 			// 1/3 short ASCII, 1/3 long ASCII, 1/3 512-byte Unicode.
-			{name: "mixed", inputs: inputs},
-		} {
+			{
+				name:   "mixed",
+				inputs: inputs,
+			},
+		}
+		for _, profile := range profiles {
 			scenarios = append(scenarios, transformCallScenario{
 				name:    "logs/" + parser.name + "/" + profile.name,
 				source:  parser.source,

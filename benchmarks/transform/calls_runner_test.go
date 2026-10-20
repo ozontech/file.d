@@ -48,10 +48,18 @@ type transformCallVariant struct {
 func (s *transformCallScenario) variants(tb testing.TB) []transformCallVariant {
 	tb.Helper()
 	require.NotEmpty(tb, s.inputs, "scenario %s has no measured inputs", s.name)
-	variants := []transformCallVariant{{
-		name:    "transform",
-		actions: []transformCallAction{{config: &transform.Config{Source: s.source}}},
-	}}
+	variants := []transformCallVariant{
+		{
+			name: "transform",
+			actions: []transformCallAction{
+				{
+					config: &transform.Config{
+						Source: s.source,
+					},
+				},
+			},
+		},
+	}
 	if len(s.actions) == 0 {
 		return variants
 	}
@@ -70,7 +78,10 @@ func (s *transformCallScenario) variants(tb testing.TB) []transformCallVariant {
 	if len(s.actions) > 1 {
 		name = fmt.Sprintf("modify_x%d", len(s.actions))
 	}
-	return append(variants, transformCallVariant{name: name, actions: s.actions})
+	return append(variants, transformCallVariant{
+		name:    name,
+		actions: s.actions,
+	})
 }
 
 type transformCallStep struct {
@@ -146,7 +157,10 @@ func newTransformCallEvents(tb testing.TB, count int) []transformCallEvent {
 	tb.Helper()
 	events := make([]transformCallEvent, count)
 	for i := range events {
-		events[i].event = pipeline.Event{Root: insaneJSON.Spawn(), SourceName: transformCallsSourceName}
+		events[i].event = pipeline.Event{
+			Root:       insaneJSON.Spawn(),
+			SourceName: transformCallsSourceName,
+		}
 		// Spawn can retain decoder memory from a different workload. Start
 		// each variant with fresh storage, then warm and reuse it normally.
 		// This setup is outside all measured metrics.

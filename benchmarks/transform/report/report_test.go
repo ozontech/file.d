@@ -9,12 +9,13 @@ import (
 )
 
 func TestTransformBenchmarkReport(t *testing.T) {
-	tests := []struct {
+	type testCase struct {
 		name       string
 		transform  string
 		modify     string
 		comparison string
-	}{
+	}
+	tests := []testCase{
 		{
 			name:       "improvement",
 			transform:  "1000.0 ns/op 1000 B/op 10 allocs/op",
@@ -66,15 +67,29 @@ func TestTransformBenchmarkReport(t *testing.T) {
 }
 
 func TestTransformBenchmarkReportPairsRepetitionsAndCPUs(t *testing.T) {
-	tests := []struct {
+	type testCase struct {
 		name            string
 		comparator      string
 		comparatorFirst bool
-	}{
-		{name: "modify", comparator: "modify"},
-		{name: "rename", comparator: "rename"},
-		{name: "chain", comparator: "modify_x64"},
-		{name: "comparator_first", comparator: "modify_x4", comparatorFirst: true},
+	}
+	tests := []testCase{
+		{
+			name:       "modify",
+			comparator: "modify",
+		},
+		{
+			name:       "rename",
+			comparator: "rename",
+		},
+		{
+			name:       "chain",
+			comparator: "modify_x64",
+		},
+		{
+			name:            "comparator_first",
+			comparator:      "modify_x4",
+			comparatorFirst: true,
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -122,35 +137,111 @@ func TestTransformBenchmarkReportRejectsInvalidResults(t *testing.T) {
 	const transform = "BenchmarkTransformCalls/trim_one/transform-8 1000 100.0 ns/op 32 B/op 1 allocs/op\n"
 	const modify = "BenchmarkTransformCalls/trim_one/modify-8 1000 50.0 ns/op 0 B/op 0 allocs/op\n"
 	const standalone = "BenchmarkTransformOnly/loop/transform-8 1000 100.0 ns/op 32 B/op 1 allocs/op\n"
-	tests := []struct {
+	type testCase struct {
 		name  string
 		input string
-	}{
-		{name: "no_results", input: "PASS\n"},
-		{name: "missing_modify", input: transform},
-		{name: "missing_transform", input: modify},
-		{name: "standalone_does_not_hide_missing_pair", input: standalone + transform},
-		{name: "different_scenario", input: transform + strings.ReplaceAll(modify, "trim_one", "full")},
-		{name: "different_cpu", input: transform + strings.ReplaceAll(modify, "-8", "-4")},
-		{name: "incomplete_repetition", input: transform + transform + modify},
-		{name: "extra_comparator", input: transform + modify + modify},
-		{name: "multiple_comparators", input: transform + transform + modify + strings.ReplaceAll(modify, "modify", "rename")},
-		{name: "invalid_metric", input: transform + strings.ReplaceAll(modify, "50.0", "invalid")},
-		{name: "negative_metric", input: transform + strings.ReplaceAll(modify, "50.0", "-50.0")},
-		{name: "nan_metric", input: transform + strings.ReplaceAll(modify, "50.0", "NaN")},
-		{name: "infinite_metric", input: transform + strings.ReplaceAll(modify, "50.0", "+Inf")},
-		{name: "wrong_units", input: transform + strings.ReplaceAll(modify, "ns/op", "ms/op")},
-		{name: "unknown_variant", input: transform + strings.ReplaceAll(modify, "modify", "unknown")},
-		{name: "invalid_cpu", input: transform + strings.ReplaceAll(modify, "-8", "-invalid")},
-		{name: "invalid_iterations", input: transform + strings.ReplaceAll(modify, "1000", "invalid")},
-		{name: "zero_iterations", input: transform + strings.ReplaceAll(modify, "1000", "0")},
-		{name: "zero_chain_length", input: transform + strings.ReplaceAll(modify, "modify", "modify_x0")},
-		{name: "one_action_is_not_chain", input: transform + strings.ReplaceAll(modify, "modify", "modify_x1")},
-		{name: "invalid_chain_length", input: transform + strings.ReplaceAll(modify, "modify", "modify_xmany")},
-		{name: "leading_zero_chain_length", input: transform + strings.ReplaceAll(modify, "modify", "modify_x02")},
-		{name: "empty_scenario", input: strings.ReplaceAll(transform, "trim_one", "")},
-		{name: "empty_nested_scenario", input: strings.ReplaceAll(transform, "trim_one", "mapping//mixed")},
-		{name: "standalone_comparator", input: strings.ReplaceAll(standalone, "/transform-", "/rename-")},
+	}
+	tests := []testCase{
+		{
+			name:  "no_results",
+			input: "PASS\n",
+		},
+		{
+			name:  "missing_modify",
+			input: transform,
+		},
+		{
+			name:  "missing_transform",
+			input: modify,
+		},
+		{
+			name:  "standalone_does_not_hide_missing_pair",
+			input: standalone + transform,
+		},
+		{
+			name:  "different_scenario",
+			input: transform + strings.ReplaceAll(modify, "trim_one", "full"),
+		},
+		{
+			name:  "different_cpu",
+			input: transform + strings.ReplaceAll(modify, "-8", "-4"),
+		},
+		{
+			name:  "incomplete_repetition",
+			input: transform + transform + modify,
+		},
+		{
+			name:  "extra_comparator",
+			input: transform + modify + modify,
+		},
+		{
+			name:  "multiple_comparators",
+			input: transform + transform + modify + strings.ReplaceAll(modify, "modify", "rename"),
+		},
+		{
+			name:  "invalid_metric",
+			input: transform + strings.ReplaceAll(modify, "50.0", "invalid"),
+		},
+		{
+			name:  "negative_metric",
+			input: transform + strings.ReplaceAll(modify, "50.0", "-50.0"),
+		},
+		{
+			name:  "nan_metric",
+			input: transform + strings.ReplaceAll(modify, "50.0", "NaN"),
+		},
+		{
+			name:  "infinite_metric",
+			input: transform + strings.ReplaceAll(modify, "50.0", "+Inf"),
+		},
+		{
+			name:  "wrong_units",
+			input: transform + strings.ReplaceAll(modify, "ns/op", "ms/op"),
+		},
+		{
+			name:  "unknown_variant",
+			input: transform + strings.ReplaceAll(modify, "modify", "unknown"),
+		},
+		{
+			name:  "invalid_cpu",
+			input: transform + strings.ReplaceAll(modify, "-8", "-invalid"),
+		},
+		{
+			name:  "invalid_iterations",
+			input: transform + strings.ReplaceAll(modify, "1000", "invalid"),
+		},
+		{
+			name:  "zero_iterations",
+			input: transform + strings.ReplaceAll(modify, "1000", "0"),
+		},
+		{
+			name:  "zero_chain_length",
+			input: transform + strings.ReplaceAll(modify, "modify", "modify_x0"),
+		},
+		{
+			name:  "one_action_is_not_chain",
+			input: transform + strings.ReplaceAll(modify, "modify", "modify_x1"),
+		},
+		{
+			name:  "invalid_chain_length",
+			input: transform + strings.ReplaceAll(modify, "modify", "modify_xmany"),
+		},
+		{
+			name:  "leading_zero_chain_length",
+			input: transform + strings.ReplaceAll(modify, "modify", "modify_x02"),
+		},
+		{
+			name:  "empty_scenario",
+			input: strings.ReplaceAll(transform, "trim_one", ""),
+		},
+		{
+			name:  "empty_nested_scenario",
+			input: strings.ReplaceAll(transform, "trim_one", "mapping//mixed"),
+		},
+		{
+			name:  "standalone_comparator",
+			input: strings.ReplaceAll(standalone, "/transform-", "/rename-"),
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -162,10 +253,11 @@ func TestTransformBenchmarkReportRejectsInvalidResults(t *testing.T) {
 }
 
 func TestTransformBenchmarkReportStandalone(t *testing.T) {
-	tests := []struct {
+	type testCase struct {
 		name  string
 		input string
-	}{
+	}
+	tests := []testCase{
 		{
 			name:  "one_result",
 			input: "BenchmarkTransformOnly/loop/transform-8 1000 100.0 ns/op 32 B/op 1 allocs/op\n",

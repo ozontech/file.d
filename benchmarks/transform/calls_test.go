@@ -23,11 +23,12 @@ func TestTransformBenchmarkScenarios(t *testing.T) {
 // These small fixtures exercise the runner's supported comparison shapes.
 // Measured workloads are added separately, in the next implementation stages.
 func TestTransformBenchmarkRunners(t *testing.T) {
-	tests := []struct {
+	type testCase struct {
 		name     string
 		scenario transformCallScenario
 		variants []string
-	}{
+	}
+	tests := []testCase{
 		{
 			name: "conditional_modify_chain",
 			scenario: transformCallScenario{
@@ -75,13 +76,23 @@ func TestTransformBenchmarkRunners(t *testing.T) {
 						.out = "ready"
 					}
 				`,
-				actions: []transformCallAction{{
-					config: &modify.Config{"out": "ready"},
-					doIf:   map[string]any{"op": "equal", "field": "source", "values": "api"},
-				}},
+				actions: []transformCallAction{
+					{
+						config: &modify.Config{"out": "ready"},
+						doIf:   map[string]any{"op": "equal", "field": "source", "values": "api"},
+					},
+				},
 				inputs: []transformCallCase{
-					{name: "match", input: `{"source":"api"}`, want: `{"source":"api","out":"ready"}`},
-					{name: "missing", input: `{}`, want: `{}`},
+					{
+						name:  "match",
+						input: `{"source":"api"}`,
+						want:  `{"source":"api","out":"ready"}`,
+					},
+					{
+						name:  "missing",
+						input: `{}`,
+						want:  `{}`,
+					},
 				},
 			},
 			variants: []string{"transform", "modify"},
@@ -93,10 +104,22 @@ func TestTransformBenchmarkRunners(t *testing.T) {
 					.new = .old
 					del .old
 				`,
-				actions: []transformCallAction{{config: &rename.Config{"old", "new"}}},
+				actions: []transformCallAction{
+					{
+						config: &rename.Config{"old", "new"},
+					},
+				},
 				inputs: []transformCallCase{
-					{name: "number", input: `{"old":42,"keep":true}`, want: `{"new":42,"keep":true}`},
-					{name: "string", input: `{"old":"value"}`, want: `{"new":"value"}`},
+					{
+						name:  "number",
+						input: `{"old":42,"keep":true}`,
+						want:  `{"new":42,"keep":true}`,
+					},
+					{
+						name:  "string",
+						input: `{"old":"value"}`,
+						want:  `{"new":"value"}`,
+					},
 				},
 			},
 			variants: []string{"transform", "rename"},
@@ -106,8 +129,16 @@ func TestTransformBenchmarkRunners(t *testing.T) {
 			scenario: transformCallScenario{
 				source: `.out = upcase(.source)`,
 				inputs: []transformCallCase{
-					{name: "text", input: `{"source":"api"}`, want: `{"source":"api","out":"API"}`},
-					{name: "empty", input: `{"source":""}`, want: `{"source":"","out":""}`},
+					{
+						name:  "text",
+						input: `{"source":"api"}`,
+						want:  `{"source":"api","out":"API"}`,
+					},
+					{
+						name:  "empty",
+						input: `{"source":""}`,
+						want:  `{"source":"","out":""}`,
+					},
 				},
 			},
 			variants: []string{"transform"},
@@ -158,15 +189,32 @@ func checkTransformCallScenario(t *testing.T, scenario *transformCallScenario) {
 }
 
 func TestTransformBenchmarkInputSequence(t *testing.T) {
-	tests := []struct {
+	type testCase struct {
 		name       string
 		inputCount int
 		batchSizes []int
-	}{
-		{name: "homogeneous", inputCount: 1, batchSizes: []int{3, 2, 3}},
-		{name: "partial_cycle", inputCount: 3, batchSizes: []int{2, 2, 1, 3}},
-		{name: "corpus_larger_than_batch", inputCount: 7, batchSizes: []int{3, 3, 1, 3, 3, 1, 3}},
-		{name: "production_batch_boundary", inputCount: 257, batchSizes: []int{256, 1, 256, 2}},
+	}
+	tests := []testCase{
+		{
+			name:       "homogeneous",
+			inputCount: 1,
+			batchSizes: []int{3, 2, 3},
+		},
+		{
+			name:       "partial_cycle",
+			inputCount: 3,
+			batchSizes: []int{2, 2, 1, 3},
+		},
+		{
+			name:       "corpus_larger_than_batch",
+			inputCount: 7,
+			batchSizes: []int{3, 3, 1, 3, 3, 1, 3},
+		},
+		{
+			name:       "production_batch_boundary",
+			inputCount: 257,
+			batchSizes: []int{256, 1, 256, 2},
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -194,22 +242,35 @@ func TestTransformBenchmarkInputSequence(t *testing.T) {
 }
 
 func TestTransformBenchmarkStopsActionSequence(t *testing.T) {
-	tests := []struct {
+	type testCase struct {
 		name   string
 		result pipeline.ActionResult
-	}{
-		{name: "break", result: pipeline.ActionBreak},
-		{name: "discard", result: pipeline.ActionDiscard},
+	}
+	tests := []testCase{
+		{
+			name:   "break",
+			result: pipeline.ActionBreak,
+		},
+		{
+			name:   "discard",
+			result: pipeline.ActionDiscard,
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			called := false
 			steps := []transformCallStep{
-				{run: func(*pipeline.Event) pipeline.ActionResult { return tc.result }},
-				{run: func(*pipeline.Event) pipeline.ActionResult {
-					called = true
-					return pipeline.ActionPass
-				}},
+				{
+					run: func(*pipeline.Event) pipeline.ActionResult {
+						return tc.result
+					},
+				},
+				{
+					run: func(*pipeline.Event) pipeline.ActionResult {
+						called = true
+						return pipeline.ActionPass
+					},
+				},
 			}
 			require.Equal(t, tc.result, runTransformCallSteps(&pipeline.Event{}, steps))
 			require.False(t, called)
@@ -220,7 +281,12 @@ func TestTransformBenchmarkStopsActionSequence(t *testing.T) {
 func TestTransformBenchmarkObservesExecutionErrors(t *testing.T) {
 	scenario := transformCallScenario{
 		source: `.out = trim_right(.source, "x")`,
-		inputs: []transformCallCase{{name: "wrong_type", input: `{"source":42}`}},
+		inputs: []transformCallCase{
+			{
+				name:  "wrong_type",
+				input: `{"source":42}`,
+			},
+		},
 	}
 	logCore, logs := observer.New(zap.ErrorLevel)
 	variant := scenario.variants(t)[0]
