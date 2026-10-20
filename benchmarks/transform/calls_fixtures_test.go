@@ -1,11 +1,15 @@
 package transformbench
 
-import "github.com/ozontech/file.d/plugin/action/modify"
+import (
+	"encoding/json"
+
+	"github.com/ozontech/file.d/plugin/action/modify"
+)
 
 // Expected values are fixed independently of either plugin. Slice order is
 // also the execution and output order of the paired benchmarks.
 func transformCallScenarios() []transformCallScenario {
-	return []transformCallScenario{
+	scenarios := []transformCallScenario{
 		{
 			name: "assign_new5",
 			inputs: []transformCallCase{
@@ -149,7 +153,7 @@ func transformCallScenarios() []transformCallScenario {
 			},
 		},
 		{
-			name: "full",
+			name: "full_regex",
 			inputs: []transformCallCase{
 				{
 					name:  "default",
@@ -158,8 +162,9 @@ func transformCallScenarios() []transformCallScenario {
 				},
 			},
 			source: `
+				parts = parse_regex(.source, r'^([^.]*)', numeric_groups: true)
 				host = trim_right(
-					before(.source, "."),
+					parts["1"],
 					"0123456789"
 				)
 				.cluster_name = trim_right(
@@ -229,4 +234,22 @@ func transformCallScenarios() []transformCallScenario {
 			},
 		},
 	}
+	scenarios = append(scenarios, transformFieldScenarios()...)
+	scenarios = append(scenarios, transformStringScenarios()...)
+	scenarios = append(scenarios, transformLogScenarios()...)
+	return scenarios
+}
+
+// Fixtures are constructed outside measurement. Expected events come from the
+// declared workload data, never from executing either compared plugin.
+func transformEventCase(name string, input, want map[string]any) transformCallCase {
+	return transformCallCase{name: name, input: fixtureJSON(input), want: fixtureJSON(want)}
+}
+
+func fixtureJSON(value any) string {
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		panic(err)
+	}
+	return string(encoded)
 }

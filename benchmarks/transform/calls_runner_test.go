@@ -147,6 +147,10 @@ func newTransformCallEvents(tb testing.TB, count int) []transformCallEvent {
 	events := make([]transformCallEvent, count)
 	for i := range events {
 		events[i].event = pipeline.Event{Root: insaneJSON.Spawn(), SourceName: transformCallsSourceName}
+		// Spawn can retain decoder memory from a different workload. Start
+		// each variant with fresh storage, then warm and reuse it normally.
+		// This setup is outside all measured metrics.
+		events[i].event.Root.ReleaseMem()
 	}
 	tb.Cleanup(func() {
 		for i := range events {

@@ -15,7 +15,7 @@ import (
 func TestTransformBenchmarkScenarios(t *testing.T) {
 	for _, scenario := range transformCallScenarios() {
 		t.Run(scenario.name, func(t *testing.T) {
-			checkTransformCallScenario(t, scenario)
+			checkTransformCallScenario(t, &scenario)
 		})
 	}
 }
@@ -120,12 +120,12 @@ func TestTransformBenchmarkRunners(t *testing.T) {
 				names = append(names, variant.name)
 			}
 			require.Equal(t, tc.variants, names)
-			checkTransformCallScenario(t, tc.scenario)
+			checkTransformCallScenario(t, &tc.scenario)
 		})
 	}
 }
 
-func checkTransformCallScenario(t *testing.T, scenario transformCallScenario) {
+func checkTransformCallScenario(t *testing.T, scenario *transformCallScenario) {
 	t.Helper()
 	for _, variant := range scenario.variants(t) {
 		t.Run(variant.name, func(t *testing.T) {

@@ -12,9 +12,9 @@ import (
 const transformCallsBatchSize = 256
 
 // BenchmarkTransformCalls measures Do on already decoded events.
-// trim4 compares the same four trims; full compares the same result with
-// before in transform and a regex prefix extraction in modify. Parity only
-// covers valid string inputs. Setup and reset are excluded from all metrics.
+// Every pair uses equivalent inputs and the same regex/no-regex approach.
+// Each fixture declares its input domain. Setup and reset are excluded from
+// all metrics.
 // Scenario and variant slices keep execution and output order stable.
 func BenchmarkTransformCalls(b *testing.B) {
 	for _, scenario := range transformCallScenarios() {
