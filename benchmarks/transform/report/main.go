@@ -1,4 +1,4 @@
-// Command report runs the transform/modify benchmarks and prints paired results.
+// Command report runs paired and standalone transform benchmarks.
 // Run from the repository root; extra arguments are passed to go test.
 package main
 
@@ -19,7 +19,7 @@ func main() {
 
 func run(args []string, out io.Writer) error {
 	command := []string{
-		"test", "./benchmarks/transform", "-run=^$", "-bench=^BenchmarkTransformCalls$",
+		"test", "./benchmarks/transform", "-run=^$", "-bench=^BenchmarkTransform(Calls|Only)$",
 		"-benchmem", "-count=1", "-benchtime=1s", "-cpu=8",
 	}
 
