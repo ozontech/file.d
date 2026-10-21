@@ -17,7 +17,10 @@ const transformCallsBatchSize = 256
 // all metrics.
 // Scenario and variant slices keep execution and output order stable.
 func BenchmarkTransformCalls(b *testing.B) {
-	for _, scenario := range transformCallScenarios() {
+	if len(selectedTransformBenchmarks.calls) == 0 {
+		b.Skip("no paired scenarios selected")
+	}
+	for _, scenario := range selectedTransformBenchmarks.calls {
 		b.Run(scenario.name, func(b *testing.B) {
 			variants := scenario.variants(b)
 			require.Len(b, variants, 2, "paired benchmark requires a comparator")
@@ -33,7 +36,10 @@ func BenchmarkTransformCalls(b *testing.B) {
 // BenchmarkTransformOnly tracks workloads without a valid modify equivalent.
 // It uses the same per-event measurement boundary as the paired benchmarks.
 func BenchmarkTransformOnly(b *testing.B) {
-	for _, scenario := range transformOnlyScenarios() {
+	if len(selectedTransformBenchmarks.only) == 0 {
+		b.Skip("no standalone scenarios selected")
+	}
+	for _, scenario := range selectedTransformBenchmarks.only {
 		b.Run(scenario.name, func(b *testing.B) {
 			variants := scenario.variants(b)
 			require.Len(b, variants, 1, "standalone benchmark must not have a comparator")
