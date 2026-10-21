@@ -20,8 +20,16 @@ func TestTransformBenchmarkScenarios(t *testing.T) {
 	}
 }
 
+func TestTransformOnlyBenchmarkScenarios(t *testing.T) {
+	for _, scenario := range transformOnlyScenarios() {
+		t.Run(scenario.name, func(t *testing.T) {
+			require.Empty(t, scenario.actions, "standalone scenarios must not have a comparator")
+			checkTransformCallScenario(t, &scenario)
+		})
+	}
+}
+
 // These small fixtures exercise the runner's supported comparison shapes.
-// Measured workloads are added separately, in the next implementation stages.
 func TestTransformBenchmarkRunners(t *testing.T) {
 	type testCase struct {
 		name     string

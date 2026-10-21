@@ -30,6 +30,21 @@ func BenchmarkTransformCalls(b *testing.B) {
 	}
 }
 
+// BenchmarkTransformOnly tracks workloads without a valid modify equivalent.
+// It uses the same per-event measurement boundary as the paired benchmarks.
+func BenchmarkTransformOnly(b *testing.B) {
+	for _, scenario := range transformOnlyScenarios() {
+		b.Run(scenario.name, func(b *testing.B) {
+			variants := scenario.variants(b)
+			require.Len(b, variants, 1, "standalone benchmark must not have a comparator")
+			variant := variants[0]
+			b.Run(variant.name, func(b *testing.B) {
+				benchmarkTransformCallVariant(b, scenario.inputs, variant)
+			})
+		})
+	}
+}
+
 // benchmarkTransformCallVariant is shared by paired and transform-only workloads.
 func benchmarkTransformCallVariant(b *testing.B, inputs []transformCallCase, variant transformCallVariant) {
 	b.Helper()
