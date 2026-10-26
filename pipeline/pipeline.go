@@ -472,9 +472,13 @@ func (p *Pipeline) In(sourceID SourceID, sourceName string, offsets Offsets, byt
 			}
 		}
 
+		checkBytes := bytes
+		if len(row.Log) > 0 {
+			checkBytes = row.Log
+		}
 		spamResult := p.antispamer.IsSpam(
 			antispam.SourceData{ID: checkSourceID, Name: checkSourceName, IsNew: isNewSource},
-			antispam.EventData{Bytes: bytes, Time: eventTime, IsPartial: row.IsPartial},
+			antispam.EventData{Bytes: checkBytes, Time: eventTime, IsPartial: row.IsPartial},
 			meta,
 		)
 		switch spamResult {
