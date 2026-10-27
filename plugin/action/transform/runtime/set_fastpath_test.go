@@ -137,7 +137,14 @@ func TestSetFastPathInvalidUTF8(t *testing.T) {
 	viaJSON := setViaJSON(t, a, "out", core.StringValue{V: bad})
 	viaFast := setViaTarget(t, b, "out", core.StringValue{V: bad})
 
-	require.Equal(t, `{"keep":1,"out":"bad\ufffd\ufffdutf8"}`, viaJSON)
+	var got struct {
+		Keep int    `json:"keep"`
+		Out  string `json:"out"`
+	}
+
+	require.NoError(t, json.Unmarshal([]byte(viaJSON), &got))
+	require.Equal(t, 1, got.Keep)
+	require.Equal(t, "bad\ufffd\ufffdutf8", got.Out)
 	require.Equal(t, "{\"keep\":1,\"out\":\"bad\xff\xfeutf8\"}", viaFast)
 }
 
