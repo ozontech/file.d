@@ -2,43 +2,28 @@ package transformbench
 
 import (
 	"encoding/json"
-	"strings"
-	"testing"
 
-	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/plugin/action/modify"
-	"github.com/ozontech/file.d/plugin/action/transform"
-	insaneJSON "github.com/ozontech/insane-json"
-	"github.com/stretchr/testify/require"
-	"go.uber.org/zap"
-	"go.uber.org/zap/zaptest/observer"
 )
 
-const transformCallsSourceName = "transform_calls"
-
-type transformCallScenario struct {
-	name         string
-	input        string
-	source       string
-	modifyConfig modify.Config
-	want         string
-	// Additional correctness cases use the same plugins but are not benchmarked.
-	cases []transformCallCase
-}
-
-type transformCallCase struct {
-	name  string
-	input string
-	want  string
+type transformCallProfile struct {
+	name   string
+	inputs []transformCallCase
 }
 
 // Expected values are fixed independently of either plugin. Slice order is
 // also the execution and output order of the paired benchmarks.
 func transformCallScenarios() []transformCallScenario {
-	return []transformCallScenario{
+	scenarios := []transformCallScenario{
 		{
-			name:  "assign_new5",
-			input: `{"source":"x"}`,
+			name: "assign_new5",
+			inputs: []transformCallCase{
+				{
+					name:  "default",
+					input: `{"source":"x"}`,
+					want:  `{"source":"x","a":"v1","b":"v2","c":"v3","d":"v4","e":"v5"}`,
+				},
+			},
 			source: `
 				.a = "v1"
 				.b = "v2"
@@ -46,12 +31,21 @@ func transformCallScenarios() []transformCallScenario {
 				.d = "v4"
 				.e = "v5"
 			`,
-			modifyConfig: modify.Config{"a": "v1", "b": "v2", "c": "v3", "d": "v4", "e": "v5"},
-			want:         `{"source":"x","a":"v1","b":"v2","c":"v3","d":"v4","e":"v5"}`,
+			actions: []transformCallAction{
+				{
+					config: &modify.Config{"a": "v1", "b": "v2", "c": "v3", "d": "v4", "e": "v5"},
+				},
+			},
 		},
 		{
-			name:  "assign_existing5",
-			input: `{"source":"x","a":"old","b":"old","c":"old","d":"old","e":"old"}`,
+			name: "assign_existing5",
+			inputs: []transformCallCase{
+				{
+					name:  "default",
+					input: `{"source":"x","a":"old","b":"old","c":"old","d":"old","e":"old"}`,
+					want:  `{"source":"x","a":"v1","b":"v2","c":"v3","d":"v4","e":"v5"}`,
+				},
+			},
 			source: `
 				.a = "v1"
 				.b = "v2"
@@ -59,15 +53,27 @@ func transformCallScenarios() []transformCallScenario {
 				.d = "v4"
 				.e = "v5"
 			`,
-			modifyConfig: modify.Config{"a": "v1", "b": "v2", "c": "v3", "d": "v4", "e": "v5"},
-			want:         `{"source":"x","a":"v1","b":"v2","c":"v3","d":"v4","e":"v5"}`,
+			actions: []transformCallAction{
+				{
+					config: &modify.Config{"a": "v1", "b": "v2", "c": "v3", "d": "v4", "e": "v5"},
+				},
+			},
 		},
 		{
-			name:         "trim_one",
-			input:        `{"source":"api123"}`,
-			source:       `.out = trim_right(.source, "0123456789")`,
-			modifyConfig: modify.Config{"out": `${source|trim("right","0123456789")}`},
-			want:         `{"source":"api123","out":"api"}`,
+			name: "trim_one",
+			inputs: []transformCallCase{
+				{
+					name:  "default",
+					input: `{"source":"api123"}`,
+					want:  `{"source":"api123","out":"api"}`,
+				},
+			},
+			source: `.out = trim_right(.source, "0123456789")`,
+			actions: []transformCallAction{
+				{
+					config: &modify.Config{"out": `${source|trim("right","0123456789")}`},
+				},
+			},
 			cases: []transformCallCase{
 				{
 					name:  "empty",
@@ -82,8 +88,14 @@ func transformCallScenarios() []transformCallScenario {
 			},
 		},
 		{
-			name:  "trim4",
-			input: `{"source":"api-123z45"}`,
+			name: "trim4",
+			inputs: []transformCallCase{
+				{
+					name:  "default",
+					input: `{"source":"api-123z45"}`,
+					want:  `{"source":"api-123z45","cluster_name":"api"}`,
+				},
+			},
 			source: `
 				host = trim_right(.source, "0123456789")
 				.cluster_name = trim_right(
@@ -94,14 +106,17 @@ func transformCallScenarios() []transformCallScenario {
 					"-"
 				)
 			`,
-			modifyConfig: modify.Config{
-				"cluster_name": `${source` +
-					`|trim("right","0123456789")` +
-					`|trim("right","z")` +
-					`|trim("right","0123456789")` +
-					`|trim("right","-")}`,
+			actions: []transformCallAction{
+				{
+					config: &modify.Config{
+						"cluster_name": `${source` +
+							`|trim("right","0123456789")` +
+							`|trim("right","z")` +
+							`|trim("right","0123456789")` +
+							`|trim("right","-")}`,
+					},
+				},
 			},
-			want: `{"source":"api-123z45","cluster_name":"api"}`,
 			cases: []transformCallCase{
 				{
 					name:  "domain",
@@ -151,11 +166,18 @@ func transformCallScenarios() []transformCallScenario {
 			},
 		},
 		{
-			name:  "full",
-			input: `{"source":"api-123z45.example.net"}`,
+			name: "full_regex",
+			inputs: []transformCallCase{
+				{
+					name:  "default",
+					input: `{"source":"api-123z45.example.net"}`,
+					want:  `{"source":"api-123z45.example.net","cluster_name":"api"}`,
+				},
+			},
 			source: `
+				parts = parse_regex(.source, r'^([^.]*)', numeric_groups: true)
 				host = trim_right(
-					before(.source, "."),
+					parts["1"],
 					"0123456789"
 				)
 				.cluster_name = trim_right(
@@ -166,15 +188,18 @@ func transformCallScenarios() []transformCallScenario {
 					"-"
 				)
 			`,
-			modifyConfig: modify.Config{
-				"cluster_name": `${source` +
-					`|re("^([^.]*)",1,[1],"")` +
-					`|trim("right","0123456789")` +
-					`|trim("right","z")` +
-					`|trim("right","0123456789")` +
-					`|trim("right","-")}`,
+			actions: []transformCallAction{
+				{
+					config: &modify.Config{
+						"cluster_name": `${source` +
+							`|re("^([^.]*)",1,[1],"")` +
+							`|trim("right","0123456789")` +
+							`|trim("right","z")` +
+							`|trim("right","0123456789")` +
+							`|trim("right","-")}`,
+					},
+				},
 			},
-			want: `{"source":"api-123z45.example.net","cluster_name":"api"}`,
 			cases: []transformCallCase{
 				{
 					name:  "domain",
@@ -224,112 +249,29 @@ func transformCallScenarios() []transformCallScenario {
 			},
 		},
 	}
+	scenarios = append(scenarios, transformFieldScenarios()...)
+	scenarios = append(scenarios, transformStringScenarios()...)
+	scenarios = append(scenarios, transformLogScenarios()...)
+	scenarios = append(scenarios, transformMappingScenarios()...)
+	scenarios = append(scenarios, transformTagScenarios()...)
+	scenarios = append(scenarios, transformDependentScenarios()...)
+	return scenarios
 }
 
-func (s *transformCallScenario) runner(tb testing.TB, variant string, logger *zap.Logger) func(*pipeline.Event) pipeline.ActionResult {
-	tb.Helper()
-	switch variant {
-	case "transform":
-		p := &transform.Plugin{}
-		p.Start(&transform.Config{Source: s.source}, &pipeline.ActionPluginParams{
-			Logger:              logger.Sugar(),
-			PluginDefaultParams: pipeline.PluginDefaultParams{PipelineName: "benchmark_transform_" + s.name},
-		})
-		tb.Cleanup(p.Stop)
-		return p.Do
-	case "modify":
-		require.NotNil(tb, s.modifyConfig)
-		p := &modify.Plugin{}
-		p.Start(&s.modifyConfig, &pipeline.ActionPluginParams{Logger: logger.Sugar()})
-		tb.Cleanup(p.Stop)
-		return p.Do
-	default:
-		tb.Fatalf("unknown benchmark variant %q", variant)
-		return nil
+// Fixtures are constructed outside measurement. Expected events come from the
+// declared workload data, never from executing either compared plugin.
+func transformEventCase(name string, input, want map[string]any) transformCallCase {
+	return transformCallCase{
+		name:  name,
+		input: fixtureJSON(input),
+		want:  fixtureJSON(want),
 	}
 }
 
-func decodeTransformCallFields(tb testing.TB, input string) map[string]any {
-	tb.Helper()
-	decoder := json.NewDecoder(strings.NewReader(input))
-	decoder.UseNumber()
-	var fields map[string]any
-	require.NoError(tb, decoder.Decode(&fields))
-	return fields
-}
-
-func (s *transformCallScenario) checkResult(tb testing.TB, root *insaneJSON.Root, result pipeline.ActionResult) {
-	tb.Helper()
-	require.Equal(tb, pipeline.ActionPass, result)
-	// Compare the entire event, including types, to catch extra fields, missing
-	// fields and changes to preserved data. All serialization stays outside timers.
-	require.Equal(tb, decodeTransformCallFields(tb, s.want), decodeTransformCallFields(tb, root.EncodeToString()))
-}
-
-// TestTransformBenchmarkScenarios checks every benchmark fixture and verifies
-// that full and partial batches restore the original input before each call.
-func TestTransformBenchmarkScenarios(t *testing.T) {
-	for _, scenario := range transformCallScenarios() {
-		t.Run(scenario.name, func(t *testing.T) {
-			for _, variant := range []string{"transform", "modify"} {
-				t.Run(variant, func(t *testing.T) {
-					logCore, logs := observer.New(zap.ErrorLevel)
-					run := scenario.runner(t, variant, zap.New(logCore))
-					events := newTransformCallEvents(t, 3)
-					input := decodeTransformCallFields(t, scenario.input)
-					// Exercise full and partial batches through the same reset/run
-					// helpers used by the benchmark. Inputs must be fresh each time.
-					for _, size := range []int{3, 2, 3} {
-						batch := events[:size]
-						resetTransformCallEvents(t, batch, scenario.input)
-						runTransformCallEvents(batch, func(event *pipeline.Event) pipeline.ActionResult {
-							require.Equal(t, input, decodeTransformCallFields(t, event.Root.EncodeToString()))
-							return run(event)
-						})
-						// Do returns ActionPass even when evaluation fails.
-						require.Empty(t, logs.All(), "unexpected plugin errors")
-						for i := range batch {
-							scenario.checkResult(t, batch[i].event.Root, batch[i].result)
-						}
-					}
-				})
-			}
-		})
+func fixtureJSON(value any) string {
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		panic(err)
 	}
-}
-
-// TestTransformBenchmarkCases checks each scenario's additional inputs using
-// the same plugin and Root repeatedly. These cases are not extra benchmarks.
-func TestTransformBenchmarkCases(t *testing.T) {
-	for _, scenario := range transformCallScenarios() {
-		if len(scenario.cases) == 0 {
-			continue
-		}
-		t.Run(scenario.name, func(t *testing.T) {
-			for _, variant := range []string{"transform", "modify"} {
-				t.Run(variant, func(t *testing.T) {
-					logCore, logs := observer.New(zap.ErrorLevel)
-					run := scenario.runner(t, variant, zap.New(logCore))
-					root := insaneJSON.Spawn()
-					defer insaneJSON.Release(root)
-					event := &pipeline.Event{Root: root, SourceName: transformCallsSourceName}
-					for _, tc := range scenario.cases {
-						t.Run(tc.name, func(t *testing.T) {
-							fixture := scenario
-							fixture.input = tc.input
-							fixture.want = tc.want
-							// Reuse both the plugin and Root across different inputs,
-							// decoding fresh contents before every execution.
-							for range 3 {
-								require.NoError(t, root.DecodeString(fixture.input))
-								result := run(event)
-								require.Empty(t, logs.All(), "unexpected plugin errors")
-								fixture.checkResult(t, root, result)
-							}
-						})
-					}
-				})
-			}
-		})
-	}
+	return string(encoded)
 }

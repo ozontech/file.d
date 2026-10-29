@@ -4,6 +4,9 @@ UPSTREAM_BRANCH ?= origin/master
 
 GOLANGCI_LINT_VER=v2.8.0
 BENCH_ARGS ?=
+GROUP ?= smoke
+CASE ?=
+LIST ?= 0
 GOOS ?= linux
 GOARCH ?= amd64
 
@@ -52,7 +55,7 @@ bench-file:
 
 .PHONY: bench-transform
 bench-transform:
-	go run ./benchmarks/transform/report $(BENCH_ARGS)
+	go run ./benchmarks/transform/report -group="$(GROUP)" -case="$(CASE)" -list="$(LIST)" -- $(BENCH_ARGS)
 
 .PHONY: gen-doc
 gen-doc:
