@@ -12,6 +12,15 @@ type indexedFunction interface {
 	CallIndexed(args []core.Value) (core.Value, error)
 }
 
+// statefulIndexedFunction optionally uses execution-owned scratch storage.
+// State can be nil; implementations must then work without reuse. Neither state
+// nor args may escape the call, and returned values must survive later reuse.
+// Call and CallIndexed remain the supported entry points without runtime state.
+type statefulIndexedFunction interface {
+	indexedFunction
+	CallIndexedWithState(state *core.CallState, args []core.Value) (core.Value, error)
+}
+
 // PrepareCall binds an already structurally validated call to this function.
 // Functions without indexed support keep the general call path; every function
 // in the standard registry supports indexed arguments.
@@ -41,7 +50,14 @@ func (c *CompiledFunc) PrepareCall(args []core.Argument) *core.CallPlan {
 		}
 	}
 
-	return core.NewCallPlan(slots, defaults, func(pos core.Position, values []core.Value) (core.Value, error) {
+	call := func(_ *core.CallState, values []core.Value) (core.Value, error) {
+		return fn.CallIndexed(values)
+	}
+	if stateful, ok := fn.(statefulIndexedFunction); ok {
+		call = stateful.CallIndexedWithState
+	}
+
+	return core.NewStatefulCallPlan(slots, defaults, func(state *core.CallState, pos core.Position, values []core.Value) (core.Value, error) {
 		if c.checkKinds {
 			for i, p := range c.params {
 				if err := c.checkKind(p, values[i]); err != nil {
@@ -49,7 +65,7 @@ func (c *CompiledFunc) PrepareCall(args []core.Argument) *core.CallPlan {
 				}
 			}
 		}
-		result, err := fn.CallIndexed(values)
+		result, err := call(state, values)
 		if err != nil {
 			return core.NullValue{}, fmt.Errorf("%s: %s: %w", pos, c.Name(), err)
 		}

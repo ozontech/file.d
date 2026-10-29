@@ -19,6 +19,7 @@ type Context struct {
 	registry      *stdlib.Registry
 	scope         map[string]core.Value
 	scopePeakSize int
+	calls         core.CallState
 }
 
 func NewContext(target core.Target, registry *stdlib.Registry) *Context {
@@ -28,7 +29,8 @@ func NewContext(target core.Target, registry *stdlib.Registry) *Context {
 	}
 }
 
-// Reset releases event-local values while retaining a small scope for reuse.
+// Reset releases event-local values while retaining a small scope and bounded
+// argument storage for reuse. No call may be active during Reset.
 // Values can reference constants or returned results, so cleanup is shallow.
 func (c *Context) Reset() {
 	clear(c.scope)
@@ -36,6 +38,13 @@ func (c *Context) Reset() {
 		c.scope = nil
 	}
 	c.scopePeakSize = 0
+	c.calls.Reset()
+}
+
+// CallState provides invocation storage owned by this execution, not the shared
+// program or registry. The Context must not be reset during an active call.
+func (c *Context) CallState() *core.CallState {
+	return &c.calls
 }
 
 func (c *Context) GetVar(name string) (core.Value, bool) {
