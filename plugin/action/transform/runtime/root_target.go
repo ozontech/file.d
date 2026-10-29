@@ -10,21 +10,46 @@ import (
 	insaneJSON "github.com/ozontech/insane-json"
 )
 
+const (
+	maxRetainedMetadataEntries = 64
+	maxRetainedPathSegments    = 64
+)
+
 type RootTarget struct {
-	Root       *insaneJSON.Root
-	SourceName string
-	metadata   map[string]string
+	Root             *insaneJSON.Root
+	SourceName       string
+	metadata         map[string]string
+	metadataPeakSize int
 
 	pathBuffer []string
 }
 
 func NewRootTarget(root *insaneJSON.Root, sourceName string, metadata map[string]string) *RootTarget {
 	return &RootTarget{
-		Root:       root,
-		SourceName: sourceName,
-		metadata:   metadata,
+		Root:             root,
+		SourceName:       sourceName,
+		metadata:         metadata,
+		metadataPeakSize: len(metadata),
+	}
+}
 
-		pathBuffer: make([]string, 0),
+// Reset detaches the event and releases its references, retaining small buffers
+// for reuse. Root and SourceName must be set before accessing the next event.
+func (t *RootTarget) Reset() {
+	t.Root = nil
+	t.SourceName = ""
+	clear(t.metadata)
+	if t.metadataPeakSize > maxRetainedMetadataEntries {
+		t.metadata = nil
+	}
+	t.metadataPeakSize = 0
+
+	// A shorter path leaves strings beyond len(pathBuffer) in the backing array.
+	clear(t.pathBuffer[:cap(t.pathBuffer)])
+	if cap(t.pathBuffer) > maxRetainedPathSegments {
+		t.pathBuffer = nil
+	} else {
+		t.pathBuffer = t.pathBuffer[:0]
 	}
 }
 
@@ -234,7 +259,11 @@ func (t *RootTarget) setMetadata(path core.Path, value core.Value) error {
 	if !ok {
 		return fmt.Errorf("metadata values must be strings, got %s", value.Kind())
 	}
+	if t.metadata == nil {
+		t.metadata = make(map[string]string)
+	}
 	t.metadata[path.Segments[0].Field] = s.V
+	t.metadataPeakSize = max(t.metadataPeakSize, len(t.metadata))
 	return nil
 }
 

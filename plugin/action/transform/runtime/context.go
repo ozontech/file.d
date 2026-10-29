@@ -7,21 +7,35 @@ import (
 	"github.com/ozontech/file.d/plugin/action/transform/stdlib"
 )
 
+// Bound the storage retained after an event with many local variables.
+const maxRetainedScopeEntries = 64
+
 // Context carries all runtime state available during expression evaluation.
 //
-// A single Context is created per Program.Run call and passed down through every Eval call.
+// A Context is passed through every Eval call and must not be used concurrently.
+// Reset prepares it for another run with the same target and registry.
 type Context struct {
-	target   core.Target
-	registry *stdlib.Registry
-	scope    map[string]core.Value
+	target        core.Target
+	registry      *stdlib.Registry
+	scope         map[string]core.Value
+	scopePeakSize int
 }
 
 func NewContext(target core.Target, registry *stdlib.Registry) *Context {
 	return &Context{
 		target:   target,
 		registry: registry,
-		scope:    make(map[string]core.Value),
 	}
+}
+
+// Reset releases event-local values while retaining a small scope for reuse.
+// Values can reference constants or returned results, so cleanup is shallow.
+func (c *Context) Reset() {
+	clear(c.scope)
+	if c.scopePeakSize > maxRetainedScopeEntries {
+		c.scope = nil
+	}
+	c.scopePeakSize = 0
 }
 
 func (c *Context) GetVar(name string) (core.Value, bool) {
@@ -30,7 +44,11 @@ func (c *Context) GetVar(name string) (core.Value, bool) {
 }
 
 func (c *Context) SetVar(name string, value core.Value) {
+	if c.scope == nil {
+		c.scope = make(map[string]core.Value)
+	}
 	c.scope[name] = value
+	c.scopePeakSize = max(c.scopePeakSize, len(c.scope))
 }
 
 func (c *Context) DeleteVar(name string) {

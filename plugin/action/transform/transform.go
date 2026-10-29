@@ -4,12 +4,12 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"sync/atomic"
 
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/plugin/action/transform/compiler"
 	"github.com/ozontech/file.d/plugin/action/transform/core"
-	"github.com/ozontech/file.d/plugin/action/transform/runtime"
 	"github.com/ozontech/file.d/plugin/action/transform/stdlib"
 	"go.uber.org/zap"
 )
@@ -71,6 +71,7 @@ type Plugin struct {
 	program          Program
 	logger           *zap.Logger
 	pluginController pipeline.ActionPluginController
+	state            atomic.Pointer[executionState]
 }
 
 // ! config-params
@@ -126,16 +127,19 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 	}
 
 	p.program = program
+	p.state.Store(newExecutionState())
 }
 
-func (p *Plugin) Stop() {}
+func (p *Plugin) Stop() {
+	p.state.Store(nil)
+}
 
 func (p *Plugin) Do(event *pipeline.Event) pipeline.ActionResult {
-	target := runtime.NewRootTarget(event.Root, event.SourceName, make(map[string]string))
-	ctx := runtime.NewContext(target, stdlib.GetRegistry())
+	state := p.acquireState(event)
+	defer p.releaseState(state)
 
 	for _, expr := range p.program.expressions {
-		_, err := expr.Eval(ctx)
+		_, err := expr.Eval(state.ctx)
 		if err != nil {
 			if errors.Is(err, core.AbortError) {
 				p.logger.Debug("transform program aborted")
