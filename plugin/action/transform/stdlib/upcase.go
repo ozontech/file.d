@@ -20,7 +20,15 @@ func (upcase) Params() []Parameter {
 	}
 }
 
-func (upcase) Call(args map[string]core.Value) (core.Value, error) {
-	val := args["value"].(core.StringValue)
+func (u upcase) Call(args map[string]core.Value) (core.Value, error) {
+	return u.call(args["value"])
+}
+
+func (u upcase) CallIndexed(args []core.Value) (core.Value, error) {
+	return u.call(args[0])
+}
+
+func (upcase) call(valueArg core.Value) (core.Value, error) {
+	val := valueArg.(core.StringValue)
 	return core.StringValue{V: strings.ToUpper(val.V)}, nil
 }

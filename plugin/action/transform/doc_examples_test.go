@@ -31,7 +31,7 @@ func TestReadmeExamplesCompile(t *testing.T) {
 					require.NoError(t, err)
 					exprs, err := cmp.Compile()
 					require.NoError(t, err)
-					require.NoError(t, compiler.ValidateCalls(exprs, stdlib.GetRegistry()))
+					require.NoError(t, compiler.Prepare(exprs, stdlib.GetRegistry()))
 				})
 			}
 			require.Positive(t, count, "documentation must contain program examples")
@@ -109,6 +109,6 @@ func TestDocExamplesCompile(t *testing.T) {
 		require.NoError(t, err, "snippet %d", i)
 		exprs, err := cmp.Compile()
 		require.NoError(t, err, "snippet %d", i)
-		require.NoError(t, compiler.ValidateCalls(exprs, stdlib.GetRegistry()), "snippet %d", i)
+		require.NoError(t, compiler.Prepare(exprs, stdlib.GetRegistry()), "snippet %d", i)
 	}
 }
