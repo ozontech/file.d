@@ -65,10 +65,11 @@ func benchmarkCommand(args []string, out io.Writer) ([]string, bool, error) {
 			return nil, false, fmt.Errorf("%s is reserved; use GROUP, CASE and LIST", arg)
 		}
 	}
-	command := []string{
+	command := make([]string, 0, 8+len(flags.Args())+3)
+	command = append(command,
 		"test", "./benchmarks/transform", "-run=^$", "-bench=^BenchmarkTransform(Calls|Only)$",
 		"-benchmem", "-count=1", "-benchtime=1s", "-cpu=8",
-	}
+	)
 	command = append(command, flags.Args()...)
 	command = append(command, "-transform.group="+*group, "-transform.case="+*prefix,
 		fmt.Sprintf("-transform.list=%t", *list))
