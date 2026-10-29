@@ -336,6 +336,10 @@ func evalIndex(pos Position, obj, idx Value) (Value, error) {
 }
 
 func (e *CallExpr) Eval(ctx EvalContext) (Value, error) {
+	if e.Plan != nil {
+		return e.Plan.eval(ctx, e)
+	}
+
 	var positional []Value
 	named := make(map[string]Value)
 
@@ -356,6 +360,7 @@ func (e *CallExpr) Eval(ctx EvalContext) (Value, error) {
 
 	return ctx.CallFunc(e.Pos(), e.Name, positional, named)
 }
+
 func (e *IfExpr) Eval(ctx EvalContext) (Value, error) {
 	condition, err := e.Condition.Eval(ctx)
 	if err != nil {

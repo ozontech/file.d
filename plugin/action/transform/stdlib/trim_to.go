@@ -30,8 +30,17 @@ func (trimTo) Name() string { return "trim_to" }
 
 func (trimTo) Params() []Parameter { return trimToParams("both ends") }
 
-func (trimTo) Call(args map[string]core.Value) (core.Value, error) {
-	value, cutset := trimArgs(args)
+func (tr trimTo) Call(args map[string]core.Value) (core.Value, error) {
+	return tr.call(args["value"], args["cutset"])
+}
+
+func (tr trimTo) CallIndexed(args []core.Value) (core.Value, error) {
+	return tr.call(args[0], args[1])
+}
+
+func (trimTo) call(valueArg, cutsetArg core.Value) (core.Value, error) {
+	value := valueArg.(core.StringValue).V
+	cutset := cutsetArg.(core.StringValue).V
 	return core.StringValue{V: trimToRightOf(trimToLeftOf(value, cutset), cutset)}, nil
 }
 
@@ -41,8 +50,17 @@ func (trimToLeft) Name() string { return "trim_to_left" }
 
 func (trimToLeft) Params() []Parameter { return trimToParams("the start") }
 
-func (trimToLeft) Call(args map[string]core.Value) (core.Value, error) {
-	value, cutset := trimArgs(args)
+func (tr trimToLeft) Call(args map[string]core.Value) (core.Value, error) {
+	return tr.call(args["value"], args["cutset"])
+}
+
+func (tr trimToLeft) CallIndexed(args []core.Value) (core.Value, error) {
+	return tr.call(args[0], args[1])
+}
+
+func (trimToLeft) call(valueArg, cutsetArg core.Value) (core.Value, error) {
+	value := valueArg.(core.StringValue).V
+	cutset := cutsetArg.(core.StringValue).V
 	return core.StringValue{V: trimToLeftOf(value, cutset)}, nil
 }
 
@@ -52,8 +70,17 @@ func (trimToRight) Name() string { return "trim_to_right" }
 
 func (trimToRight) Params() []Parameter { return trimToParams("the end") }
 
-func (trimToRight) Call(args map[string]core.Value) (core.Value, error) {
-	value, cutset := trimArgs(args)
+func (tr trimToRight) Call(args map[string]core.Value) (core.Value, error) {
+	return tr.call(args["value"], args["cutset"])
+}
+
+func (tr trimToRight) CallIndexed(args []core.Value) (core.Value, error) {
+	return tr.call(args[0], args[1])
+}
+
+func (trimToRight) call(valueArg, cutsetArg core.Value) (core.Value, error) {
+	value := valueArg.(core.StringValue).V
+	cutset := cutsetArg.(core.StringValue).V
 	return core.StringValue{V: trimToRightOf(value, cutset)}, nil
 }
 
