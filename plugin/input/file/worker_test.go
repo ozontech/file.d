@@ -47,6 +47,7 @@ func TestWorkerWork(t *testing.T) {
 		maxEventSize       int
 		readBufferSize     int
 		cutOffEventByLimit bool
+		shouldSkip         bool
 
 		inFile  string
 		expData string
@@ -57,13 +58,6 @@ func TestWorkerWork(t *testing.T) {
 			inFile:         "abc\n",
 			readBufferSize: 1024,
 			expData:        "abc\n",
-		},
-		{
-			name:           "should_ok_and_empty_when_read_not_ready_line",
-			maxEventSize:   1024,
-			inFile:         "abc",
-			readBufferSize: 1024,
-			expData:        "",
 		},
 		{
 			name:           "should_ok_and_not_read_long_line",
@@ -81,11 +75,26 @@ func TestWorkerWork(t *testing.T) {
 			expData:            "abc\n",
 		},
 		{
-			name:           "should_ok_when_read_1_line_without_newline",
+			name:           "should_emit_last_line_without_trailing_newline",
 			maxEventSize:   1024,
 			inFile:         "abc",
 			readBufferSize: 1024,
-			expData:        "",
+			expData:        "abc",
+		},
+		{
+			name:           "should_emit_last_line_among_multiple_without_trailing_newline",
+			maxEventSize:   1024,
+			inFile:         "line1\nline2\nline3",
+			readBufferSize: 1024,
+			expData:        "line3",
+		},
+		{
+			name:       "should_not_emit_incomplete_first_event_at_eof",
+			maxEventSize: 1024,
+			shouldSkip: true,
+			inFile:     "abc",
+			readBufferSize: 1024,
+			expData:    "",
 		},
 	}
 	for _, tt := range tests {
@@ -112,6 +121,7 @@ func TestWorkerWork(t *testing.T) {
 				shouldSkip:     atomic.Bool{},
 				mu:             &sync.Mutex{},
 			}
+			job.shouldSkip.Store(tt.shouldSkip)
 			ctl := metric.NewCtl("test", prometheus.NewRegistry(), 0, 0)
 			metrics := newMetricCollection(
 				ctl.RegisterCounter("worker1", "help_test"),
@@ -264,7 +274,7 @@ func TestWorkerWorkMultiData(t *testing.T) {
 			readBufferSize: 1024,
 
 			inData:  `{"a":"a"}`,
-			outData: nil, // we don't send an event if we don't find a newline
+			outData: []string{`{"a":"a"}`},
 		},
 	}
 
