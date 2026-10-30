@@ -208,7 +208,8 @@ func (w *worker) work(controller inputer, jobProvider *jobProvider, readBufferSi
 		if isEOFReached {
 			// Flush remaining data when EOF is reached and there's no trailing newline.
 			// Without this, the last line of a file that doesn't end with '\n' is silently dropped.
-			if len(accumBuf) > 0 {
+			// Skip the flush when skipLine is set: the event may be incompletely written.
+			if len(accumBuf) > 0 && !skipLine {
 				job.lastEventSeq = controller.In(sourceID, sourceName, pipeline.NewOffsets(lastOffset+scanned, offsets), accumBuf, isVirgin, metadataInfo)
 				accumBuf = accumBuf[:0]
 				job.tail = job.tail[:0]

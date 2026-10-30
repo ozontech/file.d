@@ -47,6 +47,7 @@ func TestWorkerWork(t *testing.T) {
 		maxEventSize       int
 		readBufferSize     int
 		cutOffEventByLimit bool
+		shouldSkip         bool
 
 		inFile  string
 		expData string
@@ -87,6 +88,14 @@ func TestWorkerWork(t *testing.T) {
 			readBufferSize: 1024,
 			expData:        "line3",
 		},
+		{
+			name:       "should_not_emit_incomplete_first_event_at_eof",
+			maxEventSize: 1024,
+			shouldSkip: true,
+			inFile:     "abc",
+			readBufferSize: 1024,
+			expData:    "",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -109,7 +118,7 @@ func TestWorkerWork(t *testing.T) {
 				lastEventSeq:   0,
 				isVirgin:       false,
 				isDone:         false,
-				shouldSkip:     *atomic.NewBool(false),
+				shouldSkip:     *atomic.NewBool(tt.shouldSkip),
 				mu:             &sync.Mutex{},
 			}
 			ctl := metric.NewCtl("test", prometheus.NewRegistry(), 0, 0)
