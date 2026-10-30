@@ -139,4 +139,6 @@ type Consumer struct{}
 
 func (c Consumer) Assigned(_ context.Context, _ *kgo.Client, assigned map[string][]int32) {}
 
+func (c Consumer) Revoked(_ context.Context, _ *kgo.Client, revoked map[string][]int32) {}
+
 func (c Consumer) Lost(_ context.Context, _ *kgo.Client, lost map[string][]int32) {}

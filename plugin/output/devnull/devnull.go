@@ -1,9 +1,10 @@
 package devnull
 
 import (
+	"sync/atomic"
+
 	"github.com/ozontech/file.d/fd"
 	"github.com/ozontech/file.d/pipeline"
-	"go.uber.org/atomic"
 )
 
 /*{ introduction

@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"go.uber.org/atomic"
+	"sync/atomic"
 )
 
 // actionWatcher is the struct for debugging actions.
@@ -38,7 +38,7 @@ func newActionWatcher(procID int) *actionWatcher {
 	return &actionWatcher{
 		procID:     procID,
 		samples:    make(map[int][]*sample),
-		samplesLen: atomic.NewInt64(0),
+		samplesLen: &atomic.Int64{},
 		samplesMu:  sync.Mutex{},
 	}
 }
@@ -70,7 +70,7 @@ func (aw *actionWatcher) addSample(actionIdx int) *sample {
 	}
 	aw.samplesMu.Lock()
 	aw.samples[actionIdx] = append(aw.samples[actionIdx], s)
-	aw.samplesLen.Inc()
+	aw.samplesLen.Add(1)
 	aw.samplesMu.Unlock()
 
 	return s
@@ -94,7 +94,7 @@ func (aw *actionWatcher) deleteSample(actionIdx int, sample *sample) {
 	samples[deleteInd] = samples[len(samples)-1]
 	samples[len(samples)-1] = nil
 	aw.samples[actionIdx] = samples[:len(samples)-1]
-	aw.samplesLen.Dec()
+	aw.samplesLen.Add(-1)
 }
 
 var timeoutEvent = []byte("<timeout event>")

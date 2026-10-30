@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -14,7 +15,6 @@ import (
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/xtime"
 	"github.com/rjeczalik/notify"
-	"go.uber.org/atomic"
 	"go.uber.org/zap"
 )
 
@@ -168,7 +168,7 @@ func NewJobProvider(config *Config, metrics *metricCollection, sugLogger *zap.Su
 		offsetDB: newOffsetDB(config.OffsetsFile, config.OffsetsFileTmp),
 
 		jobs:     make(map[pipeline.SourceID]*Job, config.MaxFiles),
-		jobsDone: atomic.NewInt32(0),
+		jobsDone: &atomic.Int32{},
 		jobsMu:   &sync.RWMutex{},
 		jobsChan: make(chan *Job, config.MaxFiles),
 		jobsLog:  make([]string, 0, 16),
@@ -188,13 +188,13 @@ func NewJobProvider(config *Config, metrics *metricCollection, sugLogger *zap.Su
 		numberOfCurrentJobsMetric:      metrics.numberOfCurrentJobsMetric,
 	}
 
-	if len(config.Paths.Include) == 0 {
-		currentDir, err := os.Getwd()
-		if err != nil {
-			jp.logger.Errorf("cannot get current dir: %s", err.Error())
-			return nil
-		}
+	currentDir, err := os.Getwd()
+	if err != nil {
+		jp.logger.Errorf("cannot get current dir: %s", err.Error())
+		return nil
+	}
 
+	if len(config.Paths.Include) == 0 {
 		watchDir := config.WatchingDir
 		if !filepath.IsAbs(watchDir) {
 			if watchDir == "*" {
@@ -217,6 +217,9 @@ func NewJobProvider(config *Config, metrics *metricCollection, sugLogger *zap.Su
 		}
 	}
 
+	config.Paths.Include = jp.resolvePathsToAbs(config.Paths.Include, currentDir)
+	config.Paths.Exclude = jp.resolvePathsToAbs(config.Paths.Exclude, currentDir)
+
 	jp.watcher = NewWatcher(
 		config.WatchingDir,
 		config.Paths,
@@ -227,6 +230,16 @@ func NewJobProvider(config *Config, metrics *metricCollection, sugLogger *zap.Su
 	)
 
 	return jp
+}
+
+func (jp *jobProvider) resolvePathsToAbs(paths []string, currentDir string) []string {
+	for i, pattern := range paths {
+		if filepath.IsAbs(pattern) {
+			continue
+		}
+		paths[i] = filepath.Join(currentDir, pattern)
+	}
+	return paths
 }
 
 func (jp *jobProvider) start() {
@@ -303,7 +316,7 @@ func (jp *jobProvider) commit(event *pipeline.Event) {
 
 	job.mu.Unlock()
 
-	jp.offsetsCommitted.Inc()
+	jp.offsetsCommitted.Add(1)
 	if jp.config.PersistenceMode_ == persistenceModeSync {
 		jp.offsetDB.save(jp.jobs, jp.jobsMu)
 	}
@@ -430,7 +443,7 @@ func (jp *jobProvider) addJob(file *os.File, stat os.FileInfo, filename string, 
 
 		isVirgin:   true,
 		isDone:     true,
-		shouldSkip: *atomic.NewBool(false),
+		shouldSkip: atomic.Bool{},
 
 		offsets: nil,
 
@@ -460,7 +473,7 @@ func (jp *jobProvider) addJob(file *os.File, stat os.FileInfo, filename string, 
 		)
 	}
 	jp.jobsLog = append(jp.jobsLog, filename)
-	jp.jobsDone.Inc()
+	jp.jobsDone.Add(1)
 
 	if symlink != "" {
 		jp.logger.Infof("job added for a file %d:%s, symlink=%s", sourceID, filename, symlink)
@@ -532,8 +545,8 @@ func (jp *jobProvider) initEofInfo(job *Job) {
 	if !has {
 		return
 	}
-	eofInfoFromOffsets := eofInfo{}
-	eofInfoFromOffsets.setUnixNanoTimestamp(offsets.lastReadTimestamp)
+
+	job.eofReadInfo.setUnixNanoTimestamp(offsets.lastReadTimestamp)
 
 	minOffset := int64(math.MaxInt64)
 	for _, offset := range offsets.streams {
@@ -541,9 +554,7 @@ func (jp *jobProvider) initEofInfo(job *Job) {
 			minOffset = offset
 		}
 	}
-	eofInfoFromOffsets.setOffset(minOffset)
-
-	job.eofReadInfo = eofInfoFromOffsets
+	job.eofReadInfo.setOffset(minOffset)
 }
 
 // tryResumeJob job should be already locked and it'll be unlocked.
@@ -558,7 +569,7 @@ func (jp *jobProvider) tryResumeJobAndUnlock(job *Job, filename string) {
 	job.filename = filename
 	job.isDone = false
 
-	if jp.jobsDone.Dec() < 0 {
+	if jp.jobsDone.Add(-1) < 0 {
 		jp.logger.Panicf("done jobs counter is less than zero")
 	}
 
@@ -579,7 +590,7 @@ func (jp *jobProvider) doneJob(job *Job) {
 	job.isVirgin = false
 
 	jp.jobsMu.Lock()
-	v := int(jp.jobsDone.Inc())
+	v := int(jp.jobsDone.Add(1))
 
 	jobsLen := len(jp.jobs)
 	jp.numberOfCurrentJobsMetric.Set(float64(jobsLen))
@@ -822,7 +833,7 @@ func (jp *jobProvider) deleteJobAndUnlock(job *Job) {
 
 	jp.jobsMu.Lock()
 	delete(jp.jobs, sourceID)
-	c := jp.jobsDone.Dec()
+	c := jp.jobsDone.Add(-1)
 	jp.jobsMu.Unlock()
 
 	jp.logger.Infof("job %d:%s deleted", job.sourceID, filename)

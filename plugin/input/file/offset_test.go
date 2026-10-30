@@ -6,11 +6,12 @@ import (
 	"sync"
 	"testing"
 
+	"sync/atomic"
+
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/xtime"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/atomic"
 )
 
 func TestParseOffsets(t *testing.T) {
@@ -97,7 +98,7 @@ func TestParallelOffsetsSave(t *testing.T) {
 		lastEventSeq:   0,
 		isVirgin:       false,
 		isDone:         false,
-		shouldSkip:     *atomic.NewBool(false),
+		shouldSkip:     atomic.Bool{},
 		offsets:        offsets,
 		mu:             &sync.Mutex{},
 	}
@@ -111,7 +112,7 @@ func TestParallelOffsetsSave(t *testing.T) {
 		lastEventSeq:   0,
 		isVirgin:       false,
 		isDone:         false,
-		shouldSkip:     *atomic.NewBool(false),
+		shouldSkip:     atomic.Bool{},
 		offsets:        offsets,
 		mu:             &sync.Mutex{},
 	}

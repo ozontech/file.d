@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -13,7 +14,6 @@ import (
 	"github.com/rjeczalik/notify"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/atomic"
 	"go.uber.org/zap"
 )
 
@@ -32,7 +32,7 @@ func TestWatcher(t *testing.T) {
 			dir := t.TempDir()
 			shouldCreate := atomic.Int64{}
 			notifyFn := func(_ notify.Event, _ string, _ os.FileInfo) {
-				shouldCreate.Inc()
+				shouldCreate.Add(1)
 			}
 			ctl := metric.NewCtl("test", prometheus.NewRegistry(), time.Minute, 0)
 			w := NewWatcher(
@@ -101,7 +101,7 @@ func TestWatcherPaths(t *testing.T) {
 
 	shouldCreate := atomic.Int64{}
 	notifyFn := func(_ notify.Event, _ string, _ os.FileInfo) {
-		shouldCreate.Inc()
+		shouldCreate.Add(1)
 	}
 	ctl := metric.NewCtl("test", prometheus.NewRegistry(), time.Minute, 0)
 	w := NewWatcher(
