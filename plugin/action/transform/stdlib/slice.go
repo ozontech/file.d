@@ -1,6 +1,9 @@
 package stdlib
 
 import (
+	"strings"
+	"unicode/utf8"
+
 	"github.com/ozontech/file.d/plugin/action/transform/core"
 )
 
@@ -47,33 +50,84 @@ func (s slice) CallIndexed(args []core.Value) (core.Value, error) {
 }
 
 func (slice) call(valueArg, startArg, endArg core.Value) (core.Value, error) {
-	runes := []rune(valueArg.(core.StringValue).V)
-	length := len(runes)
-
-	start := clampIndex(int(startArg.(core.IntegerValue).V), length)
-
-	end := length
+	value := valueArg.(core.StringValue).V
+	start := int(startArg.(core.IntegerValue).V)
+	// The byte length is an upper bound on the number of runes. Using it for
+	// the default end avoids counting the whole input for positive bounds.
+	end := len(value)
 	if v, ok := endArg.(core.IntegerValue); ok {
-		end = clampIndex(int(v.V), length)
+		end = int(v.V)
 	}
-
-	if end <= start {
+	if start < 0 && end >= 0 && end < len(value) {
+		// Mixed bounds can otherwise scan the entire input in both directions.
+		length := utf8.RuneCountInString(value)
+		start = max(0, start+length)
+		if end >= length {
+			end = len(value)
+		}
+	}
+	if start >= 0 && end >= 0 && end <= start {
 		return core.StringValue{V: ""}, nil
 	}
-	return core.StringValue{V: string(runes[start:end])}, nil
+
+	first := sliceByteOffset(value, start)
+	var last int
+	if start >= 0 && end >= start {
+		// Continue from the start boundary rather than scanning the prefix twice.
+		last = first + sliceByteOffset(value[first:], end-start)
+	} else {
+		last = sliceByteOffset(value, end)
+	}
+	if last <= first {
+		return core.StringValue{V: ""}, nil
+	}
+	fragment := value[first:last]
+	if utf8.ValidString(fragment) {
+		// A short result must not retain the original string's backing storage.
+		return core.StringValue{V: strings.Clone(fragment)}, nil
+	}
+
+	// Like []rune, range replaces each malformed byte with RuneError. Allocate
+	// only the normalized result; valid RuneError characters stay intact.
+	size := 0
+	for _, r := range fragment {
+		size += utf8.RuneLen(r)
+	}
+	var result strings.Builder
+	result.Grow(size)
+	for _, r := range fragment {
+		if r == utf8.RuneError {
+			result.WriteString("\ufffd")
+		} else {
+			result.WriteRune(r)
+		}
+	}
+	return core.StringValue{V: result.String()}, nil
 }
 
-// clampIndex resolves a possibly negative position against length and pins the
-// result to [0, length]
-func clampIndex(i, length int) int {
-	if i < 0 {
-		i += length
+// sliceByteOffset locates a rune boundary, clamping at either end. Negative
+// indices scan backwards so a short suffix does not need the total rune count.
+func sliceByteOffset(value string, index int) int {
+	if index < 0 {
+		if index <= -len(value) {
+			return 0
+		}
+		offset := len(value)
+		for index < 0 && offset > 0 {
+			_, size := utf8.DecodeLastRuneInString(value[:offset])
+			offset -= size
+			index++
+		}
+		return offset
 	}
-	if i < 0 {
-		return 0
+	if index >= len(value) {
+		return len(value)
 	}
-	if i > length {
-		return length
+	for offset := range value {
+		if index == 0 {
+			return offset
+		}
+		index--
 	}
-	return i
+	return len(value)
 }
