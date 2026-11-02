@@ -23,16 +23,24 @@ func (toString) Params() []Parameter {
 }
 
 func (s toString) Call(args map[string]core.Value) (core.Value, error) {
-	return s.call(args["value"])
+	return s.call(nil, args["value"])
 }
 
 func (s toString) CallIndexed(args []core.Value) (core.Value, error) {
-	return s.call(args[0])
+	return s.call(nil, args[0])
 }
 
-func (toString) call(value core.Value) (core.Value, error) {
-	if value.Kind() == core.KindNull {
+func (s toString) CallIndexedWithState(state *core.CallState, args []core.Value) (core.Value, error) {
+	return s.call(state, args[0])
+}
+
+func (toString) call(state *core.CallState, value core.Value) (core.Value, error) {
+	switch value.Kind() {
+	case core.KindNull:
 		return core.StringValue{V: ""}, nil
+	case core.KindArray, core.KindObject:
+		return core.StringValue{V: core.FormatValue(value, state)}, nil
+	default:
+		return core.StringValue{V: value.String()}, nil
 	}
-	return core.StringValue{V: value.String()}, nil
 }
