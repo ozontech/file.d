@@ -54,6 +54,17 @@ func BenchmarkTransformOnly(b *testing.B) {
 // benchmarkTransformCallVariant is shared by paired and transform-only workloads.
 func benchmarkTransformCallVariant(b *testing.B, inputs []transformCallCase, variant transformCallVariant) {
 	b.Helper()
+	benchmarkTransformCallVariantWithWarmup(b, inputs, variant, nil)
+}
+
+// Additional warmup inputs exercise the same plugin before the measured corpus.
+func benchmarkTransformCallVariantWithWarmup(
+	b *testing.B,
+	inputs []transformCallCase,
+	variant transformCallVariant,
+	warmup []transformCallCase,
+) {
+	b.Helper()
 	b.StopTimer()
 	require.NotEmpty(b, inputs)
 	// Errors from any measured iteration invalidate the result, even when Do
@@ -64,19 +75,25 @@ func benchmarkTransformCallVariant(b *testing.B, inputs []transformCallCase, var
 
 	// Warm every Root and every input, even if the corpus exceeds the batch or
 	// the requested number of iterations. Warmup does not consume measured inputs.
-	next := 0
-	for remaining := max(len(events), len(inputs)); remaining > 0; {
-		batch := events[:min(len(events), remaining)]
-		next = resetTransformCallEvents(b, batch, inputs, next)
-		runTransformCallEvents(batch, run)
-		require.Empty(b, logs.All(), "unexpected plugin errors")
-		for i := range batch {
-			inputs[batch[i].inputIndex].checkResult(b, &batch[i])
+	corpora := [][]transformCallCase{warmup, inputs}
+	for _, corpus := range corpora {
+		if len(corpus) == 0 {
+			continue
 		}
-		remaining -= len(batch)
+		next := 0
+		for remaining := max(len(events), len(corpus)); remaining > 0; {
+			batch := events[:min(len(events), remaining)]
+			next = resetTransformCallEvents(b, batch, corpus, next)
+			runTransformCallEvents(batch, run)
+			require.Empty(b, logs.All(), "unexpected plugin errors")
+			for i := range batch {
+				corpus[batch[i].inputIndex].checkResult(b, &batch[i])
+			}
+			remaining -= len(batch)
+		}
 	}
 
-	next = 0
+	next := 0
 	b.ReportAllocs()
 	b.ResetTimer()
 	for completed := 0; completed < b.N; {

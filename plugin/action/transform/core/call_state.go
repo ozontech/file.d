@@ -1,9 +1,10 @@
 package core
 
-// Bound both retained nesting depth and argument capacity per frame.
+// Bound retained argument frames and the idle string scratch buffer.
 const (
 	maxRetainedCallFrames = 32
 	maxRetainedCallArgs   = 64
+	maxRetainedStrings    = 64
 )
 
 // CallStateProvider exposes execution-local storage to prepared calls.
@@ -12,12 +13,40 @@ type CallStateProvider interface {
 	CallState() *CallState
 }
 
-// CallState reuses argument storage for successive and nested calls.
+// CallState reuses argument and scratch storage for successive and nested calls.
 // It belongs to one execution context and must not be used concurrently.
 // The zero value is ready for use.
 type CallState struct {
 	frames [][]Value
 	depth  int
+
+	// Idle storage contains no string references; ReleaseStrings clears it.
+	stringBuffer []string
+}
+
+// AcquireStrings borrows temporary string slots until ReleaseStrings. The
+// caller must not retain the slice or reset the state while it is borrowed.
+// Active borrows never share storage. A nil state allocates without reuse.
+func (s *CallState) AcquireStrings(size int) []string {
+	if s == nil || size > maxRetainedStrings || cap(s.stringBuffer) < size {
+		return make([]string, size)
+	}
+	values := s.stringBuffer[:size]
+	s.stringBuffer = nil
+	return values
+}
+
+// ReleaseStrings clears reusable slots, including unused capacity, and retains
+// at most one bounded buffer. Returned values must not refer to these slots.
+// Oversized buffers and buffers from nil-state calls are discarded without clearing.
+func (s *CallState) ReleaseStrings(values []string) {
+	if s == nil || cap(values) > maxRetainedStrings {
+		return
+	}
+	clear(values[:cap(values)])
+	if cap(values) > cap(s.stringBuffer) {
+		s.stringBuffer = values[:0]
+	}
 }
 
 func (s *CallState) acquire(size int) []Value {
