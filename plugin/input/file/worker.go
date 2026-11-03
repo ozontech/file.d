@@ -291,23 +291,23 @@ type metaInformation struct {
 }
 
 func newMetaInformation(filename, symlink string, inode inodeID, parseK8sMeta bool) (metaInformation, error) {
-	var metaData k8s_meta.K8sMetaInformation
-	var err error
+	var k8sMetadata *k8s_meta.K8sMetaInformation
 	if parseK8sMeta {
-		metaData, err = k8s_meta.NewK8sMetaInformation(symlink)
+		metaData, err := k8s_meta.NewK8sMetaInformation(symlink)
 		if err != nil {
 			metaData, err = k8s_meta.NewK8sMetaInformation(filename)
 			if err != nil {
 				return metaInformation{}, err
 			}
 		}
+		k8sMetadata = &metaData
 	}
 
 	return metaInformation{
 		filename:    filename,
 		symlink:     symlink,
 		inode:       uint64(inode),
-		k8sMetadata: &metaData,
+		k8sMetadata: k8sMetadata,
 	}, nil
 }
 

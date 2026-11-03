@@ -362,7 +362,7 @@ func TestNewMetaInformation(t *testing.T) {
 			inode:           12345,
 			parseK8sMeta:    false,
 			expectError:     false,
-			expectedK8sMeta: &k8s_meta.K8sMetaInformation{},
+			expectedK8sMeta: nil,
 		},
 		{
 			name:            "Invalid inputs without K8s metadata",
@@ -371,7 +371,7 @@ func TestNewMetaInformation(t *testing.T) {
 			inode:           0,
 			parseK8sMeta:    false,
 			expectError:     false,
-			expectedK8sMeta: &k8s_meta.K8sMetaInformation{}, // No K8s metadata expected
+			expectedK8sMeta: nil, // No K8s metadata expected
 		},
 		{
 			name:            "Invalid K8s metadata parsing",
@@ -409,6 +409,31 @@ func TestNewMetaInformation(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestMetaInformationGetCacheKeyDifferentFiles(t *testing.T) {
+	k8s_meta.DisableMetaUpdates = true
+
+	newMeta := func(t *testing.T, filename, symlink string, inode inodeID) metaInformation {
+		t.Helper()
+		metaInfo, err := newMetaInformation(filename, symlink, inode, false)
+		require.NoError(t, err)
+		return metaInfo
+	}
+
+	fileA := newMeta(t, "/var/log/service-a.log", "", 111)
+	fileB := newMeta(t, "/var/log/service-b.log", "", 222)
+
+	assert.NotEqual(t, fileA.GetCacheKey(), fileB.GetCacheKey(), "files with different name and inode must have different cache keys")
+
+	sameNameDifferentInode := newMeta(t, "/var/log/service-a.log", "", 333)
+	assert.NotEqual(t, fileA.GetCacheKey(), sameNameDifferentInode.GetCacheKey(), "same name with different inode must have different cache keys")
+
+	sameNameSameInodeDifferentSymlink := newMeta(t, "/var/log/service-a.log", "/k8s-logs/service-a.log", 111)
+	assert.NotEqual(t, fileA.GetCacheKey(), sameNameSameInodeDifferentSymlink.GetCacheKey(), "same name and inode with different symlink must have different cache keys")
+
+	identical := newMeta(t, "/var/log/service-a.log", "", 111)
+	assert.Equal(t, fileA.GetCacheKey(), identical.GetCacheKey(), "identical meta information must produce the same cache key")
 }
 
 func TestGetData(t *testing.T) {
