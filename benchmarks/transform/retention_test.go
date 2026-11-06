@@ -22,7 +22,7 @@ import (
 
 var (
 	retentionProfileDir = flag.String("transform.retention-profile-dir", "", "opt-in retained heap diagnostic output directory")
-	retentionMode       = flag.String("transform.retention-mode", "runtime", "retained heap diagnostic mode: runtime or plugin")
+	retentionMode       = flag.String("transform.retention-mode", "runtime", "retained heap diagnostic mode: runtime, plugin, or slice (stdlib diagnostic only)")
 	retentionWorkload   = flag.String("transform.retention-workload", "small", "retained heap diagnostic workload: small, large_then_small, repeated_large_then_small")
 )
 
@@ -36,14 +36,27 @@ const (
 // same toolchain and flags on both revisions, then compare inuse allocation
 // stacks. Process initialization predates the opt-in sampling rate below.
 func TestTransformRuntimeRetention(t *testing.T) {
+	rounds := startRetentionDiagnostic(t)
+	switch *retentionMode {
+	case "runtime":
+		probeRuntimeRetention(t, rounds)
+	case "plugin":
+		probePluginRetention(t, rounds)
+	default:
+		t.Fatalf("unknown runtime retention mode %q", *retentionMode)
+	}
+}
+
+func startRetentionDiagnostic(t *testing.T) int {
+	t.Helper()
 	if *retentionProfileDir == "" {
 		t.Skip("set -transform.retention-profile-dir to collect retained heap profiles")
 	}
 	previousRate := runtime.MemProfileRate
 	runtime.MemProfileRate = 1
-	defer func() { runtime.MemProfileRate = previousRate }()
+	t.Cleanup(func() { runtime.MemProfileRate = previousRate })
 	previousProcs := runtime.GOMAXPROCS(1)
-	defer runtime.GOMAXPROCS(previousProcs)
+	t.Cleanup(func() { runtime.GOMAXPROCS(previousProcs) })
 
 	var rounds int
 	switch *retentionWorkload {
@@ -58,18 +71,10 @@ func TestTransformRuntimeRetention(t *testing.T) {
 	if err := os.MkdirAll(*retentionProfileDir, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	t.Logf("retention mode=%s workload=%s go=%s os=%s arch=%s procs=1 profile_rate=1 payload_bytes=%d large_events=%d small_events=%d",
+	t.Logf("retention mode=%s workload=%s go=%s os=%s arch=%s procs=1 profile_rate=1 payload_bytes=%d large_rounds=%d small_events=%d",
 		*retentionMode, *retentionWorkload, runtime.Version(), runtime.GOOS, runtime.GOARCH,
-		retentionPayloadBytes, rounds*2, retentionSmallEvents)
-
-	switch *retentionMode {
-	case "runtime":
-		probeRuntimeRetention(t, rounds)
-	case "plugin":
-		probePluginRetention(t, rounds)
-	default:
-		t.Fatalf("unknown retention mode %q", *retentionMode)
-	}
+		retentionPayloadBytes, rounds, retentionSmallEvents)
+	return rounds
 }
 
 type retentionRuntimeState struct {
