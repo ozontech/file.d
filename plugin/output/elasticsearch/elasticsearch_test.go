@@ -80,6 +80,52 @@ func TestAppendEventWithCreateOpType(t *testing.T) {
 	assert.Equal(t, expected, string(result), "wrong request content")
 }
 
+func TestReportESErrorsWithCreateResponseType(t *testing.T) {
+	p := &Plugin{}
+	config := &Config{
+		Endpoints:   []string{"test"},
+		IndexFormat: "test-%",
+		BatchSize:   "1",
+	}
+	test.NewConfig(config, map[string]int{"gomaxprocs": 1})
+	p.Start(config, test.NewEmptyOutputPluginParams())
+
+	// Response with "create" instead of "index" (batch_op_type: create)
+	response := []byte(`{
+		"errors": true,
+		"items": [
+			{"create": {"_index": ".ds-test-000001", "_id": "1", "status": 201, "result": "created"}},
+			{"create": {"_index": ".ds-test-000001", "_id": "2", "status": 201, "result": "created"}}
+		]
+	}`)
+
+	err := p.reportESErrors(response)
+	assert.NoError(t, err)
+}
+
+func TestReportESErrorsWithMixedResponses(t *testing.T) {
+	p := &Plugin{}
+	config := &Config{
+		Endpoints:   []string{"test"},
+		IndexFormat: "test-%",
+		BatchSize:   "1",
+	}
+	test.NewConfig(config, map[string]int{"gomaxprocs": 1})
+	p.Start(config, test.NewEmptyOutputPluginParams())
+
+	// Response with mixed "index" and "create" items
+	response := []byte(`{
+		"errors": true,
+		"items": [
+			{"index": {"_index": "test-000001", "_id": "1", "status": 200}},
+			{"create": {"_index": ".ds-test-000001", "_id": "2", "status": 201, "result": "created"}}
+		]
+	}`)
+
+	err := p.reportESErrors(response)
+	assert.NoError(t, err)
+}
+
 func TestPrepareEndpoints(t *testing.T) {
 	testCases := []struct {
 		in       []string
