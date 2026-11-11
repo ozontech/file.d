@@ -16,6 +16,8 @@ jobs:
         image:
           - name: "ubuntu:latest"
             suffix: ""
+          - name: "ubuntu:26.04"
+            suffix: "-ubuntu26.04"
           - name: "ubuntu:22.04"
             suffix: "-ubuntu22.04"
           - name: "ubuntu:20.04"
@@ -28,8 +30,8 @@ jobs:
             suffix: "-scratch"
             dockerfile: "./build/package/Dockerfile.scratch"
           # RedHat-based distributions
-          - name: "rockylinux:9"
-            suffix: "-rocky9"
+          - name: "rockylinux:10"
+            suffix: "-rocky10"
     steps:
       - uses: actions/checkout@v4
 
