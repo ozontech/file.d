@@ -34,7 +34,7 @@ RUN if [ -f /etc/debian_version ]; then \
         && rm -rf /var/lib/apt/lists/* \
         && apt-get clean; \
     elif [ -f /etc/redhat-release ]; then \
-        dnf clean all || true \
+        dnf clean all || true && \
         dnf update -y && dnf install -y \
         systemd \
         && dnf clean all; \
