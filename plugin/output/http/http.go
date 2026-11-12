@@ -66,6 +66,13 @@ type Config struct {
 
 	// > @3@4@5@6
 	// >
+	// > Additional custom HTTP headers to send with each request.
+	// > Headers are applied after `Content-Type` and `Authorization`,
+	// > so a header with the same name overrides them.
+	Headers map[string]string `json:"headers"` // *
+
+	// > @3@4@5@6
+	// >
 	// > Configure event serialization before sending.
 	// > Includes:
 	// > 1) `type` - codec to use for serializing events (`json` by default):
@@ -331,6 +338,7 @@ func (p *Plugin) prepareClient(ctx context.Context) {
 		Endpoints:         p.prepareEndpoints(),
 		ConnectionTimeout: p.config.ConnectionTimeout_ * 2,
 		AuthHeader:        p.getAuthHeader(),
+		CustomHeaders:     p.config.Headers,
 		BanPeriod:         p.config.BanPeriod_,
 		ReconnectInterval: p.config.ReconnectInterval_,
 		KeepAlive: &xhttp.ClientKeepAliveConfig{

@@ -17,6 +17,14 @@ Content-Type header for HTTP requests.
 
 <br>
 
+**`headers`** *`map[string]string`* 
+
+Additional custom HTTP headers to send with each request.
+Headers are applied after `Content-Type` and `Authorization`,
+so a header with the same name overrides them.
+
+<br>
+
 **`encoding`** *`encoder.EncodingConfig`* 
 
 Configure event serialization before sending.
