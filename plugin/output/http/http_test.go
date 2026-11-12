@@ -1,14 +1,20 @@
 package http
 
 import (
+	"context"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/ozontech/file.d/encoder"
 	"github.com/ozontech/file.d/pipeline"
 	"github.com/ozontech/file.d/test"
 	insaneJSON "github.com/ozontech/insane-json"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 )
 
 func TestEncoding(t *testing.T) {
@@ -56,4 +62,39 @@ func TestEncoding(t *testing.T) {
 
 	expected = fmt.Sprintf("%s\n", `{"log":"[INFO] some event"}`)
 	assert.Equal(t, expected, string(data.outBuf), "wrong request content")
+}
+
+func TestHeaders(t *testing.T) {
+	var gotHeaders http.Header
+	testServer := httptest.NewServer(http.HandlerFunc(func(res http.ResponseWriter, req *http.Request) {
+		gotHeaders = req.Header.Clone()
+		res.WriteHeader(http.StatusOK)
+	}))
+	defer testServer.Close()
+
+	p := &Plugin{
+		config: &Config{
+			Endpoints:          []string{testServer.URL},
+			Headers:            map[string]string{"X-Header-1": "value1", "X-Header-2": "value2"},
+			BatchSize_:         1,
+			ConnectionTimeout_: 10 * time.Second,
+		},
+		logger:       zap.NewExample(),
+		avgEventSize: 1024,
+	}
+	var err error
+	p.encoder, err = encoder.NewEncoder(encoder.EncodingConfig{Type: encoder.EncoderTypeJSON})
+	require.NoError(t, err)
+	p.prepareClient(context.Background())
+
+	root, err := insaneJSON.DecodeBytes([]byte(`{"message":"test"}`))
+	require.NoError(t, err)
+	defer insaneJSON.Release(root)
+
+	batch := pipeline.NewPreparedBatch([]*pipeline.Event{{Root: root}})
+	workerData := pipeline.WorkerData(nil)
+	require.NoError(t, p.out(&workerData, batch))
+
+	assert.Equal(t, "value1", gotHeaders.Get("X-Header-1"))
+	assert.Equal(t, "value2", gotHeaders.Get("X-Header-2"))
 }
