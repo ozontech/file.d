@@ -18,6 +18,7 @@ type watcher struct {
 	notifyFn                  notifyFn // function to receive notifications
 	watcherCh                 chan notify.EventInfo
 	shouldWatchWrites         bool
+	flat                      bool
 	notifyChannelLengthMetric *metric.Gauge
 	logger                    *zap.SugaredLogger
 }
@@ -44,15 +45,23 @@ func NewWatcher(
 }
 
 func (w *watcher) start() {
+	w.flat = true
 	for i, pattern := range w.paths.Include {
 		// /var/lib/docker/containers/**/*-json.log -> /var/lib/docker/containers
-		basePattern, _ := doublestar.SplitPattern(pattern)
+		basePattern, suffix := doublestar.SplitPattern(pattern)
+		if strings.Contains(suffix, "/") || strings.Contains(suffix, "**") {
+			w.flat = false
+		}
 		allLinksResolvedPath, err := resolvePathLinks(basePattern)
 		if err != nil {
 			panic(err)
 		}
 		w.paths.Include[i] = strings.Replace(w.paths.Include[i], basePattern, allLinksResolvedPath, 1)
 		w.basePaths = append(w.basePaths, allLinksResolvedPath)
+		// keep recursive discovery when an include directory does not exist yet
+		if info, err := os.Stat(allLinksResolvedPath); err != nil || !info.IsDir() {
+			w.flat = false
+		}
 	}
 
 	for i, pattern := range w.paths.Exclude {
@@ -79,17 +88,29 @@ func (w *watcher) start() {
 		events = append(events, notify.Write)
 	}
 
-	// watch recursively.
-	err := notify.Watch(filepath.Join(w.commonPath, "..."), eventsCh, events...)
-	if err != nil {
-		w.logger.Warnf("can't create fs watcher: %s", err.Error())
-		return
+	watchPaths := []string{filepath.Join(w.commonPath, "...")}
+	if w.flat {
+		// flat masks must not subscribe to unrelated runtime/snapshot subtrees
+		watchPaths = w.basePaths
+	}
+	for _, path := range watchPaths {
+		if err := notify.Watch(path, eventsCh, events...); err != nil {
+			notify.Stop(eventsCh)
+			w.logger.Warnf("can't create fs watcher: %s", err.Error())
+			return
+		}
 	}
 	w.notifyChannelLengthMetric.Set(float64(len(w.watcherCh)))
 
 	go w.watch()
 
-	w.tryAddPath(w.commonPath)
+	if w.flat {
+		for _, path := range w.basePaths {
+			w.tryAddPath(path)
+		}
+	} else {
+		w.tryAddPath(w.commonPath)
+	}
 }
 
 func commonPathPrefix(paths []string) string {
@@ -125,13 +146,16 @@ func (w *watcher) stop() {
 	close(w.watcherCh)
 }
 
-func (w *watcher) tryAddPath(path string) {
-	w.logger.Infof("starting path watch: %s ", path)
+func (w *watcher) tryAddPath(rootPath string) {
+	w.logger.Infof("starting path watch: %s ", rootPath)
 
-	err := filepath.Walk(path,
+	err := filepath.Walk(rootPath,
 		func(path string, info os.FileInfo, err error) error {
 			if err != nil {
 				return err
+			}
+			if w.flat && info.IsDir() && path != rootPath {
+				return filepath.SkipDir
 			}
 			if !info.IsDir() {
 				w.notify(notify.Create, path)
@@ -170,6 +194,9 @@ func (w *watcher) notify(e notify.Event, path string) {
 	}
 
 	if stat.IsDir() {
+		if w.flat {
+			return
+		}
 		dirFilename := filename
 	check_dir:
 		for {
