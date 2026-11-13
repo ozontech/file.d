@@ -8,7 +8,7 @@ cd charts/filed
 helm dependency update
 ```
 
-## Examples for Minikube Minikube
+## Examples for Minikube
 
 Install [Minikube](https://minikube.sigs.k8s.io/docs/start/)
 
