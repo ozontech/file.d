@@ -2,6 +2,18 @@ package core
 
 import "slices"
 
+// CallExecutor is an immutable prepared call. It may bind expressions and
+// constants, but must obtain the target and mutable state from each context.
+type CallExecutor interface {
+	EvalCall(ctx EvalContext, expr *CallExpr) (Value, error)
+}
+
+// CallPlanner resolves unprepared specialized calls against the current context.
+// A nil executor preserves CallFunc. The shared expression must not be modified.
+type CallPlanner interface {
+	PlanCall(expr *CallExpr) (CallExecutor, error)
+}
+
 // CallPlan is an immutable binding of source arguments to parameter slots.
 // Only the layout and callable are shared; each evaluation owns its values.
 type CallPlan struct {
@@ -31,7 +43,7 @@ func NewStatefulCallPlan(slots []int, defaults []Value, call func(*CallState, Po
 	}
 }
 
-func (p *CallPlan) eval(ctx EvalContext, expr *CallExpr) (Value, error) {
+func (p *CallPlan) EvalCall(ctx EvalContext, expr *CallExpr) (Value, error) {
 	var state *CallState
 	if provider, ok := ctx.(CallStateProvider); ok {
 		state = provider.CallState()

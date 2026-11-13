@@ -1,9 +1,7 @@
 package stdlib
 
 import (
-	"maps"
 	"regexp"
-	"slices"
 	"testing"
 
 	"github.com/ozontech/file.d/plugin/action/transform/core"
@@ -11,11 +9,12 @@ import (
 )
 
 func TestRegisteredFunctionsPrepareCalls(t *testing.T) {
-	tests := []struct {
+	type testCase struct {
 		name string
 		args []core.Value
 		want core.Value
-	}{
+	}
+	tests := []testCase{
 		{
 			name: "after",
 			args: []core.Value{str("a-b"), str("-")},
@@ -98,12 +97,12 @@ func TestRegisteredFunctionsPrepareCalls(t *testing.T) {
 		},
 	}
 
-	// A newly registered function must add a case and support prepared calls.
+	// Every value function must have a case; specialized functions are covered separately.
 	names := make([]string, len(tests))
 	for i, tt := range tests {
 		names[i] = tt.name
 	}
-	require.ElementsMatch(t, slices.Collect(maps.Keys(GetRegistry().functions)), names)
+	require.ElementsMatch(t, registeredFunctionNames(false), names)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -139,12 +138,13 @@ func TestPrepareCallWithoutIndexedSupport(t *testing.T) {
 
 func TestPreparedCallsPreserveStringBytes(t *testing.T) {
 	// Keep raw strings out of JSON: decoding/encoding can replace invalid UTF-8.
-	tests := []struct {
+	type testCase struct {
 		name     string
 		function string
 		args     []core.Value
 		want     core.Value
-	}{
+	}
+	tests := []testCase{
 		{
 			name:     "slice replaces invalid UTF-8",
 			function: "slice",

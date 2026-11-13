@@ -22,8 +22,8 @@ func ValidateCalls(exprs []core.Expr, registry *stdlib.Registry) error {
 
 // Prepare validates and folds a program, then binds supported calls to registry.
 // Run it once before publishing the AST; expressions must not change afterward.
-// Use ValidateCalls on a separate AST when calls should use EvalContext.CallFunc
-// instead, for example with a custom runtime registry.
+// Use ValidateCalls on a separate AST when calls should use the current context's
+// registry instead, through CallFunc for values and CallPlanner for paths.
 func Prepare(exprs []core.Expr, registry *stdlib.Registry) error {
 	return (&validator{registry: registry, prepareCalls: true}).validateAll(exprs)
 }
@@ -49,7 +49,7 @@ func (v *validator) validateExpr(expr core.Expr) error {
 		if !ok {
 			return fmt.Errorf("%s: unknown function %q", e.Pos(), e.Name)
 		}
-		if err := validateArgs(e, fn); err != nil {
+		if err := fn.ValidateCall(e.Pos(), e.Args); err != nil {
 			return err
 		}
 		for _, arg := range e.Args {
@@ -153,71 +153,4 @@ func (v *validator) validateExpr(expr core.Expr) error {
 	}
 
 	return nil
-}
-
-// validateArgs statically checks argument structure against the function's
-// parameter list. Only structural issues are checked here — value types
-// are validated at runtime since arguments are arbitrary expressions.
-//
-// Binding is strict: positional arguments fill positional parameters and named
-// arguments fill named parameters (see stdlib.CompiledFunc.Resolve).
-func validateArgs(e *core.CallExpr, fn stdlib.Function) error {
-	params := fn.Params()
-
-	// Positional parameters always precede named ones (enforced at registration).
-	numPositional := 0
-	for _, p := range params {
-		if p.Named() {
-			break
-		}
-		numPositional++
-	}
-	positionalParams := params[:numPositional]
-	namedParams := params[numPositional:]
-
-	var positionalCount int
-	seen := make(map[string]bool)
-
-	for _, arg := range e.Args {
-		if arg.Name == "" {
-			positionalCount++
-			continue
-		}
-		if seen[arg.Name] {
-			return fmt.Errorf("%s: function %q: duplicate argument %q",
-				e.Pos(), fn.Name(), arg.Name)
-		}
-		seen[arg.Name] = true
-
-		if paramByName(namedParams, arg.Name) {
-			continue
-		}
-		if paramByName(positionalParams, arg.Name) {
-			return fmt.Errorf("%s: function %q: argument %q is positional and cannot be passed by name",
-				e.Pos(), fn.Name(), arg.Name)
-		}
-		return fmt.Errorf("%s: function %q: unknown argument %q",
-			e.Pos(), fn.Name(), arg.Name)
-	}
-
-	if positionalCount > len(positionalParams) {
-		return fmt.Errorf("%s: function %q: too many arguments: expected at most %d, got %d",
-			e.Pos(), fn.Name(), len(positionalParams), positionalCount)
-	}
-	// Every positional parameter is required.
-	if positionalCount < len(positionalParams) {
-		return fmt.Errorf("%s: function %q: missing required argument %q",
-			e.Pos(), fn.Name(), positionalParams[positionalCount].Name)
-	}
-
-	return nil
-}
-
-func paramByName(params []stdlib.Parameter, name string) bool {
-	for _, p := range params {
-		if p.Name == name {
-			return true
-		}
-	}
-	return false
 }

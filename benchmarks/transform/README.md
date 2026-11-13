@@ -77,7 +77,7 @@ It follows the same declaration order as the full suite:
 | --- | --- |
 | `assign_new5` | Basic overhead of writing new fields |
 | `trim4` | Nested string calls and the primary modify comparison |
-| `rename/preserve/5` | Typed field access, assignment, and source deletion |
+| `rename/preserve/5` | Five `rename()` calls preserving JSON types and existing destinations |
 | `logs/no_regex/mixed` | Multi-field log parsing with varied lengths and Unicode |
 | `logs/regex/mixed` | Equivalent regex-based parsing over the same input mix |
 | `chains/mapping/16/mixed` | Conditional chains with first, last, and missing matches |
@@ -134,9 +134,11 @@ of a pair or by neither.
 
 - Paired cut/slice workloads use ASCII because modify counts bytes and
   transform counts Unicode code points.
-- Rename removes the old field and preserves its JSON type. Guarded rename
-  inputs exclude explicit null sources and, in preserve mode, null
-  destinations; nested null values remain valid.
+- Rename removes the old field and preserves its JSON type. `rename/preserve/5`
+  uses five `rename()` calls; other rename scenarios retain guarded assignments
+  and deletions. All retain the original input domain: explicit null sources
+  and, in preserve mode, null destinations are excluded; nested null values
+  remain valid.
 - Log parsing uses a fixed grammar documented in
   [logs_fixtures_test.go](logs_fixtures_test.go). Regex and regex-free
   comparisons are separate. `full_regex` is not a continuation of the old
@@ -170,6 +172,52 @@ Different Go iteration counts can end at different positions in the same
 corpus. Use a fixed count when comparing identical finite input sequences.
 Keep fixtures, Go version, hardware, and flags constant across revisions.
 Use repeated measurements before drawing conclusions from small differences.
+
+## Production normalization
+
+The production normalization workload is available separately from the default
+report and `GROUP`/`CASE` selection:
+
+```sh
+go test ./benchmarks/transform -run '^$' \
+  -bench '^BenchmarkTransformProductionNormalization$' \
+  -benchmem -benchtime=1s -count=3 -cpu=8
+```
+
+It runs the unchanged first transform program from the production profile
+configuration on already decoded synthetic events. The `mixed` corpus contains
+eight equally weighted cases covering source priority, literal and nested field
+names, missing fields, explicit nulls, destination collisions, eventrouter
+messages and Unicode. `large_event` adds 64 unrelated nested fields to each of
+the same eight events, exposing the cost of the root snapshot. Expected complete
+events are specified independently and checked through the shared runner.
+
+These corpora are not captured production traffic. The benchmark excludes the
+surrounding decoders, flatten actions, other transform programs and pipeline I/O;
+it does not measure a complete pipeline or claim equivalence with its specialized
+plugin configuration. It provides a fixed reference for future normalization
+changes. Source and fixtures are in
+[production_normalization_bench_test.go](production_normalization_bench_test.go).
+Keep this program as the baseline when adding an optimized configuration and
+run both variants over the same corpora. Measurements across the optimization
+milestones are recorded in
+[the results document](../../docs/transform-benchmarks-results.md).
+
+The rewrite using `exists` and `rename` is measured separately, keeping the
+original program and its expected events unchanged. Run both on the same build:
+
+```sh
+go test ./benchmarks/transform -run '^$' \
+  -bench '^BenchmarkTransform(Production|Field)Normalization$' \
+  -benchmem -benchtime=1s -count=3 -cpu=8
+```
+
+[The rewritten program](field_normalization_bench_test.go) removes the root
+snapshot, the local presence map and repeated lookup/type-check branches.
+It preserves source priority, null handling and the remaining `@lt` condition.
+Correctness checks compare both programs with the same independently specified
+complete events. This comparison measures the configuration rewrite with the
+new operations; it does not claim that unchanged configurations become faster.
 
 ## Validation and extension
 

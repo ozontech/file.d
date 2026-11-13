@@ -68,6 +68,20 @@ func (c *Context) GetTarget() core.Target {
 	return c.target
 }
 
+// PlanCall preserves path arguments for unprepared specialized calls. Resolve the
+// function against this context's registry without mutating the shared AST.
+// Ordinary calls still go through CallFunc, including custom implementations.
+func (c *Context) PlanCall(expr *core.CallExpr) (core.CallExecutor, error) {
+	fn, ok := c.registry.Get(expr.Name)
+	if !ok || !fn.RequiresPreparation() {
+		return nil, nil
+	}
+	if err := fn.ValidateCall(expr.Pos(), expr.Args); err != nil {
+		return nil, err
+	}
+	return fn.PrepareCall(expr.Args), nil
+}
+
 func (c *Context) CallFunc(pos core.Position, name string, positional []core.Value, named map[string]core.Value) (core.Value, error) {
 	fn, ok := c.registry.Get(name)
 	if !ok {

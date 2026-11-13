@@ -22,9 +22,12 @@ type statefulIndexedFunction interface {
 }
 
 // PrepareCall binds an already structurally validated call to this function.
-// Functions without indexed support keep the general call path; every function
-// in the standard registry supports indexed arguments.
-func (c *CompiledFunc) PrepareCall(args []core.Argument) *core.CallPlan {
+// Specialized functions bind their own executor. Value functions without
+// indexed support keep the general call path.
+func (c *CompiledFunc) PrepareCall(args []core.Argument) core.CallExecutor {
+	if c.specialized != nil {
+		return c.specialized.PrepareCall(args)
+	}
 	fn, ok := c.fn.(indexedFunction)
 	if !ok {
 		return nil
@@ -59,8 +62,8 @@ func (c *CompiledFunc) PrepareCall(args []core.Argument) *core.CallPlan {
 
 	return core.NewStatefulCallPlan(slots, defaults, func(state *core.CallState, pos core.Position, values []core.Value) (core.Value, error) {
 		if c.checkKinds {
-			for i, p := range c.params {
-				if err := c.checkKind(p, values[i]); err != nil {
+			for i := range c.params {
+				if err := c.checkKind(&c.params[i], values[i]); err != nil {
 					return core.NullValue{}, fmt.Errorf("%s: %w", pos, err)
 				}
 			}

@@ -488,6 +488,10 @@ func (c *Compiler) parseEventPath() (core.Expr, error) {
 			return nil, c.errorf(start, "field name must immediately follow '.' without spaces")
 		}
 		segments = append(segments, seg)
+	}
+	// A root-level dynamic key is still an event path, not indexing a
+	// materialized root object: exists(.[key]) and rename(.[key], .out).
+	if len(segments) > 0 || (fieldAdjacent && c.check(parser.LBRACKET)) {
 		var err error
 		segments, err = c.continueSegments(segments)
 		if err != nil {

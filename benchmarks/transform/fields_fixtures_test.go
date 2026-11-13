@@ -80,7 +80,17 @@ func transformFieldScenarios() []transformCallScenario {
 	})
 	for _, count := range []int{1, 5, 20} {
 		for _, override := range []bool{false, true} {
-			scenarios = append(scenarios, transformRenameScenario(count, override, false))
+			scenario := transformRenameScenario(count, override, false)
+			if count == 5 && !override {
+				scenario.source = `
+					rename(.old_00, .new_00)
+					rename(.old_01, .new_01)
+					rename(.old_02, .new_02)
+					rename(.old_03, .new_03)
+					rename(.old_04, .new_04)
+				`
+			}
+			scenarios = append(scenarios, scenario)
 		}
 	}
 	return append(scenarios, transformRenameScenario(5, false, true))
