@@ -13,7 +13,7 @@ A great bug report should include:
 - What you expected would happen
 - What actually happens
 - Notes (possibly including why you think this might be happening, or stuff you tried that didn't work)
-- Context -- platform, versions of the software software and everything that you think may be important to reproduce and fix the newfound bug.
+- Context -- platform, versions of the software and everything that you think may be important to reproduce and fix the newfound bug.
 
 Here's an example of a [great bug report](http://www.openradar.me/11905408).
 Make sure to use the bug report template available when creating a new issue.
