@@ -76,10 +76,12 @@ func (p Parameter) Required() bool { return p.Default == nil }
 
 // Function is the interface every built-in function must implement.
 //
-// Lifecycle during a call:
+// General call path:
 //  1. Interpreter evaluates all argument expressions -> positional []Value + named map[string]Value
 //  2. CompiledFunc.Resolve validates and maps them to the parameter list -> map[string]Value
 //  3. Function.Call receives the resolved map and returns a Value
+//
+// Prepared calls use the optional indexedFunction entry point (see prepared.go).
 type Function interface {
 	// Returns the function name as it appears in source code.
 	Name() string
@@ -205,19 +207,21 @@ func (c *CompiledFunc) Resolve(
 	// (positionals are required, named ones are seeded), so no presence check.
 	if c.checkKinds {
 		for _, p := range c.params {
-			if len(p.AcceptedKinds) == 0 {
-				continue
-			}
-			val := resolved[p.Name]
-			if !slices.Contains(p.AcceptedKinds, val.Kind()) {
-				return nil, fmt.Errorf(
-					"function %q: argument %q: expected %s, got %s",
-					c.fn.Name(), p.Name, joinKinds(p.AcceptedKinds), val.Kind())
+			if err := c.checkKind(p, resolved[p.Name]); err != nil {
+				return nil, err
 			}
 		}
 	}
 
 	return resolved, nil
+}
+
+func (c *CompiledFunc) checkKind(p Parameter, value core.Value) error {
+	if len(p.AcceptedKinds) > 0 && !slices.Contains(p.AcceptedKinds, value.Kind()) {
+		return fmt.Errorf("function %q: argument %q: expected %s, got %s",
+			c.fn.Name(), p.Name, joinKinds(p.AcceptedKinds), value.Kind())
+	}
+	return nil
 }
 
 func containsName(params []Parameter, name string) bool {

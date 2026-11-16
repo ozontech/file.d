@@ -36,7 +36,7 @@ func TestJSONNodeEquality(t *testing.T) {
 	root, err := insaneJSON.DecodeString(
 		`{"num":1,"num2":1,"str":"1","obj":{"a":1},"arr":[1,2],"flt":1.0,"yes":true,"nul":null}`)
 	require.NoError(t, err)
-	defer insaneJSON.Release(root)
+	t.Cleanup(func() { insaneJSON.Release(root) })
 
 	node := func(field string) JSONNodeValue {
 		return JSONNodeValue{N: root.Dig(field)}
