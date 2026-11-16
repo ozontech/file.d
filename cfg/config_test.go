@@ -93,6 +93,14 @@ type sliceStruct struct {
 	Childs []sliceChild `default:"" slice:"true"`
 }
 
+type intSliceDefault struct {
+	T []int `default:"1 2 3"`
+}
+
+type strSliceDefault struct {
+	T []string `default:"a b c"`
+}
+
 type strBase8 struct {
 	T  string `default:"0666" parse:"base8"`
 	T_ int64
@@ -121,6 +129,24 @@ func TestParseDefault(t *testing.T) {
 
 	assert.NoError(t, err, "shouldn't be an error")
 	assert.Equal(t, "sync", s.S, "wrong value")
+}
+
+func TestParseDefaultIntSlice(t *testing.T) {
+	s := &intSliceDefault{}
+	SetDefaultValues(s)
+	err := Parse(s, nil)
+
+	assert.NoError(t, err, "shouldn't be an error")
+	assert.Equal(t, []int{1, 2, 3}, s.T, "wrong value")
+}
+
+func TestParseDefaultStrSlice(t *testing.T) {
+	s := &strSliceDefault{}
+	SetDefaultValues(s)
+	err := Parse(s, nil)
+
+	assert.NoError(t, err, "shouldn't be an error")
+	assert.Equal(t, []string{"a", "b", "c"}, s.T, "wrong value")
 }
 
 func TestParseDuration(t *testing.T) {
