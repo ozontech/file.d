@@ -436,6 +436,33 @@ func TestMetaInformationGetCacheKeyDifferentFiles(t *testing.T) {
 	assert.Equal(t, fileA.GetCacheKey(), identical.GetCacheKey(), "identical meta information must produce the same cache key")
 }
 
+func TestMetaInformationGetCacheKeyK8sMetadata(t *testing.T) {
+	k8s_meta.DisableMetaUpdates = true
+
+	newK8sMeta := func(t *testing.T, filename, symlink string, inode inodeID) metaInformation {
+		t.Helper()
+		metaInfo, err := newMetaInformation(filename, symlink, inode, true)
+		require.NoError(t, err)
+		return metaInfo
+	}
+
+	fileA := newK8sMeta(t,
+		"/var/log/pods/sre_pod-a_duty-bot-4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0.log", "", 111)
+	fileB := newK8sMeta(t,
+		"/var/log/pods/sre_pod-b_duty-bot-4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0.log", "", 222)
+
+	assert.NotEqual(t, fileA.GetCacheKey(), fileB.GetCacheKey(), "different k8s metadata must produce different cache keys")
+
+	sameK8sDifferentPath := newK8sMeta(t,
+		"/other/path/sre_pod-a_duty-bot-4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0.log", "/k8s-logs/x.log", 999)
+
+	assert.Equal(t, fileA.GetCacheKey(), sameK8sDifferentPath.GetCacheKey(), "same k8s metadata must produce the same cache key regardless of file path, symlink and inode")
+
+	identicalA := newK8sMeta(t,
+		"/var/log/pods/sre_pod-a_duty-bot-4e0301b633eaa2bfdcafdeba59ba0c72a3815911a6a820bf273534b0f32d98e0.log", "", 111)
+	assert.Equal(t, fileA.GetCacheKey(), identicalA.GetCacheKey(), "identical k8s meta information must produce the same cache key")
+}
+
 func TestGetData(t *testing.T) {
 	tests := []struct {
 		name     string
