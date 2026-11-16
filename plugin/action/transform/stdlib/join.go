@@ -33,11 +33,37 @@ func (join) Params() []Parameter {
 	}
 }
 
-func (join) Call(args map[string]core.Value) (core.Value, error) {
-	elements := args["value"].(core.ArrayValue).V
-	separator := args["separator"].(core.StringValue).V
+func (j join) Call(args map[string]core.Value) (core.Value, error) {
+	return j.call(nil, args["value"], args["separator"])
+}
 
-	parts := make([]string, len(elements))
+func (j join) CallIndexed(args []core.Value) (core.Value, error) {
+	return j.call(nil, args[0], args[1])
+}
+
+func (j join) CallIndexedWithState(state *core.CallState, args []core.Value) (core.Value, error) {
+	return j.call(state, args[0], args[1])
+}
+
+func (join) call(state *core.CallState, valueArg, separatorArg core.Value) (core.Value, error) {
+	elements := valueArg.(core.ArrayValue).V
+	separator := separatorArg.(core.StringValue).V
+
+	// Neither case needs temporary storage or a new string.
+	switch len(elements) {
+	case 0:
+		return core.StringValue{}, nil
+	case 1:
+		s, ok := elements[0].(core.StringValue)
+		if !ok {
+			return core.NullValue{}, fmt.Errorf(
+				"element 0: expected string, got %s", elements[0].Kind())
+		}
+		return s, nil
+	}
+
+	parts := state.AcquireStrings(len(elements))
+	defer state.ReleaseStrings(parts)
 	for i, el := range elements {
 		s, ok := el.(core.StringValue)
 		if !ok {

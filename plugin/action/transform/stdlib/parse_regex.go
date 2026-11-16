@@ -39,10 +39,18 @@ func (parseRegex) Params() []Parameter {
 	}
 }
 
-func (parseRegex) Call(args map[string]core.Value) (core.Value, error) {
-	value := args["value"].(core.StringValue)
-	re := args["pattern"].(core.RegexValue).V
-	numericGroups := args["numeric_groups"].(core.BoolValue).V
+func (p parseRegex) Call(args map[string]core.Value) (core.Value, error) {
+	return p.call(args["value"], args["pattern"], args["numeric_groups"])
+}
+
+func (p parseRegex) CallIndexed(args []core.Value) (core.Value, error) {
+	return p.call(args[0], args[1], args[2])
+}
+
+func (parseRegex) call(valueArg, patternArg, numericGroupsArg core.Value) (core.Value, error) {
+	value := valueArg.(core.StringValue)
+	re := patternArg.(core.RegexValue).V
+	numericGroups := numericGroupsArg.(core.BoolValue).V
 
 	match := re.FindStringSubmatch(value.V)
 	if match == nil {

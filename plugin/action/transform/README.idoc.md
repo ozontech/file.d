@@ -124,6 +124,48 @@ Functions are called with positional and named arguments. Positional arguments
 are required; named arguments are optional and fall back to their defaults:
 `fn(value, option: "x")`.
 
++ `exists(path)` — returns whether an event path or a metadata field exists.
+  An explicit `null`, `false`, empty string, array or object still exists.
+  Missing fields, incompatible parent types and out-of-bounds array indices
+  return `false`; `exists(.)` returns `true`.
+  ```
+  if !exists(.service) {
+    .service = "unknown"
+  }
+  exists(.items[-1].name)
+  exists(.[field_name])
+  exists(%source)
+  ```
+
++ `rename(source, destination, override: false)` — moves one event field and
+  returns `true` when it was moved. A missing source or identical source and
+  destination returns `false`. By default, an existing destination, including
+  `null`, preserves both fields and returns `false`. `override: true` replaces
+  the destination. The source is removed only after a successful write.
+  ```
+  rename(.log, .message, override: true)
+  rename(."exception.message", .exception_message)
+  rename(.syslog.identifier, .service)
+  rename(.k8s_label_app, .service)
+  ```
+  Calls execute in program order: the last two calls above give syslog priority
+  when `service` is absent. Paths may contain dynamic keys or array indices,
+  but both must end in object fields, such as `.items[0].name`. Moving array
+  elements, the event root or metadata is not supported. Missing destination
+  objects are created; existing scalar parents and missing/out-of-bounds arrays
+  are errors. Neither path may contain the other. These errors leave the event
+  unchanged by the rename itself.
+
+These two operations take **paths**, not strings or local values. Quoted names
+address literal keys (`."exception.message"`), while `.exception.message`
+addresses a nested field. Integer indices address arrays; string keys address
+objects. Arguments are evaluated in source order; for a path argument, only its
+indices are evaluated. The `override` argument must be a bool. Presence checks and the move happen afterward, using the
+current event. Effects of argument expressions are retained if a later argument
+fails. No full-event snapshot is created. Composite values written by `rename`
+are copied before deleting the source, so later destination writes do not alter
+local values still referencing the removed source. Field names must be nonempty.
+
 + `upcase(value)` — returns the string in upper case.
   ```
   .level = upcase(.level)    # "info" -> "INFO"

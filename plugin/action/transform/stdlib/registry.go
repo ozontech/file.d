@@ -31,6 +31,8 @@ func init() {
 	registry.mustRegister(trimToRight{})
 	registry.mustRegister(slice{})
 	registry.mustRegister(lookup{})
+	registry.mustRegister(exists{})
+	registry.mustRegister(rename{})
 }
 
 func GetRegistry() *Registry {
@@ -65,28 +67,47 @@ type Parameter struct {
 	// AcceptedKinds lists the value kinds this parameter accepts.
 	// An empty slice means any kind is accepted.
 	AcceptedKinds []core.ValueKind
+
+	// Mode selects value evaluation or path resolution. The zero value keeps
+	// ordinary function behavior. Path parameters are required and positional.
+	Mode ArgumentMode
+
+	// EventFieldOnly restricts a path parameter to a non-root event path.
+	// The resolved leaf and dynamic indices are checked by the target at runtime.
+	EventFieldOnly bool
 }
 
+type ArgumentMode uint8
+
+const (
+	ValueArgument ArgumentMode = iota
+	PathArgument
+)
+
 // Named reports whether the parameter is keyword-only (bound by name).
-func (p Parameter) Named() bool { return p.Default != nil }
+func (p *Parameter) Named() bool { return p.Default != nil }
 
 // Required reports whether the parameter must be supplied by the caller.
 // Positional parameters are always required; named parameters never are.
-func (p Parameter) Required() bool { return p.Default == nil }
+func (p *Parameter) Required() bool { return p.Default == nil }
 
-// Function is the interface every built-in function must implement.
+// Callable describes a registered function. Implementations provide exactly
+// one execution interface: Function or SpecializedFunction.
+type Callable interface {
+	Name() string
+	Params() []Parameter
+}
+
+// Function is the interface for functions that consume only values.
 //
-// Lifecycle during a call:
+// General call path:
 //  1. Interpreter evaluates all argument expressions -> positional []Value + named map[string]Value
 //  2. CompiledFunc.Resolve validates and maps them to the parameter list -> map[string]Value
 //  3. Function.Call receives the resolved map and returns a Value
+//
+// Prepared calls use the optional indexedFunction entry point (see prepared.go).
 type Function interface {
-	// Returns the function name as it appears in source code.
-	Name() string
-
-	// Returns the ordered list of parameter descriptors.
-	// Order matters for positional argument binding.
-	Params() []Parameter
+	Callable
 
 	// Call executes the function with fully-resolved, validated arguments.
 	// args is keyed by parameter name and always contains every parameter
@@ -94,12 +115,23 @@ type Function interface {
 	Call(args map[string]core.Value) (core.Value, error)
 }
 
-// CompiledFunc is a Function paired with its parameter signature precomputed
+// SpecializedFunction binds validated expressions to a dedicated executor.
+// Use it when evaluation requires paths or other expression-specific behavior.
+// Preparation must not capture an event or mutable invocation state.
+// Ordinary value functions keep Function and the shared CallPlan implementation.
+type SpecializedFunction interface {
+	Callable
+	PrepareCall(args []core.Argument) core.CallExecutor
+}
+
+// CompiledFunc is a Callable paired with its parameter signature precomputed
 // once at registration. Argument resolution reads the cached signature instead
 // of recomputing it, so nothing about the (static) parameter list is derived
 // per call.
 type CompiledFunc struct {
-	fn            Function
+	fn            Callable
+	valueFunc     Function
+	specialized   SpecializedFunction
 	params        []Parameter
 	numPositional int
 	namedSet      map[string]struct{}
@@ -111,12 +143,23 @@ func (c *CompiledFunc) Name() string { return c.fn.Name() }
 func (c *CompiledFunc) Params() []Parameter { return c.params }
 
 func (c *CompiledFunc) Call(args map[string]core.Value) (core.Value, error) {
-	return c.fn.Call(args)
+	if c.valueFunc == nil {
+		return core.NullValue{}, fmt.Errorf("function %q requires call preparation", c.Name())
+	}
+	return c.valueFunc.Call(args)
 }
 
+// RequiresPreparation reports whether evaluated values alone are insufficient.
+func (c *CompiledFunc) RequiresPreparation() bool { return c.specialized != nil }
+
 // compile precomputes the parameter signature and validates its shape.
-func compile(fn Function) (*CompiledFunc, error) {
+func compile(fn Callable) (*CompiledFunc, error) {
 	params := fn.Params()
+	valueFunc, isValue := fn.(Function)
+	specialized, isSpecialized := fn.(SpecializedFunction)
+	if isValue == isSpecialized {
+		return nil, fmt.Errorf("function %q must implement exactly one of Function or SpecializedFunction", fn.Name())
+	}
 
 	numPositional := 0
 	seenNamed := false
@@ -124,6 +167,15 @@ func compile(fn Function) (*CompiledFunc, error) {
 	namedSet := make(map[string]struct{})
 
 	for _, p := range params {
+		if p.Mode != ValueArgument && p.Mode != PathArgument {
+			return nil, fmt.Errorf("function %q: parameter %q has an invalid argument mode", fn.Name(), p.Name)
+		}
+		if p.Mode == PathArgument && (!isSpecialized || p.Named() || len(p.AcceptedKinds) > 0) {
+			return nil, fmt.Errorf("function %q: path parameter %q requires SpecializedFunction, no default and no value kinds", fn.Name(), p.Name)
+		}
+		if p.EventFieldOnly && p.Mode != PathArgument {
+			return nil, fmt.Errorf("function %q: EventFieldOnly requires a path parameter", fn.Name())
+		}
 		if len(p.AcceptedKinds) > 0 {
 			checkKinds = true
 		}
@@ -143,6 +195,8 @@ func compile(fn Function) (*CompiledFunc, error) {
 
 	return &CompiledFunc{
 		fn:            fn,
+		valueFunc:     valueFunc,
+		specialized:   specialized,
 		params:        params,
 		numPositional: numPositional,
 		namedSet:      namedSet,
@@ -161,6 +215,9 @@ func (c *CompiledFunc) Resolve(
 	positional []core.Value,
 	named map[string]core.Value,
 ) (map[string]core.Value, error) {
+	if c.RequiresPreparation() {
+		return nil, fmt.Errorf("function %q requires call preparation", c.Name())
+	}
 	positionalParams := c.params[:c.numPositional]
 	namedParams := c.params[c.numPositional:]
 
@@ -205,19 +262,21 @@ func (c *CompiledFunc) Resolve(
 	// (positionals are required, named ones are seeded), so no presence check.
 	if c.checkKinds {
 		for _, p := range c.params {
-			if len(p.AcceptedKinds) == 0 {
-				continue
-			}
-			val := resolved[p.Name]
-			if !slices.Contains(p.AcceptedKinds, val.Kind()) {
-				return nil, fmt.Errorf(
-					"function %q: argument %q: expected %s, got %s",
-					c.fn.Name(), p.Name, joinKinds(p.AcceptedKinds), val.Kind())
+			if err := c.checkKind(&p, resolved[p.Name]); err != nil {
+				return nil, err
 			}
 		}
 	}
 
 	return resolved, nil
+}
+
+func (c *CompiledFunc) checkKind(p *Parameter, value core.Value) error {
+	if len(p.AcceptedKinds) > 0 && !slices.Contains(p.AcceptedKinds, value.Kind()) {
+		return fmt.Errorf("function %q: argument %q: expected %s, got %s",
+			c.fn.Name(), p.Name, joinKinds(p.AcceptedKinds), value.Kind())
+	}
+	return nil
 }
 
 func containsName(params []Parameter, name string) bool {
@@ -249,7 +308,7 @@ func newRegistry() *Registry {
 	}
 }
 
-func (r *Registry) register(fn Function) error {
+func (r *Registry) register(fn Callable) error {
 	name := fn.Name()
 	if _, exists := r.functions[name]; exists {
 		return fmt.Errorf("function %q is already registered", name)
@@ -262,7 +321,7 @@ func (r *Registry) register(fn Function) error {
 	return nil
 }
 
-func (r *Registry) mustRegister(fn Function) {
+func (r *Registry) mustRegister(fn Callable) {
 	if err := r.register(fn); err != nil {
 		panic(fmt.Sprintf("transform: %s", err))
 	}

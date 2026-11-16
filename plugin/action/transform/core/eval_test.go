@@ -65,6 +65,28 @@ func (t *mockTarget) Delete(path Path) error {
 	return nil
 }
 
+func (t *mockTarget) Exists(path Path) (bool, error) {
+	_, exists := t.store[t.pathKey(path)]
+	return exists, t.err
+}
+
+func (t *mockTarget) Rename(source, destination Path, override bool) (bool, error) {
+	if t.err != nil {
+		return false, t.err
+	}
+	src, dst := t.pathKey(source), t.pathKey(destination)
+	value, exists := t.store[src]
+	if !exists || src == dst {
+		return false, nil
+	}
+	if _, exists := t.store[dst]; exists && !override {
+		return false, nil
+	}
+	t.store[dst] = value
+	delete(t.store, src)
+	return true, nil
+}
+
 type mockContext struct {
 	vars   map[string]Value
 	target *mockTarget

@@ -146,6 +146,11 @@ type CallExpr struct {
 	Node
 	Name string
 	Args []Argument
+
+	// Plan binds this call to its preparation-time registry. A nil plan uses
+	// the context's CallPlanner or EvalContext.CallFunc, allowing unprepared
+	// calls and custom registries.
+	Plan CallExecutor
 }
 
 type IfExpr struct {
