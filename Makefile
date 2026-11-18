@@ -2,7 +2,7 @@ VERSION ?= $(shell git describe --abbrev=4 --dirty --always --tags)
 TIME := $(shell date '+%Y-%m-%d_%H:%M:%S')
 UPSTREAM_BRANCH ?= origin/master
 
-GOLANGCI_LINT_VER=v2.8.0
+GOLANGCI_LINT_VER=v2.14.0
 GOOS ?= linux
 GOARCH ?= amd64
 
