@@ -149,7 +149,7 @@ func TestStart(t *testing.T) {
 	fileConfig := file.Config{
 		TargetFile:        targetFile,
 		RetentionInterval: "300ms",
-		Layout:            "01",
+		TimeLayout:        "01",
 		BatchFlushTimeout: "100ms",
 	}
 	config := &Config{
@@ -301,7 +301,7 @@ func TestStartWithMultiBuckets(t *testing.T) {
 	fileConfig := file.Config{
 		TargetFile:        targetFile,
 		RetentionInterval: "300ms",
-		Layout:            "01",
+		TimeLayout:        "01",
 		BatchFlushTimeout: "100ms",
 	}
 	config := &Config{
@@ -521,7 +521,7 @@ func TestStartWithSendProblems(t *testing.T) {
 	fileConfig := file.Config{
 		TargetFile:        targetFile,
 		RetentionInterval: "300ms",
-		Layout:            "01",
+		TimeLayout:        "01",
 		BatchFlushTimeout: "100ms",
 	}
 	config := &Config{
