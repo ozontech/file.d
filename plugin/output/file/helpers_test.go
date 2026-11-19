@@ -2,6 +2,7 @@ package file
 
 import (
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -92,4 +93,14 @@ func newPipeline(t *testing.T, configOutput *Config) *pipeline.Pipeline {
 	},
 	)
 	return p
+}
+
+func newTestPlugin(t *testing.T, config *Config) *Plugin {
+	t.Helper()
+	return &Plugin{
+		logger:    zap.NewNop().Sugar(),
+		config:    config,
+		mu:        &sync.RWMutex{},
+		openFiles: make(map[string]*activeFile),
+	}
 }

@@ -2,18 +2,24 @@ package file
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"os"
-	"path"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
+	"github.com/klauspost/compress/gzip"
+
+	"github.com/klauspost/compress/zstd"
 	"github.com/ozontech/file.d/cfg"
+	"github.com/ozontech/file.d/cfg/substitution"
 	"github.com/ozontech/file.d/fd"
-	"github.com/ozontech/file.d/logger"
 	"github.com/ozontech/file.d/pipeline"
+	"github.com/pierrec/lz4/v4"
 	"go.uber.org/zap"
 )
 
@@ -28,28 +34,35 @@ type Plugable interface {
 }
 
 type Plugin struct {
-	controller     pipeline.OutputPluginController
-	logger         *zap.SugaredLogger
-	config         *Config
-	avgEventSize   int
-	batcher        *pipeline.Batcher
-	file           *os.File
-	cancel         context.CancelFunc
-	idx            int
-	nextSealUpTime time.Time
-
-	targetDir     string
-	fileExtension string
-	fileName      string
-	tsFileName    string
+	controller   pipeline.OutputPluginController
+	logger       *zap.SugaredLogger
+	config       *Config
+	avgEventSize int
+	batcher      *pipeline.Batcher
+	cancel       context.CancelFunc
+	openFiles    map[string]*activeFile
+	staticPath   string // staticPath is target_file if it has no dynamic fields
 
 	SealUpCallback func(string)
 
 	mu *sync.RWMutex
 }
 
+type activeFile struct {
+	file *os.File
+	name string
+	dir  string // dir + slash
+	ext  string // dot + ext
+
+	sealUpAt  time.Time // when the file is sealed up
+	sealUpIdx int       // index in the name of the next sealed file
+}
+
 type data struct {
-	outBuf []byte
+	outBuf  []byte
+	pathOps []substitution.SubstitutionOp
+	pathBuf []byte
+	groups  map[string]*[]*pipeline.Event
 }
 
 const (
@@ -64,22 +77,28 @@ type Config struct {
 	// > @3@4@5@6
 	// >
 	// > File path to write events to.
-	// > Each rotated file will be named with current unix timestamp.
+	// > Until it's sealed up, the file is named with its creation unix time:
+	// > `/var/log/file-d.log` -> `/var/log/1893445200_file-d.log`
 	// >
-	// > For example, if `target_file` is `/var/log/file-d.log`
-	// > file will be `/var/log/1893445200_file-d.log`
+	// > The path may contain `${field}` and `%y`, `%m`, `%d`.
+	// > For example, if `target_file` is `/var/log/%y/%m/%d/${host}/file-d.log` file will be `/var/log/2006/01/02/host1/1893445200_file-d.log`
 	TargetFile string `json:"target_file" default:"/var/log/file-d.log"` // *
 
 	// > @3@4@5@6
 	// >
-	// > How often to rotate a particular file.
+	// > How long to write a file before sealing it up.
 	RetentionInterval  cfg.Duration `json:"retention_interval" default:"1h" parse:"duration"` // *
 	RetentionInterval_ time.Duration
 
 	// > @3@4@5@6
 	// >
+	// > Compressed files format.
+	Compression string `json:"compression" default:"none" options:"none|gzip|zstd|lz4"` // *
+
+	// > @3@4@5@6
+	// >
 	// > Layout is added to targetFile after sealing up. Determines result file name
-	Layout string `json:"time_layout" default:"01-02-2006_15:04:05"` // *
+	TimeLayout string `json:"time_layout" default:"2006-01-02 15:04:05"` // *
 
 	// > @3@4@5@6
 	// >
@@ -128,12 +147,27 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	p.controller = params.Controller
 	p.logger = params.Logger
 	p.config = config.(*Config)
+	p.avgEventSize = params.PipelineSettings.AvgEventSize
+	p.openFiles = make(map[string]*activeFile)
 
-	dir, file := filepath.Split(p.config.TargetFile)
-	p.targetDir = dir
-	p.fileExtension = filepath.Ext(file)
-	p.fileName = file[0 : len(file)-len(p.fileExtension)]
-	p.tsFileName = "%s" + "-" + p.fileName
+	pathOps, err := substitution.ParseSubstitution(p.config.TargetFile, nil, p.logger.Desugar())
+	if err != nil {
+		p.logger.Fatalf("can't parse target file: %s", err)
+	}
+
+	hasDynamicFields := false
+	for _, op := range pathOps {
+		if op.Kind == substitution.SubstitutionOpKindField {
+			hasDynamicFields = true
+		}
+		if op.Kind == substitution.SubstitutionOpKindRaw && strings.Contains(op.Data[0], "%") {
+			raw := op.Data[0]
+			if strings.Count(raw, "%") != strings.Count(raw, "%y")+strings.Count(raw, "%m")+strings.Count(raw, "%d") {
+				p.logger.Fatalf("only %%y, %%m, %%d are supported after %% in target_file: %s", p.config.TargetFile)
+			}
+			hasDynamicFields = true
+		}
+	}
 
 	p.batcher = pipeline.NewBatcher(pipeline.BatcherOptions{
 		PipelineName:   params.PipelineName,
@@ -151,19 +185,9 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.OutputPluginP
 	ctx, cancel := context.WithCancel(context.Background())
 	p.cancel = cancel
 
-	if err := os.MkdirAll(p.targetDir, os.ModePerm); err != nil {
-		p.logger.Fatalf("could not create target dir: %s, error: %s", p.targetDir, err.Error())
-	}
-
-	p.idx = p.getStartIdx()
-	p.createNew()
-	p.setNextSealUpTime()
-
-	if p.file == nil {
-		p.logger.Panic("file struct is nil!")
-	}
-	if p.nextSealUpTime.IsZero() {
-		p.logger.Panic("next seal up time is nil!")
+	if !hasDynamicFields {
+		p.staticPath = string(p.buildTargetPath(nil, pathOps, nil))
+		p.openFiles[p.staticPath] = p.openActive(p.staticPath)
 	}
 
 	go p.fileSealUpTicker(ctx)
@@ -181,36 +205,73 @@ func (p *Plugin) Out(event *pipeline.Event) {
 	p.batcher.Add(event)
 }
 
+// out writes the batch: into the single file or grouped by paths build from events.
 func (p *Plugin) out(workerData *pipeline.WorkerData, batch *pipeline.Batch) {
 	if *workerData == nil {
-		*workerData = &data{
-			outBuf: make([]byte, 0, p.config.BatchSize_*p.avgEventSize),
+		d := &data{outBuf: make([]byte, 0, p.config.BatchSize_*p.avgEventSize)}
+		if p.staticPath == "" {
+			d.pathOps, _ = substitution.ParseSubstitution(p.config.TargetFile, nil, p.logger.Desugar())
+			d.pathBuf = make([]byte, 0, len(p.config.TargetFile))
+			d.groups = make(map[string]*[]*pipeline.Event)
 		}
+		*workerData = d
 	}
 	data := (*workerData).(*data)
 
-	// handle to much memory consumption
+	// large batch can grow outBuf a lot, don't keep it
 	if cap(data.outBuf) > p.config.BatchSize_*p.avgEventSize {
 		data.outBuf = make([]byte, 0, p.config.BatchSize_*p.avgEventSize)
 	}
 
-	outBuf := data.outBuf[:0]
+	if p.staticPath != "" {
+		outBuf := data.outBuf[:0]
+		batch.ForEach(func(event *pipeline.Event) {
+			outBuf, _ = event.Encode(outBuf)
+			outBuf = append(outBuf, byte('\n'))
+		})
+		data.outBuf = outBuf
+		p.write(p.staticPath, outBuf)
+		return
+	}
 
+	// groups events by paths
 	batch.ForEach(func(event *pipeline.Event) {
-		outBuf, _ = event.Encode(outBuf)
-		outBuf = append(outBuf, byte('\n'))
+		data.pathBuf = p.buildTargetPath(data.pathBuf[:0], data.pathOps, event)
+		if events, ok := data.groups[string(data.pathBuf)]; ok {
+			*events = append(*events, event)
+			return
+		}
+		data.groups[string(data.pathBuf)] = &[]*pipeline.Event{event}
 	})
-	data.outBuf = outBuf
+	defer clear(data.groups)
 
-	p.write(outBuf)
+	for path, events := range data.groups {
+		outBuf := data.outBuf[:0]
+		for _, event := range *events {
+			outBuf, _ = event.Encode(outBuf)
+			outBuf = append(outBuf, byte('\n'))
+		}
+		data.outBuf = outBuf
+		p.write(path, outBuf)
+	}
 }
 
 func (p *Plugin) fileSealUpTicker(ctx context.Context) {
 	for {
-		timer := time.NewTimer(time.Until(p.nextSealUpTime))
+		delay := p.config.RetentionInterval_
+		p.mu.RLock()
+		now := time.Now()
+		for _, active := range p.openFiles {
+			if until := active.sealUpAt.Sub(now); until < delay {
+				delay = until
+			}
+		}
+		p.mu.RUnlock()
+
+		timer := time.NewTimer(delay)
 		select {
 		case <-timer.C:
-			p.sealUp()
+			p.sealUpExpired(time.Now())
 		case <-ctx.Done():
 			timer.Stop()
 			return
@@ -218,89 +279,166 @@ func (p *Plugin) fileSealUpTicker(ctx context.Context) {
 	}
 }
 
-func (p *Plugin) setNextSealUpTime() {
-	ts := p.tsFileName[0 : len(p.tsFileName)-len(fileNameSeparator)-len(p.fileName)-len(p.fileExtension)]
-	t, err := strconv.ParseInt(ts, 10, 64)
-	if err != nil {
-		p.logger.Panicf("coult nod convert timestamp to int for file: %s, error: %s", p.tsFileName, err.Error())
-	}
-	creationTime := time.Unix(t, 0)
-	p.nextSealUpTime = creationTime.Add(p.config.RetentionInterval_)
-}
-
-func (p *Plugin) write(data []byte) {
+func (p *Plugin) write(path string, data []byte) {
 	p.mu.RLock()
-	defer p.mu.RUnlock()
-	if _, err := p.file.Write(data); err != nil {
-		p.logger.Fatalf("could not write into the file: %s, error: %s", p.file.Name(), err.Error())
-	}
-}
-
-func (p *Plugin) createNew() {
-	p.tsFileName = fmt.Sprintf("%d%s%s%s", time.Now().Unix(), fileNameSeparator, p.fileName, p.fileExtension)
-	logger.Infof("tsFileName in createNew=%s", p.tsFileName)
-	f := fmt.Sprintf("%s%s", p.targetDir, p.tsFileName)
-	pattern := fmt.Sprintf("%s*%s%s%s", p.targetDir, fileNameSeparator, p.fileName, p.fileExtension)
-	matches, err := filepath.Glob(pattern)
-	if err != nil {
-		p.logger.Fatalf("can't glob: pattern=%s, err=%ss", pattern, err.Error())
-	}
-	if len(matches) == 1 {
-		p.tsFileName = path.Base(matches[0])
-		f = fmt.Sprintf("%s%s", p.targetDir, p.tsFileName)
-	}
-	file, err := os.OpenFile(f, os.O_CREATE|os.O_APPEND|os.O_RDWR, os.FileMode(p.config.FileMode_))
-	if err != nil {
-		p.logger.Panicf("could not open or create file: %s, error: %s", f, err.Error())
-	}
-	p.file = file
-}
-
-// sealUp manages current file: renames, closes, and creates new.
-func (p *Plugin) sealUp() {
-	info, err := p.file.Stat()
-	if err != nil {
-		p.logger.Panicf("could not get info about file: %s, error: %s", p.file.Name(), err.Error())
-	}
-	if info.Size() == 0 {
+	if active, ok := p.openFiles[path]; ok {
+		if _, err := active.file.Write(data); err != nil {
+			p.logger.Fatalf("can't write into the file %s: %s", active.file.Name(), err)
+		}
+		p.mu.RUnlock()
 		return
 	}
+	p.mu.RUnlock()
 
-	// newFileName will be like: ".var/log/log_1_01-02-2009_15:04.log
-	newFileName := filepath.Join(p.targetDir, fmt.Sprintf("%s%s%d%s%s%s", p.fileName, fileNameSeparator, p.idx, fileNameSeparator, time.Now().Format(p.config.Layout), p.fileExtension))
-	p.rename(newFileName)
-	oldFile := p.file
 	p.mu.Lock()
-	p.createNew()
-	p.nextSealUpTime = time.Now().Add(p.config.RetentionInterval_)
-	p.mu.Unlock()
-	if err := oldFile.Close(); err != nil {
-		p.logger.Panicf("could not close file: %s, error: %s", oldFile.Name(), err.Error())
+	defer p.mu.Unlock()
+	active, ok := p.openFiles[path]
+	if !ok {
+		active = p.openActive(path)
+		p.openFiles[path] = active
 	}
-	logger.Infof("sealing file, newFileName=%s", newFileName)
-	if p.SealUpCallback != nil {
-		go p.SealUpCallback(newFileName)
+	if _, err := active.file.Write(data); err != nil {
+		p.logger.Fatalf("can't write into the file %s: %s", active.file.Name(), err)
 	}
 }
 
-func (p *Plugin) rename(newFileName string) {
-	f := fmt.Sprintf("%s%s", p.targetDir, p.tsFileName)
-	if err := os.Rename(f, newFileName); err != nil {
-		p.logger.Panicf("could not rename file, error: %s", err.Error())
+func (p *Plugin) openActive(targetPath string) *activeFile {
+	dir, name := filepath.Split(targetPath)
+	ext := filepath.Ext(name)
+
+	active := &activeFile{
+		dir:  dir,
+		name: name[:len(name)-len(ext)],
+		ext:  ext,
 	}
-	p.idx++
+
+	if err := os.MkdirAll(active.dir, os.ModePerm); err != nil {
+		p.logger.Fatalf("can't create target dir %s: %s", active.dir, err)
+	}
+
+	active.sealUpIdx = p.nextSealUpIdx(active)
+
+	// reuse a current file after restart
+	suffix := fileNameSeparator + active.name + active.ext
+	matches, err := filepath.Glob(active.dir + "*" + suffix)
+	if err != nil {
+		p.logger.Panic(err)
+	}
+	if len(matches) > 0 {
+		current := matches[0]
+		ts, err := strconv.ParseInt(strings.TrimSuffix(filepath.Base(current), suffix), 10, 64)
+		if err != nil {
+			p.logger.Panicf("can't convert timestamp to int for file %s: %s", current, err)
+		}
+
+		file, err := os.OpenFile(current, os.O_CREATE|os.O_APPEND|os.O_RDWR, os.FileMode(p.config.FileMode_))
+		if err != nil {
+			p.logger.Panicf("can't create file %s: %s", current, err)
+		}
+
+		active.file = file
+		active.sealUpAt = time.Unix(ts, 0).Add(p.config.RetentionInterval_)
+		return active
+	}
+
+	p.createNew(active, time.Now())
+	return active
 }
 
-func (p *Plugin) getStartIdx() int {
-	pattern := fmt.Sprintf("%s/%s%s*%s*%s", p.targetDir, p.fileName, fileNameSeparator, fileNameSeparator, p.fileExtension)
+func (p *Plugin) createNew(active *activeFile, now time.Time) {
+	filePath := fmt.Sprintf("%s%d%s%s%s", active.dir, now.Unix(), fileNameSeparator, active.name, active.ext)
+	file, err := os.OpenFile(filePath, os.O_CREATE|os.O_APPEND|os.O_RDWR, os.FileMode(p.config.FileMode_))
+	if err != nil {
+		p.logger.Panicf("can't create file %s: %s", filePath, err)
+	}
+
+	active.file = file
+	active.sealUpAt = now.Add(p.config.RetentionInterval_)
+}
+
+func (p *Plugin) sealUpExpired(now time.Time) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	for path, active := range p.openFiles {
+		if active.sealUpAt.After(now) {
+			continue
+		}
+
+		sealed := p.sealUp(active, now)
+
+		if p.staticPath == "" {
+			if !sealed {
+				// empty file with dynamic path, so close and remove it, a new one is opened on the next write
+				name := active.file.Name()
+				if err := active.file.Close(); err != nil {
+					p.logger.Panicf("can't close empty file %s: %s", name, err)
+				}
+				if err := os.Remove(name); err != nil {
+					p.logger.Panicf("can't remove empty file %s: %s", name, err)
+				}
+			}
+			delete(p.openFiles, path)
+			continue
+		}
+
+		if sealed {
+			p.createNew(active, now)
+			continue
+		}
+
+		// empty file with static path: keep writing into it, check on the next tick
+		active.sealUpAt = now.Add(p.config.RetentionInterval_)
+	}
+}
+
+// sealUp closes and renames the file: app.log -> app_<idx>_<time>.log, returns false for an empty file.
+func (p *Plugin) sealUp(active *activeFile, now time.Time) bool {
+	info, err := active.file.Stat()
+	if err != nil {
+		p.logger.Panicf("can't get info about file %s: %s", active.file.Name(), err)
+	}
+	if info.Size() == 0 {
+		return false
+	}
+
+	oldPath := active.file.Name()
+	if err := active.file.Close(); err != nil {
+		p.logger.Panicf("can't close file %s: %s", active.file.Name(), err)
+	}
+
+	name := fmt.Sprintf("%s%s%d%s%s%s", active.name, fileNameSeparator, active.sealUpIdx, fileNameSeparator, now.Format(p.config.TimeLayout), active.ext)
+	newFilePath := filepath.Join(active.dir, name)
+	if err := os.Rename(oldPath, newFilePath); err != nil {
+		p.logger.Panicf("can't rename %s to %s: %s", oldPath, newFilePath, err)
+	}
+	active.sealUpIdx++
+
+	p.logger.Infof("sealing file, newFilePath=%s", newFilePath)
+
+	go func(path string) {
+		pathAfterCompress := p.compress(path)
+		if p.SealUpCallback != nil {
+			go p.SealUpCallback(pathAfterCompress)
+		}
+	}(newFilePath)
+
+	return true
+}
+
+// nextSealUpIdx returns the index for the next sealed file.
+func (p *Plugin) nextSealUpIdx(active *activeFile) int {
+	// sealed up files can be compressed
+	pattern := fmt.Sprintf("%s%s%s*%s*%s*", active.dir, active.name, fileNameSeparator, fileNameSeparator, active.ext)
 	matches, err := filepath.Glob(pattern)
 	if err != nil {
-		p.logger.Panic(err.Error())
+		p.logger.Panic(err)
 	}
+
 	idx := -1
-	for _, v := range matches {
-		file := filepath.Base(v)
-		i := file[len(p.fileName)+len(fileNameSeparator) : len(file)-len(p.fileExtension)-len(p.config.Layout)-len(fileNameSeparator)]
+	for _, filePath := range matches {
+		file := filepath.Base(filePath)
+		i, _, _ := strings.Cut(file[len(active.name)+len(fileNameSeparator):], fileNameSeparator)
 		maxIdx, err := strconv.Atoi(i)
 		if err != nil {
 			break
@@ -309,6 +447,116 @@ func (p *Plugin) getStartIdx() int {
 			idx = maxIdx
 		}
 	}
-	idx++
-	return idx
+
+	return idx + 1
+}
+
+var dateLayouts = map[byte]string{'y': "2006", 'm': "01", 'd': "02"}
+
+// buildTargetPath builds the file path for the event from target_file.
+func (p *Plugin) buildTargetPath(dst []byte, pathOps []substitution.SubstitutionOp, event *pipeline.Event) []byte {
+	var ts time.Time
+	for _, op := range pathOps {
+		switch op.Kind {
+		case substitution.SubstitutionOpKindRaw:
+			raw := op.Data[0]
+			if ts.IsZero() && strings.Contains(raw, "%") {
+				for _, field := range [...]string{"timestamp", "time", "ts"} {
+					if node := event.Root.Dig(field).AsString(); node != "" {
+						ts, _ = time.Parse(p.config.TimeLayout, node)
+						break
+					}
+				}
+			}
+			if len(dst) > 0 && dst[len(dst)-1] == '/' && strings.HasPrefix(raw, "/") {
+				raw = raw[1:]
+			}
+
+			for {
+				before, after, ok := strings.Cut(raw, "%")
+				dst = append(dst, before...)
+				if !ok {
+					break
+				}
+				dst = ts.AppendFormat(dst, dateLayouts[after[0]])
+				raw = after[1:]
+			}
+		case substitution.SubstitutionOpKindField:
+			node := event.Root.Dig(op.Data...)
+			// pass only bool, str, num types
+			if node.IsNil() || !(node.IsString() || node.IsNumber() || node.IsTrue() || node.IsFalse()) {
+				continue
+			}
+
+			start := len(dst)
+			dst = append(dst, node.AsString()...)
+
+			// filters change tha value in place, so it's applied to its copy in dst
+			value := dst[start:]
+			for _, filter := range op.Filters {
+				value = filter.Apply(value, value)
+			}
+			dst = append(dst[:start], value...)
+		}
+	}
+
+	return dst
+}
+
+func (p *Plugin) compress(path string) string {
+	var newWriter func(io.Writer) (io.WriteCloser, error)
+	var ext string
+
+	switch p.config.Compression {
+	case "none":
+		return path
+	case "gzip":
+		ext = ".gz"
+		newWriter = func(w io.Writer) (io.WriteCloser, error) {
+			return gzip.NewWriter(w), nil
+		}
+	case "zstd":
+		ext = ".zst"
+		newWriter = func(w io.Writer) (io.WriteCloser, error) {
+			return zstd.NewWriter(w)
+		}
+	case "lz4":
+		ext = ".lz4"
+		newWriter = func(w io.Writer) (io.WriteCloser, error) {
+			return lz4.NewWriter(w), nil
+		}
+	}
+
+	src, err := os.Open(path)
+	if err != nil {
+		p.logger.Errorf("can't open file to compress %s: %s", path, err)
+		return path
+	}
+
+	compPath := path + ext
+	dst, err := os.OpenFile(compPath, os.O_CREATE|os.O_APPEND|os.O_RDWR, os.FileMode(p.config.FileMode_))
+	if err != nil {
+		_ = src.Close()
+		p.logger.Errorf("can't create file %s: %s", compPath, err)
+		return path
+	}
+
+	w, err := newWriter(dst)
+	if err == nil {
+		_, err = io.Copy(w, src)
+		err = errors.Join(err, w.Close())
+	}
+
+	err = errors.Join(err, dst.Close(), src.Close())
+	if err != nil {
+		err = errors.Join(err, os.Remove(compPath))
+		p.logger.Errorf("can't compress file %s: %s", path, err)
+		return path
+	}
+
+	if err := os.Remove(path); err != nil {
+		p.logger.Errorf("can't remove file %s: %s", path, err)
+	}
+
+	return compPath
 }
