@@ -230,4 +230,8 @@ Example: ```topic: '{{ .topic }}'```
 **`partition`**
 
 **`offset`**
+
+**`timestamp`**  *`time.Time`*
+
+Record timestamp. In templates you can use `time.Time` methods, e.g. `{{ .timestamp.Unix }}` or `{{ .timestamp.Format "2006-01-02T15:04:05Z07:00" }}`.
 <br>*Generated using [__insane-doc__](https://github.com/vitkovskii/insane-doc)*
