@@ -52,13 +52,18 @@ Optional flag `emptyOnNotMatched` allows to returns empty string if no matches o
 + `trim-to filter` - `trim_to(mode string, cutset string[, includeCutset bool])`, trims data to `cutset` substring. Available modes are `all` - trim both sides, `left` - trim only left, `right` - trim only right.
 `cutset` must not be empty. An empty `cutset` causes a configuration parsing error.
 Optional flag `includeCutset` allows to trim `cutset` itself.
-
 The complete matched substring is preserved, including multi-byte and Unicode delimiters.
 The `left` mode trims before the first occurrence, `right` trims after the last occurrence, and `all` applies both.
 If no match is found, the input is unchanged.
 
 + `cut filter` - `cut(mode string, count int)`, cut `count` data bytes.
 Available modes are `first` - cut first `count` bytes, `last` - cut last `count` bytes.
+
++ `replace filter` - `replace(old string, new string, count int)`, replaces the first `count` non-overlapping instances of `old` by `new`.
+If `count < 0`, there is no limit on the number of replacements.
+
++ `replace_all filter` - `replace_all(old string, new string)`, replaces all non-overlapping instances of `old` by `new`.
+Shortcut for `replace(old, new, -1)`.
 
 ### Examples
 
@@ -157,5 +162,45 @@ Data: `{"message":"some looooooooooooong data"}`
 Substitution: `message: ${message|cut("last",5)}`
 
 Result: `{"message":" data"}`
+
+**Example replace #1**
+
+Data: `{"message":"old old old"}`
+
+Substitution: `message: ${message|replace("old","new",2)}`
+
+Result: `{"message":"new new old"}`
+
+**Example replace #2**
+
+Data: `{"message":"old old old"}`
+
+Substitution: `message: ${message|replace("old","new",-1)}`
+
+Result: `{"message":"new new new"}`
+
+**Example replace #3**
+
+Data: `{"message":"some hidden data"}`
+
+Substitution: `message: ${message|replace("hidden","",-1)}`
+
+Result: `{"message":"some  data"}`
+
+**Example replace_all #1**
+
+Data: `{"message":"old old old"}`
+
+Substitution: `message: ${message|replace_all("old","new")}`
+
+Result: `{"message":"new new new"}`
+
+**Example replace_all #2**
+
+Data: `{"message":"some hidden data and other hidden data"}`
+
+Substitution: `message: ${message|replace_all("hidden","")}`
+
+Result: `{"message":"some  data and other  data"}`
 
 <br>*Generated using [__insane-doc__](https://github.com/vitkovskii/insane-doc)*
