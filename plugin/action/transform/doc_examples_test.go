@@ -96,9 +96,13 @@ func TestDocExamplesCompile(t *testing.T) {
 		`.ids = parse_regex_all(.log, r'id=(\w+)', group: 1)`,
 		`.extracted = join(parse_regex_all(.message, r're\d+', limit: 2), ",")`,
 		`.message = trim_right(.message, "\n")`,
-		`.message = trim_to_right(trim_to_left(.message, "{"), "}")`,
+		`.message = trim_to_right(trim_to_left(.message, "{"), "}")
+		.message = trim_to(.message, "|", include_cutset: true)`,
 		`.head = slice(.message, 0, end: 10)
 		.tail = slice(.message, -5)`,
+		`.message = replace(.message, "old", "new", count: 2)
+		.message = replace(.message, "old", "new")
+		.message = replace(.message, "hidden", "")`,
 		`api_key = {"0": "produce", "1": "fetch", "2": "offsets"}
 		.kafka_request_api_key = lookup(.kafka_request_api_key, api_key)`,
 		`.severity = lookup(.status, {"500": "crit", "400": "warn"}, default: "ok")`,

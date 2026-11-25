@@ -30,6 +30,7 @@ func init() {
 	registry.mustRegister(trimToLeft{})
 	registry.mustRegister(trimToRight{})
 	registry.mustRegister(slice{})
+	registry.mustRegister(replace{})
 	registry.mustRegister(lookup{})
 }
 
