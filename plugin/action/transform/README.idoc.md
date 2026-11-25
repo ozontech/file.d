@@ -221,6 +221,20 @@ are required; named arguments are optional and fall back to their defaults:
   .tail = slice(.message, -5)           # last 5 characters
   ```
 
++ `replace(value, old, new, count: -1)` — returns a copy of the string with the first `count`
+  non-overlapping instances of `old` replaced by `new`. `new` can be empty, while `old` is not.
+  If `count < 0`, there is no limit on the number of replacements:
+  ```
+  # 'some old old old data' -> 'some new new old data'
+  .message = replace(.message, "old", "new", count: 2)
+
+  # 'some old old old data' -> 'some new new new data'
+  .message = replace(.message, "old", "new")
+
+  # 'some hidden data' -> 'some  data'
+  .message = replace(.message, "hidden", "")
+  ```
+
 + `lookup(value, table, default: <unchanged>)` — translates a value through a
   table of replacements. It turns enumeration codes into readable names without
   a chain of `if`s:
