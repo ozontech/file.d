@@ -241,14 +241,20 @@ are required; named arguments are optional and fall back to their defaults:
   .message = trim_right(.message, "\n")
   ```
 
-+ `trim_to(value, cutset)`, `trim_to_left(value, cutset)`,
-  `trim_to_right(value, cutset)` — cut the string back to a delimiter, keeping the
++ `trim_to(value, cutset, include_cutset: false)`, `trim_to_left(value, cutset, include_cutset: false)`,
+  `trim_to_right(value, cutset, include_cutset: false)` — cut the string back to a delimiter, keeping the
   delimiter itself; the value is returned unchanged when it is not found. Here
   `cutset` is a *substring*: the left side trims to its first occurrence, the
   right side to its last one, so the outermost pair is kept:
   ```
   # 'some data {"took":"200ms"} some data' -> '{"took":"200ms"}'
   .message = trim_to_right(trim_to_left(.message, "{"), "}")
+  ```
+
+  `include_cutset: true` allows to trim `cutset` itself:
+  ```
+  # 'some data |value| some data' -> 'value'
+  .message = trim_to(.message, "|", include_cutset: true)
   ```
 
 + `slice(value, start, end: null)` — returns the part of the string between two
