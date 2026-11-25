@@ -391,6 +391,27 @@ func TestParseSubstitution(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name:         "trim_to_filter_with_optional_ok",
+			substitution: `test ${field|trim_to("left","{",true)} test2`,
+			data: [][]string{
+				{"test "},
+				{"field"},
+				{" test2"},
+			},
+			filters: [][][]any{
+				nil,
+				{
+					{
+						trimModeLeft,
+						"{",
+						true,
+					},
+				},
+				nil,
+			},
+			wantErr: false,
+		},
+		{
 			name:         "err_trim_to_filter_args_empty",
 			substitution: `test ${field|trim_to()} test2`,
 			wantErr:      true,
@@ -402,7 +423,7 @@ func TestParseSubstitution(t *testing.T) {
 		},
 		{
 			name:         "err_trim_to_filter_invalid_args_count_2",
-			substitution: `test ${field|trim_to("all","{","asd")} test2`,
+			substitution: `test ${field|trim_to("all","{",true,"asd")} test2`,
 			wantErr:      true,
 		},
 		{
@@ -421,18 +442,13 @@ func TestParseSubstitution(t *testing.T) {
 			wantErr:      true,
 		},
 		{
-			name:         "err_trim_to_filter_empty_cutset_all",
+			name:         "err_trim_to_filter_invalid_third_arg",
+			substitution: `test ${field|trim_to("all","test","asd")} test2`,
+			wantErr:      true,
+		},
+		{
+			name:         "err_trim_to_filter_empty_cutset",
 			substitution: `test ${field|trim_to("all","")} test2`,
-			wantErr:      true,
-		},
-		{
-			name:         "err_trim_to_filter_empty_cutset_left",
-			substitution: `test ${field|trim_to("left","")} test2`,
-			wantErr:      true,
-		},
-		{
-			name:         "err_trim_to_filter_empty_cutset_right",
-			substitution: `test ${field|trim_to("right","")} test2`,
 			wantErr:      true,
 		},
 		{
@@ -595,40 +611,58 @@ func TestFilterApply(t *testing.T) {
 			want:         `{"message":"test"}`,
 		},
 		{
-			name:         "trim_to_right_multibyte_delimiter",
+			name:         "ok_trim_to_right_multibyte_delimiter",
 			substitution: `${field|trim_to("right","END")}`,
 			data:         `first END second END trailing`,
 			want:         `first END second END`,
 		},
 		{
-			name:         "trim_to_all_multibyte_delimiter",
+			name:         "ok_trim_to_all_multibyte_delimiter",
 			substitution: `${field|trim_to("all","END")}`,
 			data:         `leading END message END trailing`,
 			want:         `END message END`,
 		},
 		{
-			name:         "trim_to_left_multibyte_delimiter",
+			name:         "ok_trim_to_left_multibyte_delimiter",
 			substitution: `${field|trim_to("left","END")}`,
 			data:         `leading END message END trailing`,
 			want:         `END message END trailing`,
 		},
 		{
-			name:         "trim_to_right_unicode_delimiter",
+			name:         "ok_trim_to_right_unicode_delimiter",
 			substitution: `${field|trim_to("right","界")}`,
 			data:         `hello界 trailing`,
 			want:         `hello界`,
 		},
 		{
-			name:         "trim_to_right_missing_delimiter",
+			name:         "ok_trim_to_right_missing_delimiter",
 			substitution: `${field|trim_to("right","END")}`,
 			data:         `message`,
 			want:         `message`,
 		},
 		{
-			name:         "trim_to_empty_input",
+			name:         "ok_trim_to_empty_input",
 			substitution: `${field|trim_to("right","END")}`,
 			data:         ``,
 			want:         ``,
+		},
+		{
+			name:         "ok_trim_to_all_include_cutset",
+			substitution: `${field|trim_to("all","END",true)}`,
+			data:         `leading END message END trailing`,
+			want:         ` message `,
+		},
+		{
+			name:         "ok_trim_to_left_include_cutset",
+			substitution: `${field|trim_to("left","END",true)}`,
+			data:         `leading END message END trailing`,
+			want:         ` message END trailing`,
+		},
+		{
+			name:         "ok_trim_to_right_include_cutset",
+			substitution: `${field|trim_to("right","END",true)}`,
+			data:         `leading END message END trailing`,
+			want:         `leading END message `,
 		},
 		{
 			name:         "ok_single_cut_filter_cut_first",

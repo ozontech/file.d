@@ -49,9 +49,9 @@ Optional flag `emptyOnNotMatched` allows to returns empty string if no matches o
 `left` - trim only left, `right` - trim only right.
 `cutset` must not be empty. An empty `cutset` causes a configuration parsing error.
 
-+ `trim-to filter` - `trim_to(mode string, cutset string)`, trims data to `cutset` substring. Available modes are `all` - trim both sides,
-`left` - trim only left, `right` - trim only right.
++ `trim-to filter` - `trim_to(mode string, cutset string[, includeCutset bool])`, trims data to `cutset` substring. Available modes are `all` - trim both sides, `left` - trim only left, `right` - trim only right.
 `cutset` must not be empty. An empty `cutset` causes a configuration parsing error.
+Optional flag `includeCutset` allows to trim `cutset` itself.
 
 The complete matched substring is preserved, including multi-byte and Unicode delimiters.
 The `left` mode trims before the first occurrence, `right` trims after the last occurrence, and `all` applies both.
@@ -109,6 +109,14 @@ Data: `{"message":"some data {\"service\":\"service-test-1\",\"took\":\"200ms\"}
 Substitution: `message: ${message|trim_to("left","{")|trim_to("right","}")}`
 
 Result: `{"message":"{\"service\":\"service-test-1\",\"took\":\"200ms\"}"}`
+
+**Example trim-to with `includeCutset` flag**
+
+Data: `{"message":"prefix |data| suffix"}`
+
+Substitution: `message: ${message|trim_to("all","|",true)}`
+
+Result: `{"message":"data"}`
 
 **Example trim-to: multi-byte delimiter**
 
