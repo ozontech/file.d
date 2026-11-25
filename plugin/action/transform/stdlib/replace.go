@@ -46,9 +46,9 @@ func (replace) Params() []Parameter {
 
 func (replace) Call(args map[string]core.Value) (core.Value, error) {
 	value := args["value"].(core.StringValue).V
-	old := args["old"].(core.StringValue).V
-	new := args["new"].(core.StringValue).V
+	o := args["old"].(core.StringValue).V
+	n := args["new"].(core.StringValue).V
 	count := int(args["count"].(core.IntegerValue).V)
 
-	return core.StringValue{V: strings.Replace(value, old, new, count)}, nil
+	return core.StringValue{V: strings.Replace(value, o, n, count)}, nil
 }

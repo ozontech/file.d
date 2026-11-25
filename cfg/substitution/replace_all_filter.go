@@ -48,19 +48,19 @@ func parseReplaceAllFilter(data string, offset int) (FieldFilter, int, error) {
 		return nil, filterEndPos, fmt.Errorf("invalid args for replace_all filter, exptected %d, got %d", expArgsCnt, len(args))
 	}
 
-	var old, new string
-	if err := json.Unmarshal([]byte(args[0]), &old); err != nil {
+	var o, n string
+	if err := json.Unmarshal([]byte(args[0]), &o); err != nil {
 		return nil, filterEndPos, fmt.Errorf("failed to parse replace_all filter 'old': %w", err)
 	}
-	if len(old) == 0 {
+	if o == "" {
 		return nil, filterEndPos, fmt.Errorf("replace_all filter 'old' must not be empty")
 	}
-	if err := json.Unmarshal([]byte(args[1]), &new); err != nil {
+	if err := json.Unmarshal([]byte(args[1]), &n); err != nil {
 		return nil, filterEndPos, fmt.Errorf("failed to parse replace_all filter 'new': %w", err)
 	}
 	filter := &ReplaceAllFilter{
-		old: []byte(old),
-		new: []byte(new),
+		old: []byte(o),
+		new: []byte(n),
 	}
 	return filter, filterEndPos, nil
 }
