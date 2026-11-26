@@ -5,20 +5,27 @@ It sends event batches into files.
 **`target_file`** *`string`* *`default=/var/log/file-d.log`* 
 
 File path to write events to.
-Each rotated file will be named with current unix timestamp.
+Until it's sealed up, the file is named with its creation unix time:
+`/var/log/file-d.log` -> `/var/log/1893445200_file-d.log`
 
-For example, if `target_file` is `/var/log/file-d.log`
-file will be `/var/log/1893445200_file-d.log`
+The path may contain `${field}` and `%y`, `%m`, `%d`.
+For example, if `target_file` is `/var/log/%y/%m/%d/${host}/file-d.log` file will be `/var/log/2006/01/02/host1/1893445200_file-d.log`
 
 <br>
 
 **`retention_interval`** *`cfg.Duration`* *`default=1h`* 
 
-How often to rotate a particular file.
+How long to write a file before sealing it up.
 
 <br>
 
-**`time_layout`** *`string`* *`default=01-02-2006_15:04:05`* 
+**`compression`** *`string`* *`default=none`* *`options=none|gzip|zstd|lz4`* 
+
+Compressed files format.
+
+<br>
+
+**`time_layout`** *`string`* *`default=2006-01-02 15:04:05`* 
 
 Layout is added to targetFile after sealing up. Determines result file name
 

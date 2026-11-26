@@ -2,11 +2,9 @@ package file
 
 import (
 	"fmt"
-	"os"
 	"path"
 	"path/filepath"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -17,8 +15,7 @@ import (
 )
 
 const (
-	targetFile          = "filetests/log.log"
-	targetFileThreshold = "filetests/%d%slog.log"
+	targetFile = "filetests/log.log"
 )
 
 var (
@@ -26,158 +23,66 @@ var (
 	extension = filepath.Ext(file)
 )
 
-func TestGetStartIdx(t *testing.T) {
-	testsCases := []struct {
-		targetFile  string
-		layout      string
-		filesName   []string
-		expectedIdx int
+func TestNextSealUpIdx(t *testing.T) {
+	tests := []struct {
+		name       string
+		targetFile string
+		files      []string
+		want       int
 	}{
-		{targetFile, "01", []string{}, 0},
-		{targetFile, "01", []string{"filetests/log_0_06.log", "filetests/log_1_06.log", "filetests/log_2_06.log"}, 3},
-		{targetFile, "01", []string{"filetests/log_0_06.log", "filetests/log_1_06.log", "filetests/log_2_06.log", "filetests/log_3_07.log"}, 4},
-		{targetFile, "01", []string{"filetests/log_-2_06.log", "filetests/log_-3_06.log", "filetests/log_-1_06.log"}, 0},
-		{targetFile, "01", []string{"filetests/log_0_06.log", "filetests/log_1_06.log", "filetests/log_2_06"}, 2},
-		{targetFile, "01", []string{"filetests/log_-2_06.log", "filetests/log_-3_06.log", "filetests/log_-4_06.log"}, 0},
-		{targetFile, "01", []string{"filetests/another_0_06.log", "filetests/another_1_06.log", "filetests/another_2_06.log"}, 0},
-
-		{"filetests/some-file", "01-02", []string{"filetests/some-file_0_06-02.log"}, 0},
-		{"filetests/some-file", "01-02", []string{"filetests/some-file_0_06-02"}, 1},
-		{"tmp/f.log", "", []string{"tmp/f_0_.log", "tmp/f_8_.log"}, 9},
-		{"tmp/f.log.log", "", []string{"tmp/f.log_0_.log"}, 1},
-		{"tmp/f_0_3.log", "01", []string{"tmp/f_0_3_0_05.log"}, 1},
-		{"tmp/f_0_3.log", "01", []string{"tmp/f_3_0_05.log"}, 0},
+		{
+			name:       "no_files",
+			targetFile: targetFile,
+			files:      []string{},
+			want:       0,
+		},
+		{
+			name:       "sealed_up_files",
+			targetFile: targetFile,
+			files:      []string{"filetests/log_0_06.log", "filetests/log_1_06.log", "filetests/log_2_06.log"},
+			want:       3,
+		},
+		{
+			name:       "negative_indexes",
+			targetFile: targetFile,
+			files:      []string{"filetests/log_-2_06.log", "filetests/log_-3_06.log", "filetests/log_-1_06.log"},
+			want:       0,
+		},
+		{
+			name:       "another_extension",
+			targetFile: "log.log",
+			files:      []string{"log_0_06.log", "log_5_06"},
+			want:       1,
+		},
+		{
+			name:       "another_name",
+			targetFile: "log.log",
+			files:      []string{"another_0_06.log"},
+			want:       0,
+		},
+		{
+			name:       "compressed",
+			targetFile: "log.log",
+			files:      []string{"log_0_06.log.gz", "log_1_06.log.zst", "log_2_06.log.lz4"},
+			want:       3,
+		},
 	}
 
-	for _, tc := range testsCases {
-		config := Config{
-			TargetFile: tc.targetFile,
-			Layout:     tc.layout,
-		}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir() + "/"
+			for _, f := range tt.files {
+				createDir(t, filepath.Dir(dir+f))
+				createFile(t, dir+f, nil).Close()
+			}
 
-		dir, file := filepath.Split(config.TargetFile)
-		extension := filepath.Ext(file)
-		test.ClearDir(t, dir)
-		p := Plugin{
-			config:        &config,
-			targetDir:     dir,
-			fileExtension: extension,
-			fileName:      file[0 : len(file)-len(extension)],
-		}
+			dir, file := filepath.Split(dir + tt.targetFile)
+			p := newTestPlugin(t, &Config{TimeLayout: "01"})
 
-		// create files.
-		files := make([]*os.File, 0, len(tc.filesName))
-		createDir(t, p.targetDir)
-		for _, f := range tc.filesName {
-			files = append(files, createFile(t, f, nil))
-		}
-		// make check
-		idx := p.getStartIdx()
-		assert.EqualValues(t, tc.expectedIdx, idx)
-
-		// close files.
-		for _, f := range files {
-			f.Close()
-		}
-		test.ClearDir(t, p.targetDir)
+			got := p.nextSealUpIdx(&activeFile{dir: dir, name: strings.TrimSuffix(file, extension), ext: extension})
+			require.Equal(t, tt.want, got)
+		})
 	}
-}
-
-func TestSealUpHasContent(t *testing.T) {
-	config := Config{
-		TargetFile:         targetFile,
-		RetentionInterval_: 200 * time.Millisecond,
-		Layout:             "01",
-		FileMode_:          0o666,
-	}
-
-	dir, file := filepath.Split(config.TargetFile)
-
-	extension := filepath.Ext(file)
-	test.ClearDir(t, dir)
-	createDir(t, dir)
-	defer test.ClearDir(t, dir)
-
-	d := []byte("some data")
-	testFileName := fmt.Sprintf(targetFileThreshold, time.Now().Unix(), fileNameSeparator)
-	f := createFile(t, testFileName, &d)
-	defer f.Close()
-	infoInitial, _ := f.Stat()
-	assert.NotZero(t, infoInitial.Size())
-	p := Plugin{
-		config:        &config,
-		mu:            &sync.RWMutex{},
-		file:          f,
-		targetDir:     dir,
-		fileExtension: extension,
-		fileName:      file[0 : len(file)-len(extension)],
-		tsFileName:    path.Base(testFileName),
-	}
-
-	// call func
-	p.sealUp()
-
-	// check work result
-	pattern := fmt.Sprintf("%s/*%s", p.targetDir, p.fileExtension)
-	matches := test.GetMatches(t, pattern)
-	assert.Equal(t, 2, len(matches))
-
-	// check new file was created and it is empty
-	info, err := p.file.Stat()
-	assert.EqualValues(t, 0, info.Size())
-	assert.NoError(t, err)
-
-	// check old file was renamed. And renamed file is not empty and contains data
-	for _, v := range matches {
-		if v != fmt.Sprintf("%s%s", dir, p.tsFileName) {
-			info, err := os.Stat(v)
-			assert.NoError(t, err)
-			assert.EqualValues(t, len(d), info.Size())
-		}
-	}
-}
-
-func TestSealUpNoContent(t *testing.T) {
-	config := Config{
-		TargetFile:         targetFile,
-		RetentionInterval_: 200 * time.Millisecond,
-		Layout:             "01",
-		FileMode_:          0o666,
-	}
-
-	dir, file := filepath.Split(config.TargetFile)
-	extension := filepath.Ext(file)
-
-	test.ClearDir(t, dir)
-	createDir(t, dir)
-	defer test.ClearDir(t, dir)
-	testFileName := fmt.Sprintf(targetFileThreshold, time.Now().Unix(), fileNameSeparator)
-	f := createFile(t, testFileName, nil)
-	defer f.Close()
-	p := Plugin{
-		config:        &config,
-		mu:            &sync.RWMutex{},
-		file:          f,
-		targetDir:     dir,
-		fileExtension: extension,
-		fileName:      file[0 : len(file)-len(extension)],
-		tsFileName:    path.Base(testFileName),
-	}
-
-	infoInitial, _ := f.Stat()
-	assert.Zero(t, infoInitial.Size())
-
-	// call func
-	p.sealUp()
-
-	// check work result
-	pattern := fmt.Sprintf("%s/*%s", p.targetDir, p.fileExtension)
-	assert.Equal(t, 1, len(test.GetMatches(t, pattern)))
-
-	// check new file was created and it is empty
-	info, err := p.file.Stat()
-	assert.Zero(t, info.Size())
-	assert.NoError(t, err)
 }
 
 func TestStart(t *testing.T) {
@@ -190,19 +95,19 @@ func TestStart(t *testing.T) {
 		thirdPack  []test.Msg
 	}{
 		firstPack: []test.Msg{
-			test.Msg(`{"level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_1","trace_id":"3ea4a6589d06bb3f","span_id":"deddd718684b10a","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_canceled"}`),
-			test.Msg(`{"level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_1","trace_id":"3ea4a6589d06bb3f","span_id":"deddd718684b10a","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_canceled"}`),
-			test.Msg(`{"level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_1","trace_id":"3ea4a6589d06bb3f","span_id":"deddd718684b10a","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_canceled"}`),
+			test.Msg(`{"level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_1","trace_id":"1","span_id":"1","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_canceled"}`),
+			test.Msg(`{"level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_1","trace_id":"2","span_id":"2","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_canceled"}`),
+			test.Msg(`{"level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_1","trace_id":"3","span_id":"3","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_canceled"}`),
 		},
 		secondPack: []test.Msg{
-			test.Msg(`{"level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_12","trace_id":"3ea4a6589d06bb3f","span_id":"deddd718684b10a","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_canceled"}`),
-			test.Msg(`{"level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_12","trace_id":"3ea4a6589d06bb3f","span_id":"deddd718684b10a","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_canceled"}`),
-			test.Msg(`{"level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_12","trace_id":"3ea4a6589d06bb3f","span_id":"deddd718684b10a","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_canceled"}`),
+			test.Msg(`{"level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_12","trace_id":"4","span_id":"4","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_canceled"}`),
+			test.Msg(`{"level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_12","trace_id":"5","span_id":"5","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_canceled"}`),
+			test.Msg(`{"level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_12","trace_id":"6","span_id":"6","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_canceled"}`),
 		},
 		thirdPack: []test.Msg{
-			test.Msg(`{"level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_123","trace_id":"3ea4a6589d06bb3f","span_id":"deddd718684b10a","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_canceled"}`),
-			test.Msg(`{"level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_123","trace_id":"3ea4a6589d06bb3f","span_id":"deddd718684b10a","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_canceled"}`),
-			test.Msg(`{"level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_123","trace_id":"3ea4a6589d06bb3f","span_id":"deddd718684b10a","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_canceled"}`),
+			test.Msg(`{"level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_123","trace_id":"7","span_id":"7","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_canceled"}`),
+			test.Msg(`{"level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_123","trace_id":"8","span_id":"8","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_canceled"}`),
+			test.Msg(`{"level":"error","ts":"2019-08-21T11:43:25.865Z","message":"get_items_error_123","trace_id":"9","span_id":"9","get_items_error":"product: error while consuming CoverImage: context canceled","get_items_error_option":"CoverImage","get_items_error_cause":"context canceled","get_items_error_cause_type":"context_canceled"}`),
 		},
 	}
 	test.ClearDir(t, dir)
@@ -210,10 +115,9 @@ func TestStart(t *testing.T) {
 	config := &Config{
 		TargetFile:        targetFile,
 		RetentionInterval: "2s",
-		Layout:            "01",
+		TimeLayout:        "2006-01-02",
 		BatchFlushTimeout: "100ms",
-
-		FileMode_: 0o666,
+		FileMode_:         0o666,
 	}
 
 	writeFileSleep := 4 * 100 * time.Millisecond
