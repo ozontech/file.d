@@ -2,6 +2,7 @@ package kafka
 
 import (
 	"testing"
+	"time"
 
 	"github.com/ozontech/file.d/pipeline/metadata"
 	"github.com/stretchr/testify/assert"
@@ -53,12 +54,14 @@ func TestMetaInformationGetData(t *testing.T) {
 		Topic:     "test-topic",
 		Partition: 3,
 		Offset:    100,
+		Timestamp: time.Unix(1700000000, 123000000),
 	})
 
 	data := mi.GetData()
 	assert.Equal(t, "test-topic", data["topic"])
 	assert.Equal(t, int32(3), data["partition"])
 	assert.Equal(t, int64(100), data["offset"])
+	assert.Equal(t, time.Unix(1700000000, 123000000), data["timestamp"])
 }
 
 func TestMetaInformationGetCacheKey(t *testing.T) {

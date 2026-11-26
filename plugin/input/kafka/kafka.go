@@ -423,6 +423,7 @@ type metaInformation struct {
 	topic     string
 	partition int32
 	offset    int64
+	timestamp time.Time
 }
 
 func newMetaInformation(message *kgo.Record) metaInformation {
@@ -430,6 +431,7 @@ func newMetaInformation(message *kgo.Record) metaInformation {
 		topic:     message.Topic,
 		partition: message.Partition,
 		offset:    message.Offset,
+		timestamp: message.Timestamp,
 	}
 }
 
@@ -438,6 +440,7 @@ func (m metaInformation) GetData() map[string]any {
 		"topic":     m.topic,
 		"partition": m.partition,
 		"offset":    m.offset,
+		"timestamp": m.timestamp,
 	}
 }
 
@@ -455,4 +458,8 @@ func (m metaInformation) GetCacheKey() uint64 {
 **`partition`**
 
 **`offset`**
+
+**`timestamp`**  *`time.Time`*
+
+Record timestamp. In templates you can use `time.Time` methods, e.g. `{{ .timestamp.Unix }}` or `{{ .timestamp.Format "2006-01-02T15:04:05Z07:00" }}`.
 }*/
