@@ -39,4 +39,11 @@ type Target interface {
 
 	// Delete removes the node at path. No-op when the path does not exist.
 	Delete(path Path) error
+
+	// Exists distinguishes a missing path from a value containing null.
+	Exists(path Path) (bool, error)
+
+	// Rename moves an event field, preserving both fields on a collision unless
+	// override is true. It reports whether a field was moved.
+	Rename(source, destination Path, override bool) (bool, error)
 }

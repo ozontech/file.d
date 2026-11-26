@@ -199,10 +199,29 @@ func (v FloatValue) String() string {
 
 func (v StringValue) String() string { return v.V }
 
+// Tiny collections stay on the stack and leave scratch available to children.
+const stackFormatSlots = 2
+
 func (v ArrayValue) String() string {
-	parts := make([]string, len(v.V))
+	return v.format(nil)
+}
+
+func (v ArrayValue) format(state *CallState) string {
+	if len(v.V) == 0 {
+		return "[]"
+	}
+	if len(v.V) <= stackFormatSlots {
+		var parts [stackFormatSlots]string
+		return v.formatParts(parts[:len(v.V)], state)
+	}
+	parts := state.AcquireStrings(len(v.V))
+	defer state.ReleaseStrings(parts)
+	return v.formatParts(parts, state)
+}
+
+func (v ArrayValue) formatParts(parts []string, state *CallState) string {
 	for i, el := range v.V {
-		parts[i] = display(el)
+		parts[i] = display(el, state)
 	}
 	return "[" + strings.Join(parts, ", ") + "]"
 }
@@ -211,11 +230,41 @@ func (v ArrayValue) String() string {
 // the runtime path of to_string(value), so it does not pay for a sort; debug
 // output that needs a stable rendering uses dumpValue instead.
 func (v ObjectValue) String() string {
-	parts := make([]string, 0, len(v.V))
+	return v.format(nil)
+}
+
+func (v ObjectValue) format(state *CallState) string {
+	if len(v.V) == 0 {
+		return "{}"
+	}
+	if len(v.V) <= stackFormatSlots {
+		var parts [stackFormatSlots]string
+		return v.formatParts(parts[:len(v.V)], state)
+	}
+	parts := state.AcquireStrings(len(v.V))
+	defer state.ReleaseStrings(parts)
+	return v.formatParts(parts, state)
+}
+
+func (v ObjectValue) formatParts(parts []string, state *CallState) string {
+	parts = parts[:0]
 	for k, val := range v.V {
-		parts = append(parts, fmt.Sprintf("%q: %s", k, display(val)))
+		parts = append(parts, fmt.Sprintf("%q: %s", k, display(val, state)))
 	}
 	return "{" + strings.Join(parts, ", ") + "}"
+}
+
+// FormatValue preserves Value.String formatting while reusing temporary slots
+// for collections. The result is independent of state, which may be nil.
+func FormatValue(v Value, state *CallState) string {
+	switch value := v.(type) {
+	case ArrayValue:
+		return value.format(state)
+	case ObjectValue:
+		return value.format(state)
+	default:
+		return v.String()
+	}
 }
 
 func (v RegexValue) String() string {
@@ -244,11 +293,11 @@ func ToFloat(v Value) (float64, error) {
 }
 
 // wraps StringValue in quotes when used inside array/object formatting.
-func display(v Value) string {
+func display(v Value, state *CallState) string {
 	if s, ok := v.(StringValue); ok {
 		return fmt.Sprintf("%q", s.V)
 	}
-	return v.String()
+	return FormatValue(v, state)
 }
 
 func resolve(v Value) Value {

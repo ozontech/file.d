@@ -64,7 +64,7 @@ func (e *IdentExpr) Eval(ctx EvalContext) (Value, error) {
 }
 
 func (e *PathExpr) Eval(ctx EvalContext) (Value, error) {
-	path, err := e.toRuntimePath(ctx)
+	path, err := e.ResolvePath(ctx)
 	if err != nil {
 		return NullValue{}, err
 	}
@@ -72,14 +72,14 @@ func (e *PathExpr) Eval(ctx EvalContext) (Value, error) {
 	return val, err
 }
 
-// toRuntimePath converts a PathExpr (AST) into a Path (runtime) by evaluating
+// ResolvePath converts a PathExpr (AST) into a Path (runtime) by evaluating
 // any dynamic index expressions contained in the segment list.
 //
 //   - .field           -> FieldSeg("field")
 //   - [0]              -> IndexSeg(0)
 //   - ["key"]          -> FieldSeg("key")   - string key becomes a named field
 //   - [.dynamic_idx]   -> IndexSeg(n)       - expression evaluated at runtime
-func (e *PathExpr) toRuntimePath(ctx EvalContext) (Path, error) {
+func (e *PathExpr) ResolvePath(ctx EvalContext) (Path, error) {
 	segs := make([]Segment, 0, len(e.Segments))
 
 	for _, s := range e.Segments {
@@ -88,15 +88,21 @@ func (e *PathExpr) toRuntimePath(ctx EvalContext) (Path, error) {
 			continue
 		}
 
+		if !s.IsIndex() {
+			return Path{}, fmt.Errorf("%s: path field name must not be empty", e.Pos())
+		}
 		idxVal, err := s.Index.Eval(ctx)
 		if err != nil {
 			return Path{}, err
 		}
 
-		switch v := idxVal.(type) {
+		switch v := resolve(idxVal).(type) {
 		case IntegerValue:
 			segs = append(segs, IndexSeg(int(v.V)))
 		case StringValue:
+			if v.V == "" {
+				return Path{}, fmt.Errorf("%s: path field name must not be empty", e.Pos())
+			}
 			segs = append(segs, FieldSeg(v.V))
 		default:
 			return Path{}, fmt.Errorf(
@@ -218,7 +224,7 @@ func (e *AssignExpr) Eval(ctx EvalContext) (Value, error) {
 		ctx.SetVar(target.Name, value)
 		return value, nil
 	case *PathExpr:
-		path, err := target.toRuntimePath(ctx)
+		path, err := target.ResolvePath(ctx)
 		if err != nil {
 			return NullValue{}, err
 		}
@@ -336,6 +342,19 @@ func evalIndex(pos Position, obj, idx Value) (Value, error) {
 }
 
 func (e *CallExpr) Eval(ctx EvalContext) (Value, error) {
+	if e.Plan != nil {
+		return e.Plan.EvalCall(ctx, e)
+	}
+	if planner, ok := ctx.(CallPlanner); ok {
+		plan, err := planner.PlanCall(e)
+		if err != nil {
+			return NullValue{}, err
+		}
+		if plan != nil {
+			return plan.EvalCall(ctx, e)
+		}
+	}
+
 	var positional []Value
 	named := make(map[string]Value)
 
@@ -356,6 +375,7 @@ func (e *CallExpr) Eval(ctx EvalContext) (Value, error) {
 
 	return ctx.CallFunc(e.Pos(), e.Name, positional, named)
 }
+
 func (e *IfExpr) Eval(ctx EvalContext) (Value, error) {
 	condition, err := e.Condition.Eval(ctx)
 	if err != nil {
@@ -377,7 +397,7 @@ func (e *AbortExpr) Eval(_ EvalContext) (Value, error) {
 }
 
 func (e *DelExpr) Eval(ctx EvalContext) (Value, error) {
-	path, err := e.Target.toRuntimePath(ctx)
+	path, err := e.Target.ResolvePath(ctx)
 	if err != nil {
 		return NullValue{}, err
 	}

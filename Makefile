@@ -3,6 +3,10 @@ TIME := $(shell date '+%Y-%m-%d_%H:%M:%S')
 UPSTREAM_BRANCH ?= origin/master
 
 GOLANGCI_LINT_VER=v2.8.0
+BENCH_ARGS ?=
+GROUP ?= smoke
+CASE ?=
+LIST ?= 0
 GOOS ?= linux
 GOARCH ?= amd64
 
@@ -48,6 +52,10 @@ test-e2e-docker-down:
 .PHONY: bench-file
 bench-file:
 	go test -bench LightJsonReadPar ./plugin/input/file -v -count 1 -run -benchmem -benchtime 1x
+
+.PHONY: bench-transform
+bench-transform:
+	go run ./benchmarks/transform/report -group="$(GROUP)" -case="$(CASE)" -list="$(LIST)" -- $(BENCH_ARGS)
 
 .PHONY: gen-doc
 gen-doc:

@@ -1,7 +1,6 @@
 package runtime
 
 import (
-	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -10,21 +9,57 @@ import (
 	insaneJSON "github.com/ozontech/insane-json"
 )
 
+const (
+	maxRetainedMetadataEntries = 64
+	maxRetainedPathSegments    = 64
+	maxRetainedJSONBufferSize  = 64 * 1024
+)
+
 type RootTarget struct {
-	Root       *insaneJSON.Root
-	SourceName string
-	metadata   map[string]string
+	Root             *insaneJSON.Root
+	SourceName       string
+	metadata         map[string]string
+	metadataPeakSize int
 
 	pathBuffer []string
+	jsonBuffer []byte
 }
 
 func NewRootTarget(root *insaneJSON.Root, sourceName string, metadata map[string]string) *RootTarget {
 	return &RootTarget{
-		Root:       root,
-		SourceName: sourceName,
-		metadata:   metadata,
+		Root:             root,
+		SourceName:       sourceName,
+		metadata:         metadata,
+		metadataPeakSize: len(metadata),
+	}
+}
 
-		pathBuffer: make([]string, 0),
+// Reset detaches the event and releases its references, retaining small buffers
+// for reuse. Root and SourceName must be set before accessing the next event.
+func (t *RootTarget) Reset() {
+	t.Root = nil
+	t.SourceName = ""
+	clear(t.metadata)
+	if t.metadataPeakSize > maxRetainedMetadataEntries {
+		t.metadata = nil
+	}
+	t.metadataPeakSize = 0
+
+	// A shorter path leaves strings beyond len(pathBuffer) in the backing array.
+	clear(t.pathBuffer[:cap(t.pathBuffer)])
+	if cap(t.pathBuffer) > maxRetainedPathSegments {
+		t.pathBuffer = nil
+	} else {
+		t.pathBuffer = t.pathBuffer[:0]
+	}
+	t.releaseJSONBuffer()
+}
+
+func (t *RootTarget) releaseJSONBuffer() {
+	if cap(t.jsonBuffer) > maxRetainedJSONBufferSize {
+		t.jsonBuffer = nil
+	} else {
+		t.jsonBuffer = t.jsonBuffer[:0]
 	}
 }
 
@@ -67,10 +102,14 @@ func (t *RootTarget) Set(path core.Path, value core.Value) error {
 	scalar := isScalarValue(value)
 	var encoded string
 	if !scalar {
-		encoded, err = valueToJSON(value)
+		defer t.releaseJSONBuffer()
+		t.jsonBuffer, err = appendJSONValue(t.jsonBuffer[:0], value)
 		if err != nil {
 			return fmt.Errorf("set %s: %w", formatSegments(path.Segments), err)
 		}
+		// Keep the serialized snapshot independent of the reusable buffer.
+		// MutateToJSON also copies its input into the event's decoder storage.
+		encoded = string(t.jsonBuffer)
 	}
 
 	leaf := path.Segments[len(path.Segments)-1]
@@ -101,7 +140,7 @@ func (t *RootTarget) Set(path core.Path, value core.Value) error {
 // isScalarValue reports whether value can be written with one of insane-json's
 // typed mutators, which only set a node's bits and data
 //
-// everything else goes through valueToJSON plus MutateToJSON, which serializes
+// everything else goes through appendJSONValue plus MutateToJSON, which serializes
 // the value and parses it back; that round trip is what makes an assignment cost
 // a full encode and re-parse of the subtree, and it is also what draws nodes
 // from the root's decoder pool on every assignment
@@ -234,7 +273,11 @@ func (t *RootTarget) setMetadata(path core.Path, value core.Value) error {
 	if !ok {
 		return fmt.Errorf("metadata values must be strings, got %s", value.Kind())
 	}
+	if t.metadata == nil {
+		t.metadata = make(map[string]string)
+	}
 	t.metadata[path.Segments[0].Field] = s.V
+	t.metadataPeakSize = max(t.metadataPeakSize, len(t.metadata))
 	return nil
 }
 
@@ -265,68 +308,6 @@ func toInsaneJSONPath(segments []core.Segment, pathBuffer []string) []string {
 	}
 
 	return pathBuffer
-}
-
-// quoteJSON renders a string as a JSON string literal
-//
-// strconv.Quote is Go quoting, not JSON quoting: it escapes a control character
-// as \x01 and a byte that is not valid UTF-8 as \xff, neither of which JSON
-// accepts; using it here put malformed JSON into the event whenever a log line
-// carried such a byte
-func quoteJSON(s string) string {
-	encoded, err := json.Marshal(s)
-	if err != nil {
-		// json.Marshal only fails on unsupported types, never on a string
-		return strconv.Quote(s)
-	}
-	return string(encoded)
-}
-
-// valueToJSON serializes a core.Value to a JSON string.
-func valueToJSON(v core.Value) (string, error) {
-	switch val := v.(type) {
-	case core.NullValue:
-		return "null", nil
-	case core.BoolValue:
-		if val.V {
-			return "true", nil
-		}
-		return "false", nil
-	case core.IntegerValue:
-		return strconv.FormatInt(val.V, 10), nil
-	case core.FloatValue:
-		return strconv.FormatFloat(val.V, 'f', -1, 64), nil
-	case core.StringValue:
-		return quoteJSON(val.V), nil
-	case core.ArrayValue:
-		parts := make([]string, len(val.V))
-		for i, el := range val.V {
-			s, err := valueToJSON(el)
-			if err != nil {
-				return "", err
-			}
-			parts[i] = s
-		}
-		return "[" + strings.Join(parts, ",") + "]", nil
-	case core.ObjectValue:
-		parts := make([]string, 0, len(val.V))
-		for k, el := range val.V {
-			s, err := valueToJSON(el)
-			if err != nil {
-				return "", err
-			}
-			parts = append(parts, quoteJSON(k)+":"+s)
-		}
-		return "{" + strings.Join(parts, ",") + "}", nil
-	case core.JSONNodeValue:
-		node := v.(core.JSONNodeValue).N
-		if node == nil {
-			return "null", nil
-		}
-
-		return node.EncodeToString(), nil
-	}
-	return "", fmt.Errorf("cannot serialize %s to JSON", v.Kind())
 }
 
 func formatSegments(segs []core.Segment) string {
