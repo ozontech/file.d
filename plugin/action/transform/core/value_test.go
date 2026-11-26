@@ -33,100 +33,93 @@ func TestDumpConstIsStable(t *testing.T) {
 func TestJSONNodeEquality(t *testing.T) {
 	t.Parallel()
 
-	root, err := insaneJSON.DecodeString(
-		`{"num":1,"num2":1,"str":"1","obj":{"a":1},"arr":[1,2],"flt":1.0,"yes":true,"nul":null}`)
-	require.NoError(t, err)
-	defer insaneJSON.Release(root)
-
-	node := func(field string) JSONNodeValue {
-		return JSONNodeValue{N: root.Dig(field)}
+	type testCase struct {
+		name       string
+		leftField  string
+		rightField string
+		right      Value
+		want       bool
 	}
-
-	tests := []struct {
-		name  string
-		left  Value
-		right Value
-		want  bool
-	}{
+	tests := []testCase{
 		{
-			name:  "object field equals an object literal",
-			left:  node("obj"),
-			right: ObjectValue{V: map[string]Value{"a": IntegerValue{V: 1}}},
-			want:  true,
+			name:      "object field equals an object literal",
+			leftField: "obj",
+			right:     ObjectValue{V: map[string]Value{"a": IntegerValue{V: 1}}},
+			want:      true,
 		},
 		{
-			name:  "object field differs from another object",
-			left:  node("obj"),
-			right: ObjectValue{V: map[string]Value{"a": IntegerValue{V: 2}}},
-			want:  false,
+			name:      "object field differs from another object",
+			leftField: "obj",
+			right:     ObjectValue{V: map[string]Value{"a": IntegerValue{V: 2}}},
+			want:      false,
 		},
 		{
-			name:  "array field equals an array literal",
-			left:  node("arr"),
-			right: ArrayValue{V: []Value{IntegerValue{V: 1}, IntegerValue{V: 2}}},
-			want:  true,
+			name:      "array field equals an array literal",
+			leftField: "arr",
+			right:     ArrayValue{V: []Value{IntegerValue{V: 1}, IntegerValue{V: 2}}},
+			want:      true,
 		},
 		{
-			name:  "array order matters",
-			left:  node("arr"),
-			right: ArrayValue{V: []Value{IntegerValue{V: 2}, IntegerValue{V: 1}}},
-			want:  false,
+			name:      "array order matters",
+			leftField: "arr",
+			right:     ArrayValue{V: []Value{IntegerValue{V: 2}, IntegerValue{V: 1}}},
+			want:      false,
 		},
 		{
-			name:  "number equals an integer literal",
-			left:  node("num"),
-			right: IntegerValue{V: 1},
-			want:  true,
+			name:      "number equals an integer literal",
+			leftField: "num",
+			right:     IntegerValue{V: 1},
+			want:      true,
 		},
 		{
 			// Integers and floats compare numerically, as documented.
-			name:  "integer equals a float",
-			left:  node("num"),
-			right: FloatValue{V: 1.0},
-			want:  true,
+			name:      "integer equals a float",
+			leftField: "num",
+			right:     FloatValue{V: 1.0},
+			want:      true,
 		},
 		{
 			// Equality is type-aware; it used to be true via the string forms.
-			name:  "number does not equal the same digits as a string",
-			left:  node("num"),
-			right: StringValue{V: "1"},
-			want:  false,
+			name:      "number does not equal the same digits as a string",
+			leftField: "num",
+			right:     StringValue{V: "1"},
+			want:      false,
 		},
 		{
-			name:  "string equals a string literal",
-			left:  node("str"),
-			right: StringValue{V: "1"},
-			want:  true,
+			name:      "string equals a string literal",
+			leftField: "str",
+			right:     StringValue{V: "1"},
+			want:      true,
 		},
 		{
-			name:  "two nodes of equal value",
-			left:  node("num"),
-			right: node("num2"),
-			want:  true,
+			name:       "two nodes of equal value",
+			leftField:  "num",
+			rightField: "num2",
+			want:       true,
 		},
 		{
-			name:  "two nodes of different type",
-			left:  node("num"),
-			right: node("str"),
-			want:  false,
+			name:       "two nodes of different type",
+			leftField:  "num",
+			rightField: "str",
+			want:       false,
 		},
 		{
-			name:  "bool field",
-			left:  node("yes"),
-			right: BoolValue{V: true},
-			want:  true,
+			name:      "bool field",
+			leftField: "yes",
+			right:     BoolValue{V: true},
+			want:      true,
 		},
 		{
-			name:  "null field",
-			left:  node("nul"),
-			right: NullValue{},
-			want:  true,
+			name:      "null field",
+			leftField: "nul",
+			right:     NullValue{},
+			want:      true,
 		},
 		{
-			name:  "missing field is null",
-			left:  JSONNodeValue{N: nil},
-			right: NullValue{},
-			want:  true,
+			name:      "missing field is null",
+			leftField: "missing",
+			right:     NullValue{},
+			want:      true,
 		},
 	}
 
@@ -134,7 +127,18 @@ func TestJSONNodeEquality(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			assert.Equal(t, tt.want, tt.left.Equal(tt.right))
+			// Each parallel case owns its tree because reading nodes can mutate them.
+			root, err := insaneJSON.DecodeString(
+				`{"num":1,"num2":1,"str":"1","obj":{"a":1},"arr":[1,2],"flt":1.0,"yes":true,"nul":null}`)
+			require.NoError(t, err)
+			defer insaneJSON.Release(root)
+
+			left := JSONNodeValue{N: root.Dig(tt.leftField)}
+			right := tt.right
+			if tt.rightField != "" {
+				right = JSONNodeValue{N: root.Dig(tt.rightField)}
+			}
+			assert.Equal(t, tt.want, left.Equal(right))
 		})
 	}
 }
