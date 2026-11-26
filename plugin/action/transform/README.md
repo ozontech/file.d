@@ -241,14 +241,20 @@ are required; named arguments are optional and fall back to their defaults:
   .message = trim_right(.message, "\n")
   ```
 
-+ `trim_to(value, cutset)`, `trim_to_left(value, cutset)`,
-  `trim_to_right(value, cutset)` — cut the string back to a delimiter, keeping the
++ `trim_to(value, cutset, include_cutset: false)`, `trim_to_left(value, cutset, include_cutset: false)`,
+  `trim_to_right(value, cutset, include_cutset: false)` — cut the string back to a delimiter, keeping the
   delimiter itself; the value is returned unchanged when it is not found. Here
   `cutset` is a *substring*: the left side trims to its first occurrence, the
   right side to its last one, so the outermost pair is kept:
   ```
   # 'some data {"took":"200ms"} some data' -> '{"took":"200ms"}'
   .message = trim_to_right(trim_to_left(.message, "{"), "}")
+  ```
+
+  `include_cutset: true` allows to trim `cutset` itself:
+  ```
+  # 'some data |value| some data' -> 'value'
+  .message = trim_to(.message, "|", include_cutset: true)
   ```
 
 + `slice(value, start, end: null)` — returns the part of the string between two
@@ -258,6 +264,20 @@ are required; named arguments are optional and fall back to their defaults:
   ```
   .head = slice(.message, 0, end: 10)   # first 10 characters
   .tail = slice(.message, -5)           # last 5 characters
+  ```
+
++ `replace(value, old, new, count: -1)` — returns a copy of the string with the first `count`
+  non-overlapping instances of `old` replaced by `new`. `new` can be empty, while `old` is not.
+  If `count < 0`, there is no limit on the number of replacements:
+  ```
+  # 'some old old old data' -> 'some new new old data'
+  .message = replace(.message, "old", "new", count: 2)
+
+  # 'some old old old data' -> 'some new new new data'
+  .message = replace(.message, "old", "new")
+
+  # 'some hidden data' -> 'some  data'
+  .message = replace(.message, "hidden", "")
   ```
 
 + `lookup(value, table, default: <unchanged>)` — translates a value through a

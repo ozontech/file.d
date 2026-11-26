@@ -391,6 +391,27 @@ func TestParseSubstitution(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name:         "trim_to_filter_with_optional_ok",
+			substitution: `test ${field|trim_to("left","{",true)} test2`,
+			data: [][]string{
+				{"test "},
+				{"field"},
+				{" test2"},
+			},
+			filters: [][][]any{
+				nil,
+				{
+					{
+						trimModeLeft,
+						"{",
+						true,
+					},
+				},
+				nil,
+			},
+			wantErr: false,
+		},
+		{
 			name:         "err_trim_to_filter_args_empty",
 			substitution: `test ${field|trim_to()} test2`,
 			wantErr:      true,
@@ -402,7 +423,7 @@ func TestParseSubstitution(t *testing.T) {
 		},
 		{
 			name:         "err_trim_to_filter_invalid_args_count_2",
-			substitution: `test ${field|trim_to("all","{","asd")} test2`,
+			substitution: `test ${field|trim_to("all","{",true,"asd")} test2`,
 			wantErr:      true,
 		},
 		{
@@ -421,18 +442,13 @@ func TestParseSubstitution(t *testing.T) {
 			wantErr:      true,
 		},
 		{
-			name:         "err_trim_to_filter_empty_cutset_all",
+			name:         "err_trim_to_filter_invalid_third_arg",
+			substitution: `test ${field|trim_to("all","test","asd")} test2`,
+			wantErr:      true,
+		},
+		{
+			name:         "err_trim_to_filter_empty_cutset",
 			substitution: `test ${field|trim_to("all","")} test2`,
-			wantErr:      true,
-		},
-		{
-			name:         "err_trim_to_filter_empty_cutset_left",
-			substitution: `test ${field|trim_to("left","")} test2`,
-			wantErr:      true,
-		},
-		{
-			name:         "err_trim_to_filter_empty_cutset_right",
-			substitution: `test ${field|trim_to("right","")} test2`,
 			wantErr:      true,
 		},
 		{
@@ -472,22 +488,169 @@ func TestParseSubstitution(t *testing.T) {
 		},
 		{
 			name:         "err_cut_filter_invalid_first_arg_1",
-			substitution: `test ${field|trim_to("invalid",10)} test2`,
+			substitution: `test ${field|cut("invalid",10)} test2`,
 			wantErr:      true,
 		},
 		{
 			name:         "err_cut_filter_invalid_first_arg_2",
-			substitution: `test ${field|trim_to(true,10)} test2`,
+			substitution: `test ${field|cut(true,10)} test2`,
 			wantErr:      true,
 		},
 		{
 			name:         "err_cut_filter_invalid_second_arg_1",
-			substitution: `test ${field|trim_to("first",true)} test2`,
+			substitution: `test ${field|cut("first",true)} test2`,
 			wantErr:      true,
 		},
 		{
 			name:         "err_cut_filter_invalid_second_arg_2",
-			substitution: `test ${field|trim_to("first",-10)} test2`,
+			substitution: `test ${field|cut("first",-10)} test2`,
+			wantErr:      true,
+		},
+		{
+			name:         "replace_filter_ok",
+			substitution: `test ${field|replace("old","new",2)} test2`,
+			data: [][]string{
+				{"test "},
+				{"field"},
+				{" test2"},
+			},
+			filters: [][][]any{
+				nil,
+				{
+					{
+						"old",
+						"new",
+						2,
+					},
+				},
+				nil,
+			},
+			wantErr: false,
+		},
+		{
+			name:         "replace_filter_empty_new_ok",
+			substitution: `test ${field|replace("old","",2)} test2`,
+			data: [][]string{
+				{"test "},
+				{"field"},
+				{" test2"},
+			},
+			filters: [][][]any{
+				nil,
+				{
+					{
+						"old",
+						"",
+						2,
+					},
+				},
+				nil,
+			},
+			wantErr: false,
+		},
+		{
+			name:         "err_replace_filter_args_empty",
+			substitution: `test ${field|replace()} test2`,
+			wantErr:      true,
+		},
+		{
+			name:         "err_replace_filter_invalid_args_count_1",
+			substitution: `test ${field|replace("old")} test2`,
+			wantErr:      true,
+		},
+		{
+			name:         "err_replace_filter_invalid_args_count_2",
+			substitution: `test ${field|replace("old","new",2,123)} test2`,
+			wantErr:      true,
+		},
+		{
+			name:         "err_replace_filter_invalid_first_arg",
+			substitution: `test ${field|replace(1,"new",2)} test2`,
+			wantErr:      true,
+		},
+		{
+			name:         "err_replace_filter_empty_first_arg",
+			substitution: `test ${field|replace("","new",2)} test2`,
+			wantErr:      true,
+		},
+		{
+			name:         "err_replace_filter_invalid_second_arg",
+			substitution: `test ${field|replace("old",1,2)} test2`,
+			wantErr:      true,
+		},
+		{
+			name:         "err_replace_filter_invalid_third_arg",
+			substitution: `test ${field|replace("old","new","not_num")} test2`,
+			wantErr:      true,
+		},
+		{
+			name:         "replace_all_filter_ok",
+			substitution: `test ${field|replace_all("old","new")} test2`,
+			data: [][]string{
+				{"test "},
+				{"field"},
+				{" test2"},
+			},
+			filters: [][][]any{
+				nil,
+				{
+					{
+						"old",
+						"new",
+					},
+				},
+				nil,
+			},
+			wantErr: false,
+		},
+		{
+			name:         "replace_all_filter_empty_new_ok",
+			substitution: `test ${field|replace_all("old","")} test2`,
+			data: [][]string{
+				{"test "},
+				{"field"},
+				{" test2"},
+			},
+			filters: [][][]any{
+				nil,
+				{
+					{
+						"old",
+						"",
+					},
+				},
+				nil,
+			},
+			wantErr: false,
+		},
+		{
+			name:         "err_replace_all_filter_args_empty",
+			substitution: `test ${field|replace_all()} test2`,
+			wantErr:      true,
+		},
+		{
+			name:         "err_replace_all_filter_invalid_args_count_1",
+			substitution: `test ${field|replace_all("old")} test2`,
+			wantErr:      true,
+		},
+		{
+			name:         "err_replace_all_filter_invalid_args_count_2",
+			substitution: `test ${field|replace_all("old","new",1)} test2`,
+			wantErr:      true,
+		},
+		{
+			name:         "err_replace_all_filter_invalid_first_arg",
+			substitution: `test ${field|replace_all(1,"new")} test2`,
+			wantErr:      true,
+		},
+		{
+			name:         "err_replace_all_filter_empty_first_arg",
+			substitution: `test ${field|replace_all("","new")} test2`,
+			wantErr:      true,
+		},
+		{
+			name:         "err_replace_all_filter_invalid_second_arg",
+			substitution: `test ${field|replace_all("old",1)} test2`,
 			wantErr:      true,
 		},
 		{
@@ -595,40 +758,58 @@ func TestFilterApply(t *testing.T) {
 			want:         `{"message":"test"}`,
 		},
 		{
-			name:         "trim_to_right_multibyte_delimiter",
+			name:         "ok_trim_to_right_multibyte_delimiter",
 			substitution: `${field|trim_to("right","END")}`,
 			data:         `first END second END trailing`,
 			want:         `first END second END`,
 		},
 		{
-			name:         "trim_to_all_multibyte_delimiter",
+			name:         "ok_trim_to_all_multibyte_delimiter",
 			substitution: `${field|trim_to("all","END")}`,
 			data:         `leading END message END trailing`,
 			want:         `END message END`,
 		},
 		{
-			name:         "trim_to_left_multibyte_delimiter",
+			name:         "ok_trim_to_left_multibyte_delimiter",
 			substitution: `${field|trim_to("left","END")}`,
 			data:         `leading END message END trailing`,
 			want:         `END message END trailing`,
 		},
 		{
-			name:         "trim_to_right_unicode_delimiter",
+			name:         "ok_trim_to_right_unicode_delimiter",
 			substitution: `${field|trim_to("right","界")}`,
 			data:         `hello界 trailing`,
 			want:         `hello界`,
 		},
 		{
-			name:         "trim_to_right_missing_delimiter",
+			name:         "ok_trim_to_right_missing_delimiter",
 			substitution: `${field|trim_to("right","END")}`,
 			data:         `message`,
 			want:         `message`,
 		},
 		{
-			name:         "trim_to_empty_input",
+			name:         "ok_trim_to_empty_input",
 			substitution: `${field|trim_to("right","END")}`,
 			data:         ``,
 			want:         ``,
+		},
+		{
+			name:         "ok_trim_to_all_include_cutset",
+			substitution: `${field|trim_to("all","END",true)}`,
+			data:         `leading END message END trailing`,
+			want:         ` message `,
+		},
+		{
+			name:         "ok_trim_to_left_include_cutset",
+			substitution: `${field|trim_to("left","END",true)}`,
+			data:         `leading END message END trailing`,
+			want:         ` message END trailing`,
+		},
+		{
+			name:         "ok_trim_to_right_include_cutset",
+			substitution: `${field|trim_to("right","END",true)}`,
+			data:         `leading END message END trailing`,
+			want:         `leading END message `,
 		},
 		{
 			name:         "ok_single_cut_filter_cut_first",
@@ -653,6 +834,36 @@ func TestFilterApply(t *testing.T) {
 			substitution: `${field|cut("first",10)|cut("last",10)}`,
 			data:         `some data`,
 			want:         `some data`,
+		},
+		{
+			name:         "ok_single_replace_filter_count",
+			substitution: `${field|replace("old","",2)}`,
+			data:         `old old old old old`,
+			want:         `  old old old`,
+		},
+		{
+			name:         "ok_single_replace_filter_all",
+			substitution: `${field|replace("old","new",-1)}`,
+			data:         `old old old old old`,
+			want:         `new new new new new`,
+		},
+		{
+			name:         "ok_two_replace_filters",
+			substitution: `${field|replace("old","new",3)|replace("new","last",2)}`,
+			data:         `old old old old old`,
+			want:         `last last new old old`,
+		},
+		{
+			name:         "ok_single_replace_all_filter",
+			substitution: `${field|replace_all("old","new")}`,
+			data:         `old old old old old`,
+			want:         `new new new new new`,
+		},
+		{
+			name:         "ok_two_replace_all_filters",
+			substitution: `${field|replace_all("old","new")|replace_all("new","last")}`,
+			data:         `old old old old old`,
+			want:         `last last last last last`,
 		},
 	}
 	for _, tt := range tests {
