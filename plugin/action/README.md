@@ -189,6 +189,10 @@ It calculates the hash for one of the specified event fields and adds a new fiel
 > Fields can be of any type except for an object and an array.
 
 [More details...](plugin/action/hash/README.md)
+## http_request
+Makes HTTP requests with URL templating, query params, and custom headers. Writes response to event field. Supports retry with exponential backoff.
+
+[More details...](plugin/action/http_request/README.md)
 ## join
 It makes one big event from the sequence of the events.
 It is useful for assembling back together "exceptions" or "panics" if they were written line by line.
