@@ -22,8 +22,15 @@ func (toString) Params() []Parameter {
 	}
 }
 
-func (toString) Call(args map[string]core.Value) (core.Value, error) {
-	value := args["value"]
+func (s toString) Call(args map[string]core.Value) (core.Value, error) {
+	return s.call(args["value"])
+}
+
+func (s toString) CallIndexed(args []core.Value) (core.Value, error) {
+	return s.call(args[0])
+}
+
+func (toString) call(value core.Value) (core.Value, error) {
 	if value.Kind() == core.KindNull {
 		return core.StringValue{V: ""}, nil
 	}

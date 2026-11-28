@@ -117,7 +117,7 @@ func (p *Plugin) Start(config pipeline.AnyConfig, params *pipeline.ActionPluginP
 			p.logger.Fatal("compilation error", zap.Error(err))
 		}
 
-		if err := compiler.ValidateCalls(exprs, stdlib.GetRegistry()); err != nil {
+		if err := compiler.Prepare(exprs, stdlib.GetRegistry()); err != nil {
 			p.logger.Fatal("validation error", zap.Error(err))
 		}
 
